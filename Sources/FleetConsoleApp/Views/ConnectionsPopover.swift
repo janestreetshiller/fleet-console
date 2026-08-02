@@ -99,17 +99,9 @@ struct ConnectionsPopover: View {
 
             if listenerCount == 0 {
                 EmptyLine(text: model.connected
-                          ? "nothing on this Mac is holding a listening socket"
+                          ? "nothing unmanaged is holding a listening socket"
                           : "controller unavailable")
             } else {
-                ForEach(listeningServices, id: \.id) { row in
-                    let service = row.record
-                    CompactRow(icon: "shield.lefthalf.filled",
-                               tone: .good,
-                               title: service.friendlyName,
-                               subtitle: "managed · \(service.ownerAgent)",
-                               trailing: portList(service.evidence.listeningPorts))
-                }
                 ForEach(listeningUnmanaged, id: \.id) { process in
                     CompactRow(icon: "questionmark.circle",
                                tone: .warn,
@@ -125,17 +117,21 @@ struct ConnectionsPopover: View {
     /// which falls back to what a service *declared*. A section titled
     /// "Listening" that lists a port nobody has seen listening would be exactly
     /// the kind of claim the rest of this app refuses to make.
-    private var listeningServices: [ServiceRow] {
-        model.activeServices.filter { !$0.record.evidence.listeningPorts.isEmpty }
-    }
-
+    /// Unmanaged listeners only.
+    ///
+    /// This section used to list managed services too, on the argument that a
+    /// network surface is opened to find out what is holding a socket. The
+    /// argument is sound and the result was not: a managed service already has a
+    /// row on the Services tab with its state, its owner, its lease and its verbs,
+    /// so listing it again here made every managed service appear on two tabs and
+    /// left neither one authoritative. Services live on Services. What this tab
+    /// adds is the half the controller does not own — the sockets held by things
+    /// it never launched.
     private var listeningUnmanaged: [UnmanagedProcess] {
         model.unmanaged.filter { !$0.ports.isEmpty }
     }
 
-    private var listenerCount: Int {
-        listeningServices.count + listeningUnmanaged.count
-    }
+    private var listenerCount: Int { listeningUnmanaged.count }
 
     /// Two ports fit the trailing column at this width; past that the count
     /// carries it rather than a list that would truncate mid-number.
