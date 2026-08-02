@@ -163,7 +163,7 @@ enum Sysctl {
         guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
         var buffer = [CChar](repeating: 0, count: size)
         guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return nil }
-        return String(cString: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
+        return String(nulTerminated: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -322,7 +322,15 @@ private final class HostSampler: @unchecked Sendable {
         }
         guard status == KERN_SUCCESS else { return sample }
 
-        let page = Int64(vm_kernel_page_size)
+        // `host_page_size` rather than the `vm_kernel_page_size` global: the global
+        // is a `var` the kernel fills in before main and never touches again, which
+        // Swift 6 cannot tell apart from state someone might write to. The call is
+        // also the documented pairing for the counts `host_statistics64` just
+        // returned, so this is the more correct of the two reads, not a workaround.
+        // Both report 16384 here; the point is which one is *defined* to match.
+        var pageSize: vm_size_t = 0
+        guard host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS else { return sample }
+        let page = Int64(pageSize)
         let wired = Int64(stats.wire_count) * page
         let compressed = Int64(stats.compressor_page_count) * page
         let active = Int64(stats.active_count) * page
@@ -653,21 +661,20 @@ enum SystemThresholds {
 // MARK: - Formatting
 
 enum SystemFmt {
-    private static let bytes: ByteCountFormatter = {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        formatter.allowsNonnumericFormatting = false
-        return formatter
-    }()
+    /// The same shared formatter type the console uses. It was a second private
+    /// `ByteCountFormatter` configured identically to `ConsoleFmt`'s, which is two
+    /// places for "how this app writes a byte count" to drift apart — the exact
+    /// thing the file header of `Formatters.swift` says must not happen.
+    private static let byteFormatter = SharedByteFormatter(countStyle: .file)
 
     static func size(_ value: Int64) -> String {
-        bytes.string(fromByteCount: value)
+        byteFormatter.string(fromByteCount: value)
     }
 
     static func rate(_ value: Double?) -> String {
         guard let value else { return "—" }
         if value < 1024 { return "0 KB/s" }
-        return bytes.string(fromByteCount: Int64(value)) + "/s"
+        return byteFormatter.string(fromByteCount: Int64(value)) + "/s"
     }
 
     /// Percentages are shown whole. A utilisation figure with a decimal point

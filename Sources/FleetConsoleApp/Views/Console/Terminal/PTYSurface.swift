@@ -231,7 +231,12 @@ final class PTYHostView: NSView {
     var onWindowClose: (() -> Void)?
 
     private weak var hostWindow: NSWindow?
-    private var closeObserver: NSObjectProtocol?
+    /// The observer token, written once in `init` and read once in `deinit`.
+    /// `deinit` is nonisolated in Swift 6 and the token's existential type is not
+    /// Sendable, so the access has to be spelled out as unchecked — which is
+    /// accurate here: both ends of its life are on the main thread, and nothing
+    /// else ever touches it.
+    private nonisolated(unsafe) var closeObserver: NSObjectProtocol?
 
     /// Absorbs float error in `width / cellWidth`, which floors: a settled 80
     /// columns must not become 79 because the last cell was a millionth of a
@@ -262,8 +267,14 @@ final class PTYHostView: NSView {
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { [weak self] note in
+            // `queue: .main` already puts this block on the main thread, so the
+            // isolation below is asserted rather than hopped. What crosses into it
+            // is the window's `ObjectIdentifier`, not the window: `NSWindow` is not
+            // Sendable, and identity is the only question being asked of it.
+            let closing = (note.object as? NSWindow).map(ObjectIdentifier.init)
             MainActor.assumeIsolated {
-                guard let self, let closing = note.object as? NSWindow, closing === self.hostWindow else { return }
+                guard let self, let closing,
+                      closing == self.hostWindow.map(ObjectIdentifier.init) else { return }
                 self.onWindowClose?()
             }
         }
@@ -523,8 +534,13 @@ final class PTYSession {
     /// is delivered on the main queue (`LocalProcess` defaults its dispatch queue
     /// to `.main`), so the isolation is asserted rather than hopped — a hop would
     /// let a resize land between the exit and our record of it.
-    private final class Bridge: LocalProcessTerminalViewDelegate {
-        weak var session: PTYSession?
+    private final class Bridge: LocalProcessTerminalViewDelegate, @unchecked Sendable {
+        /// The delegate protocol's methods are nonisolated, so the bridge itself has
+        /// to be sendable to be handed to SwiftTerm at all. The unchecked part is
+        /// this one reference, and it is safe for the reason in the comment above:
+        /// every callback arrives on the main queue, so this is only ever read
+        /// there — the same thread that set it.
+        nonisolated(unsafe) weak var session: PTYSession?
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             MainActor.assumeIsolated { session?.childExited(status: exitCode) }

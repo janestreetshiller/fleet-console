@@ -51,8 +51,8 @@ enum OrcsProcess {
                     arguments: [String],
                     workingDirectory: URL? = nil,
                     timeout: TimeInterval,
-                    onOutput: ((String) -> Void)? = nil,
-                    onDiagnostics: ((String) -> Void)? = nil) async -> OrcsRun {
+                    onOutput: (@Sendable (String) -> Void)? = nil,
+                    onDiagnostics: (@Sendable (String) -> Void)? = nil) async -> OrcsRun {
         let invocation = OrcsInvocation(executable: executable,
                                        arguments: arguments,
                                        workingDirectory: workingDirectory,
@@ -93,11 +93,11 @@ private final class OrcsInvocation: @unchecked Sendable {
     private let arguments: [String]
     private let workingDirectory: URL?
     private let timeout: TimeInterval
-    private let onOutput: ((String) -> Void)?
-    private let onDiagnostics: ((String) -> Void)?
+    private let onOutput: (@Sendable (String) -> Void)?
+    private let onDiagnostics: (@Sendable (String) -> Void)?
 
     private var process: Process?
-    private var completion: ((OrcsRun) -> Void)?
+    private var completion: (@Sendable (OrcsRun) -> Void)?
     private var sources: [DispatchSourceRead] = []
     private var openDescriptors = 0
     private var stdoutData = Data()
@@ -112,8 +112,8 @@ private final class OrcsInvocation: @unchecked Sendable {
     private var startedAt = Date()
 
     init(executable: String, arguments: [String], workingDirectory: URL?,
-         timeout: TimeInterval, onOutput: ((String) -> Void)?,
-         onDiagnostics: ((String) -> Void)?) {
+         timeout: TimeInterval, onOutput: (@Sendable (String) -> Void)?,
+         onDiagnostics: (@Sendable (String) -> Void)?) {
         self.executable = executable
         self.arguments = arguments
         self.workingDirectory = workingDirectory
@@ -122,7 +122,7 @@ private final class OrcsInvocation: @unchecked Sendable {
         self.onDiagnostics = onDiagnostics
     }
 
-    func start(completion: @escaping (OrcsRun) -> Void) {
+    func start(completion: @escaping @Sendable (OrcsRun) -> Void) {
         queue.async { self.begin(completion) }
     }
 
@@ -135,7 +135,7 @@ private final class OrcsInvocation: @unchecked Sendable {
 
     // MARK: Spawn
 
-    private func begin(_ completion: @escaping (OrcsRun) -> Void) {
+    private func begin(_ completion: @escaping @Sendable (OrcsRun) -> Void) {
         self.completion = completion
         startedAt = Date()
 
@@ -169,7 +169,14 @@ private final class OrcsInvocation: @unchecked Sendable {
         process.standardOutput = FileHandle(fileDescriptor: outPipe[1], closeOnDealloc: false)
         process.standardError = FileHandle(fileDescriptor: errPipe[1], closeOnDealloc: false)
         process.terminationHandler = { [weak self] process in
-            self?.queue.async { self?.handleExit(process.terminationStatus) }
+            // Bind once and read the status here. The previous spelling reached
+            // through `self?` a second time *inside* the queue block, which meant
+            // two separate loads of a weak reference that could differ, and left
+            // `process` being touched from the queue rather than from the handler
+            // that owns it.
+            guard let self else { return }
+            let status = process.terminationStatus
+            self.queue.async { self.handleExit(status) }
         }
 
         do {

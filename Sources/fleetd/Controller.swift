@@ -9,7 +9,12 @@ import FleetCore
 /// handle. Anything that can block for a meaningful time (subprocess capture,
 /// health checks, socket writes to subscribers) happens off that queue and posts
 /// its result back onto it.
-final class Controller {
+///
+/// That paragraph is also the whole justification for `@unchecked Sendable`: the
+/// serial queue, not a lock and not the compiler, is what makes every stored
+/// property below safe to touch from the work and broadcast queues. The
+/// annotation states the existing contract; it does not relax one.
+final class Controller: @unchecked Sendable {
     static let version = "1.0.0"
 
     private let queue = DispatchQueue(label: "com.fleetconsole.controller")
@@ -80,11 +85,17 @@ final class Controller {
 
         let server = UnixSocketServer(path: FleetPaths.socket.path)
         server.onRejectedPeer = { [weak self] uid in
-            self?.queue.async {
-                _ = try? self?.registry.append(.rejectedPeer, service: nil,
-                                           detail: "connection from uid \(uid) refused (daemon uid \(geteuid()))")
-            }
+            // The log is unconditional — a refused peer is worth a line whether or
+            // not the controller is still around to record it in the registry. The
+            // registry write binds `self` once rather than reaching through the weak
+            // reference a second time inside the queue block, which was two separate
+            // loads that could disagree.
             FleetLog.warn("rejected connection from uid \(uid)")
+            guard let self else { return }
+            self.queue.async {
+                _ = try? self.registry.append(.rejectedPeer, service: nil,
+                                              detail: "connection from uid \(uid) refused (daemon uid \(geteuid()))")
+            }
         }
         try server.start()
         self.server = server
@@ -1211,6 +1222,12 @@ final class Controller {
     private func dispatchBroadcast(_ snapshot: Snapshot) {
         let targets = Array(subscribers.values)
         broadcastQueue.async { [weak self] in
+            // Bind once at the top. Every `self?` below used to be its own load of
+            // the weak reference, so a controller torn down mid-broadcast could drop
+            // a subscriber and then fail to clear `broadcastInFlight` — leaving the
+            // daemon believing a broadcast was still in flight and never sending
+            // another. One binding makes the whole block all-or-nothing.
+            guard let self else { return }
             if let data = try? Codec.encode(RPCResponse(ok: true, snapshot: snapshot)) {
                 for conn in targets {
                     do {
@@ -1221,12 +1238,11 @@ final class Controller {
                         // allowed to stall every other one.
                         FleetLog.debug("dropping subscriber: \(error.localizedDescription)")
                         conn.close()
-                        self?.queue.async { self?.subscribers.removeValue(forKey: ObjectIdentifier(conn)) }
+                        self.queue.async { self.subscribers.removeValue(forKey: ObjectIdentifier(conn)) }
                     }
                 }
             }
-            self?.queue.async {
-                guard let self else { return }
+            self.queue.async {
                 let pending = self.broadcastPending
                 self.broadcastPending = false
                 if pending, !self.subscribers.isEmpty {

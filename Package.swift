@@ -20,17 +20,17 @@ let package = Package(
         .executableTarget(
             name: "fleetd",
             dependencies: ["FleetCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
             name: "fleetctl",
             dependencies: ["FleetCore"],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .executableTarget(
             name: "FleetConsoleApp",
             dependencies: ["FleetCore", .product(name: "SwiftTerm", package: "SwiftTerm")],
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
             name: "FleetCoreTests",

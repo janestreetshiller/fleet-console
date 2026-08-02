@@ -33,24 +33,32 @@ narrower, and specific.
 
 ## Ranked debt
 
-### 1. There is no git repository — blocking
+### 1. There is no git repository — blocking — **done**
 
-`.git` does not exist. 27,186 lines of Swift, a signed and notarized app bundle
+`.git` did not exist. 27,186 lines of Swift, a signed and notarized app bundle
 pipeline, and no history, no branches, no undo. Every other item below is
 cheaper and safer once this is fixed, and no structural change should happen
 before it. `.build/`, `build/`, `rust/target/` and `.DS_Store` all need a
 `.gitignore` in the same commit.
 
-### 2. Swift 6 language mode is opted out on all four targets — the actual concurrency debt
+*Resolved:* repository initialised, tree committed as an unmodified baseline,
+`.gitignore` covering 1.2 GB of build artifacts.
 
-`Package.swift` declares `swift-tools-version: 6.0` but pins every target to
+### 2. Swift 6 language mode is opted out on all four targets — the actual concurrency debt — **done**
+
+`Package.swift` declared `swift-tools-version: 6.0` but pinned every target to
 `.swiftLanguageMode(.v5)`. This is the modernization the mission is reaching for
 — not MVVM, which is already there. Strict concurrency checking is what would
-have caught items 3 and 4 at compile time. The migration is target-by-target and
-`FleetCore` is the natural first one: it is dependency-free and has the test
-coverage.
+have caught items 3 and 4 at compile time.
 
-### 3. `Notifier`'s mutable static state is an actual data race
+*Resolved:* all four targets are on language mode 6. `fleetctl` needed no
+changes at all; `fleetd` needed no changes to compile and three to stop warning.
+What the migration actually turned up is recorded in
+[SWIFT-6-MIGRATION.md](SWIFT-6-MIGRATION.md) — including two more genuine races
+(`DaemonClient.shouldRun`, and the weak-`self` double-load in the daemon's
+broadcast loop) that were invisible to the v5 compiler.
+
+### 3. `Notifier`'s mutable static state is an actual data race — **done**
 
 `Sources/FleetConsoleApp/Notifier.swift:12-13` — `authorized` and `requested`
 are unsynchronized `static var`s. `authorized` is written inside the
@@ -58,7 +66,7 @@ are unsynchronized `static var`s. `authorized` is written inside the
 an arbitrary queue, and read from `post(_:)` on the main actor. Small, real, and
 exactly what strict concurrency would reject.
 
-### 4. `HealthChecker.httpGet` can have its result overwritten on the timeout path
+### 4. `HealthChecker.httpGet` can have its result overwritten on the timeout path — **done**
 
 `Sources/fleetd/HealthChecker.swift:47-80`. The happy path is ordered correctly
 by the semaphore. The timeout path is not: after `semaphore.wait` reports

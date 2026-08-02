@@ -322,7 +322,7 @@ final class NetworkMonitor {
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             guard getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count),
                               nil, 0, NI_NUMERICHOST) == 0 else { continue }
-            return String(cString: host)
+            return String(nulTerminated: host)
         }
         return nil
     }

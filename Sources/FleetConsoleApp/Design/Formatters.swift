@@ -9,26 +9,47 @@ import Foundation
 // ways across three modules. Everything here pairs with `.monospacedDigit()`
 // at the call site — a formatter cannot enforce that, the view must.
 
-enum ConsoleFmt {
-    private static let bytes: ByteCountFormatter = {
+/// A `ByteCountFormatter` that can be shared across threads.
+///
+/// The formatter is a reference type with mutable options, so a shared static of
+/// one is shared mutable state — which Swift 6 rejects, correctly. The obvious
+/// modern answer is `ByteCountFormatStyle`, a `Sendable` value, and it was
+/// measured and rejected: it renders kilobytes as **"kB"** where this app has
+/// always shown **"KB"**. A concurrency migration is not a licence to change what
+/// every storage row and transfer rate in the window reads. So the formatter is
+/// kept and the *sharing* is made safe instead. The lock is held for the length of
+/// one string conversion, on a path that is already main-thread in practice.
+final class SharedByteFormatter: @unchecked Sendable {
+    private let lock = NSLock()
+    private let formatter: ByteCountFormatter
+
+    init(countStyle: ByteCountFormatter.CountStyle) {
         let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
+        formatter.countStyle = countStyle
         formatter.allowsNonnumericFormatting = false
-        return formatter
-    }()
+        self.formatter = formatter
+    }
+
+    func string(fromByteCount value: Int64) -> String {
+        lock.withLock { formatter.string(fromByteCount: value) }
+    }
+}
+
+enum ConsoleFmt {
+    private static let byteFormatter = SharedByteFormatter(countStyle: .file)
 
     // MARK: Bytes
 
     /// "994.66 GB" — the full-precision count for capacities and totals.
     static func bytes(_ value: Int64) -> String {
-        bytes.string(fromByteCount: value)
+        byteFormatter.string(fromByteCount: value)
     }
 
     /// "1.42 GB/s" for live throughput; nil is a genuine "not sampled" em dash,
     /// and sub-KB rates floor at zero rather than implying precision they lack.
     static func byteRate(_ value: Double?) -> String {
         guard let value, value >= 1024 else { return value == nil ? "—" : "0 KB/s" }
-        return bytes.string(fromByteCount: Int64(value)) + "/s"
+        return byteFormatter.string(fromByteCount: Int64(value)) + "/s"
     }
 
     // MARK: Rates and ratios

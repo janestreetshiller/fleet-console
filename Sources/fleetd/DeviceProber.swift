@@ -316,7 +316,7 @@ enum DeviceProber {
             var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
             guard getnameinfo(addr, socklen_t(addr.pointee.sa_len), &host, socklen_t(host.count),
                               nil, 0, NI_NUMERICHOST) == 0 else { continue }
-            let ip = String(cString: host)
+            let ip = String(nulTerminated: host)
             if ip.hasPrefix("127.") { continue }
             addresses[name] = ip
         }

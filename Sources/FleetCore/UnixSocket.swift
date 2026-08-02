@@ -26,7 +26,13 @@ private func posixError(_ context: String) -> FleetError {
 }
 
 /// One accepted connection. Framing is newline-delimited JSON.
-public final class SocketConnection {
+/// `@unchecked Sendable`, earned rather than asserted. Two disciplines make it
+/// true, and they are different disciplines: `buffer` is touched only by
+/// `readLine`/`takeRemainder`, which run on the one thread that owns this
+/// connection (`SocketServer` starts exactly one per accept); `closed` and every
+/// write are serialised by `writeLock`, because the broadcast path writes from the
+/// controller's queue while that owning thread is parked in `read`.
+public final class SocketConnection: @unchecked Sendable {
     public let fd: Int32
     public let peerUID: uid_t
     private var buffer = Data()
@@ -163,7 +169,7 @@ public final class UnixSocketServer {
 
     /// Blocking accept loop. Each accepted connection is handed to `handler` on its
     /// own thread; the handler owns closing it.
-    public func run(handler: @escaping (SocketConnection) -> Void) {
+    public func run(handler: @escaping @Sendable (SocketConnection) -> Void) {
         while listenFD >= 0 {
             let clientFD = accept(listenFD, nil, nil)
             if clientFD < 0 {

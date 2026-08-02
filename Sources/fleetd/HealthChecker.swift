@@ -94,7 +94,7 @@ enum HealthChecker {
     /// decided, concurrently with the read on the waiting thread. First writer
     /// wins, under a lock, so the check reports the reason it actually stopped
     /// rather than whichever thread happened to land last.
-    private final class SettledOutcome {
+    private final class SettledOutcome: @unchecked Sendable {
         private let lock = NSLock()
         private var value: Outcome?
 

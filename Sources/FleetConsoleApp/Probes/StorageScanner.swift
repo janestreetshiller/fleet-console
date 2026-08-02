@@ -239,7 +239,11 @@ final class StorageScanner {
     ///
     /// `keep` candidates are refused here as well as hidden in the UI, so a future
     /// caller cannot route around the rule by constructing the action itself.
-    func reclaim(_ candidate: ReclaimCandidate, completion: @escaping (Bool) -> Void) {
+    /// `completion` is `@MainActor` in the signature because that is where it has
+    /// always been called from — the `Task { @MainActor }` at the end of the work
+    /// block. Saying so makes the closure `Sendable`, which is what lets it cross
+    /// onto `queue` and back without the compiler having to take it on trust.
+    func reclaim(_ candidate: ReclaimCandidate, completion: @escaping @MainActor (Bool) -> Void) {
         guard candidate.risk.reclaimable else {
             lastError = "\(candidate.title) holds data, not cache — it is not reclaimable."
             completion(false)
