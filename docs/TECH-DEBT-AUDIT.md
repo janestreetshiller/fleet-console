@@ -103,11 +103,18 @@ The cost, stated plainly: the twenty-one members the extension reaches for are
 `internal` rather than `private`. `fleetd` is a seven-file executable, so that is
 module-private either way — but it is a genuine loosening and not a free move.
 
-### 6. `FleetCore/Models.swift` is 1,158 lines
+### 6. `FleetCore/Models.swift` is 1,158 lines — **done**
 
 A grab-bag: records, events, snapshot types, attention derivation. Splitting it
 along those seams is low-risk and mechanical, but it is cosmetic next to items
 1–5 and should not jump the queue.
+
+*Resolved:* split along its own `MARK` boundaries into seven files —
+`Models` (the service record and its evidence, 346), `Agents` (277), `Devices`
+(192), `Snapshot` (180), `Events` (112), `Unmanaged` (51), `Formatting` (39).
+Purely a move: a line-by-line comparison against the original confirms nothing
+was lost or edited, and the only additions are the six new `import Foundation`
+lines and one header comment per file.
 
 ## Deliberately not on this list
 
