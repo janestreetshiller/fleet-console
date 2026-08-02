@@ -53,7 +53,7 @@ enum HealthChecker {
         request.setValue("FleetConsole/1.0 (health check)", forHTTPHeaderField: "User-Agent")
 
         let semaphore = DispatchSemaphore(value: 0)
-        var outcome = Outcome(passed: false, detail: "no response", latencyMs: 0)
+        let settled = SettledOutcome()
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout
@@ -61,23 +61,55 @@ enum HealthChecker {
         let task = session.dataTask(with: request) { _, response, error in
             defer { semaphore.signal() }
             if let error {
-                outcome = Outcome(passed: false,
-                                  detail: "GET \(url.absoluteString) failed: \(error.localizedDescription)",
-                                  latencyMs: elapsed(start))
+                settled.settle(Outcome(passed: false,
+                                       detail: "GET \(url.absoluteString) failed: \(error.localizedDescription)",
+                                       latencyMs: elapsed(start)))
                 return
             }
             let status = (response as? HTTPURLResponse)?.statusCode ?? -1
-            outcome = Outcome(passed: status == expect,
-                              detail: "GET \(url.path.isEmpty ? "/" : url.path) → \(status) (expected \(expect))",
-                              latencyMs: elapsed(start))
+            settled.settle(Outcome(passed: status == expect,
+                                   detail: "GET \(url.path.isEmpty ? "/" : url.path) → \(status) (expected \(expect))",
+                                   latencyMs: elapsed(start)))
         }
         task.resume()
         if semaphore.wait(timeout: .now() + timeout + 1) == .timedOut {
+            // Settle *before* cancelling. `cancel()` completes the task with a
+            // cancellation error, so the handler above runs — and without the
+            // first-write-wins rule it would overwrite the timeout with "failed:
+            // cancelled", which reports our own cancel as the server's fault.
+            settled.settle(Outcome(passed: false,
+                                   detail: "GET \(url.absoluteString) timed out",
+                                   latencyMs: elapsed(start)))
             task.cancel()
-            outcome = Outcome(passed: false, detail: "GET \(url.absoluteString) timed out", latencyMs: elapsed(start))
         }
         session.invalidateAndCancel()
-        return outcome
+        return settled.resolved(or: Outcome(passed: false, detail: "no response", latencyMs: elapsed(start)))
+    }
+
+    /// A verdict written from two threads that must only be decided once.
+    ///
+    /// `httpGet` settles either from the session's completion handler or from its
+    /// own timeout branch, and those are not mutually exclusive: cancelling a
+    /// timed-out task makes the handler fire after the timeout branch has already
+    /// decided, concurrently with the read on the waiting thread. First writer
+    /// wins, under a lock, so the check reports the reason it actually stopped
+    /// rather than whichever thread happened to land last.
+    private final class SettledOutcome {
+        private let lock = NSLock()
+        private var value: Outcome?
+
+        func settle(_ outcome: Outcome) {
+            lock.lock()
+            defer { lock.unlock() }
+            guard value == nil else { return }
+            value = outcome
+        }
+
+        func resolved(or fallback: Outcome) -> Outcome {
+            lock.lock()
+            defer { lock.unlock() }
+            return value ?? fallback
+        }
     }
 
     private static func elapsed(_ start: Date) -> Double {

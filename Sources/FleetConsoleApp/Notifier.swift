@@ -8,6 +8,14 @@ import FleetCore
 /// interrupts you. Status messages appear in the popover and nowhere else — an
 /// agent that chats every thirty seconds must not be able to turn itself into a
 /// notification storm.
+///
+/// Main-actor isolated, and not incidentally: `authorized` is written by the
+/// authorization callback — which arrives on whatever queue UserNotifications
+/// felt like using — and read by `post(_:)` on the main actor. Both call sites
+/// are already main-actor (the app delegate at launch, `AppModel` when a
+/// snapshot brings new messages), so the isolation costs nothing and the write
+/// hops onto the actor instead of racing the read.
+@MainActor
 enum Notifier {
     private static var authorized = false
     private static var requested = false
@@ -17,7 +25,7 @@ enum Notifier {
         requested = true
         UNUserNotificationCenter.current()
             .requestAuthorization(options: [.alert, .sound]) { granted, error in
-                authorized = granted
+                Task { @MainActor in authorized = granted }
                 if let error {
                     FleetLog.warn("notification authorization failed: \(error.localizedDescription)")
                 } else {
