@@ -348,13 +348,19 @@ struct NetworkAdminSection: View {
                 }
                 IconButton(symbol: "xmark", help: "Dismiss") { actions.clearOutcome() }
             }
-            ScrollView(.horizontal) {
+            // Both axes, and clipped. `fixedSize` gives the text its full
+            // intrinsic height, so a horizontal-only ScrollView never clipped the
+            // vertical overflow — `maxHeight` bounded the frame while the content
+            // drew straight through it and over the rest of the popover. Four
+            // lines of ping never reached the bound; a support bundle is hundreds.
+            ScrollView([.horizontal, .vertical]) {
                 Text(outcome.output.isEmpty ? "(no output)" : outcome.output)
                     .font(FleetFont.mono(10))
                     .textSelection(.enabled)
                     .fixedSize(horizontal: true, vertical: true)
             }
             .frame(maxHeight: 132)
+            .clipped()
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

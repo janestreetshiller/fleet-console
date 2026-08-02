@@ -22,8 +22,18 @@ mkdir -p "$OUT"
 
 echo "▸ building renderer…"
 cd "$ROOT"
-swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER 2>&1 \
-    | grep -vE '^\[|warning: missing creator' || true
+# `|| true` used to sit on the end of this, which made a build failure look like a
+# successful run that happened to render nothing. The renderer only compiles under
+# -DFLEET_SURFACE_RENDERER, so it is exactly the code a normal build never checks,
+# and "✓ 0 surfaces" is not a thing this script should ever be able to print.
+if ! swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER 2>&1 \
+    | grep -vE '^\[|warning: missing creator'; then
+    :   # grep exits 1 when it filters every line, which is the quiet-success case
+fi
+if ! swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER >/dev/null 2>&1; then
+    echo "✗ the surface renderer does not compile — see the errors above"
+    exit 1
+fi
 BIN="$(swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER --show-bin-path)"
 
 echo "▸ rendering…"
@@ -33,6 +43,10 @@ echo "▸ rendering…"
 "$BIN/FleetConsoleApp" --render-surfaces "$OUT"
 
 COUNT=$(find "$OUT" -name '*.png' | wc -l | tr -d ' ')
+if [ "$COUNT" -eq 0 ]; then
+    echo "✗ the renderer ran but produced nothing → $OUT"
+    exit 1
+fi
 echo
 echo "✓ $COUNT surfaces → $OUT"
 echo

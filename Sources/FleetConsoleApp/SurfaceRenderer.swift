@@ -85,24 +85,11 @@ enum SurfaceRenderer {
         let model = AppModel()
         let counts = Counter()
 
-        func watchRouting() {
-            withObservationTracking { _ = model.network.routing } onChange: {
-                Task { @MainActor in counts.bump("routing"); watchRouting() }
-            }
+        watch("routing", counts) { _ = model.network.routing }
+        watch("processes", counts) { _ = model.processes.rows }
+        watch("menu-bar", counts) {
+            _ = model.fleetText; _ = model.fleetTint; _ = model.fleetTooltip
         }
-        func watchProcesses() {
-            withObservationTracking { _ = model.processes.rows } onChange: {
-                Task { @MainActor in counts.bump("processes"); watchProcesses() }
-            }
-        }
-        func watchMenuBar() {
-            withObservationTracking {
-                _ = model.fleetText; _ = model.fleetTint; _ = model.fleetTooltip
-            } onChange: {
-                Task { @MainActor in counts.bump("menu-bar"); watchMenuBar() }
-            }
-        }
-        watchRouting(); watchProcesses(); watchMenuBar()
 
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
@@ -119,6 +106,20 @@ enum SurfaceRenderer {
         exit(0)
     }
 
+    /// Re-arms itself on every change, counting as it goes. A static method rather
+    /// than three mutually-recursive local functions: `onChange` is `@Sendable`, and
+    /// a local function captured into it is not.
+    private static func watch(_ key: String, _ counts: Counter,
+                              _ read: @escaping @MainActor () -> Void) {
+        withObservationTracking(read, onChange: {
+            Task { @MainActor in
+                counts.bump(key)
+                watch(key, counts, read)
+            }
+        })
+    }
+
+    @MainActor
     private final class Counter {
         private var counts: [String: Int] = [:]
         func bump(_ key: String) { counts[key, default: 0] += 1 }
@@ -218,6 +219,17 @@ enum SurfaceRenderer {
         renderPopoverSurface(AnyView(NetworkAdminPreview(model: model)),
                              named: "popover-network-admin", model: model, fixture: fixture,
                              appearance: appearance, into: out)
+        // The diagnostic panel carrying output far taller than its 132pt bound.
+        // It shipped for a release drawing straight over the rows beneath it, and
+        // no surface caught that because no fixture ever put enough text in it.
+        // A four-line ping never reaches the bound; a support bundle is hundreds.
+        model.actions.previewOutcome(title: "Copied support bundle",
+                                     output: Self.tallDiagnosticFixture)
+        renderPopoverSurface(AnyView(NetworkAdminPreview(model: model)),
+                             named: "popover-network-admin-output", model: model,
+                             fixture: fixture, appearance: appearance, into: out)
+        model.actions.clearOutcome()
+
         renderPopoverSurface(AnyView(OverlaysPreview(model: model)),
                              named: "popover-overlays", model: model, fixture: fixture,
                              appearance: appearance, into: out)
@@ -226,6 +238,27 @@ enum SurfaceRenderer {
                              named: "popover-network", model: model, fixture: fixture,
                              appearance: appearance, into: out)
     }
+
+    /// Deliberately far taller than the panel's bound — the whole point of the
+    /// surface is to prove the overflow is clipped and scrolled, not painted.
+    private static let tallDiagnosticFixture: String = {
+        let interfaces = ["en0", "en5", "en6", "en7", "utun4"]
+        return interfaces.map { name in
+            """
+            {
+              "bsdName" : "\(name)",
+              "displayName" : "Ethernet Adapter (\(name))",
+              "hasLink" : false,
+              "ipv4" : [ ],
+              "ipv6" : [ ],
+              "isUp" : true,
+              "kind" : "ethernet",
+              "macAddress" : "<mac>",
+              "mtu" : 1500
+            }
+            """
+        }.joined(separator: ",\n")
+    }()
 
     private static func renderPopoverSurface(_ view: AnyView, named name: String,
                                              model: AppModel, fixture: Snapshot,

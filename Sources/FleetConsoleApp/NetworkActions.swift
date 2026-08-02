@@ -63,6 +63,14 @@ final class NetworkActions {
 
     func clearOutcome() { lastOutcome = nil }
 
+    #if FLEET_SURFACE_RENDERER
+    /// Seeds an outcome so the surface sheet can capture the diagnostic panel.
+    /// Compiled only into the renderer, never into the signed bundle.
+    func previewOutcome(title: String, output: String) {
+        lastOutcome = Outcome(title: title, output: output, succeeded: true)
+    }
+    #endif
+
     private func run(title: String, tool: String, arguments: [String], timeout: TimeInterval) {
         guard running == nil else { return }
         running = title
