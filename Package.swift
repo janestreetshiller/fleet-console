@@ -14,7 +14,7 @@ let package = Package(
     targets: [
         .target(
             name: "FleetCore",
-            swiftSettings: [.swiftLanguageMode(.v5)],
+            swiftSettings: [.swiftLanguageMode(.v6)],
             linkerSettings: [.linkedLibrary("sqlite3")]
         ),
         .executableTarget(
