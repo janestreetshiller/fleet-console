@@ -167,6 +167,12 @@ final class AppModel {
         serviceRows.filter { !$0.record.state.isTerminal }
     }
 
+    /// Actually up, as opposed to merely on the books. An expired lease still has
+    /// a row; it does not have a running process.
+    var runningServices: [ServiceRow] {
+        serviceRows.filter(\.record.state.isRunning)
+    }
+
     private(set) var agentSummaries: [AgentSummary] = []
     private(set) var agentProfiles: [AgentProfile] = []
     private(set) var recentMessages: [AgentMessage] = []
@@ -219,7 +225,7 @@ final class AppModel {
     var fleetTooltip: String {
         guard connected, let daemon else { return "FleetConsole — controller not running" }
         var lines: [String] = []
-        var counts = ["\(activeServices.count) running"]
+        var counts = ["\(runningServices.count) running"]
         if !unmanaged.isEmpty { counts.append("\(unmanaged.count) unmanaged") }
         if criticalCount > 0 { counts.append("\(criticalCount) critical") }
         if warningCount > 0 { counts.append("\(warningCount) warning") }

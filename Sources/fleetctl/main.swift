@@ -522,7 +522,7 @@ case "doctor":
           TailscaleClient.executablePath ?? "not found — device probes will be limited")
 
     if let snapshot = (try? UnixSocketClient.send(RPCRequest(op: .snapshot), timeout: 6))?.snapshot {
-        check("managed services", true, "\(snapshot.activeServices.count) running")
+        check("managed services", true, "\(snapshot.runningServices.count) running")
         // Unmanaged processes are a state of the machine, not a fault in the
         // install — reporting them as a failure here would contradict the whole
         // point of the attention rules and make `doctor` cry wolf on every run.

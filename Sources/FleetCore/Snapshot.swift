@@ -85,7 +85,12 @@ public struct Snapshot: Codable, Sendable {
         self.recentEvents = recentEvents
     }
 
+    /// On the books: everything not finished, including an expired lease that is
+    /// being reported rather than reaped. This is what a list shows.
     public var activeServices: [ServiceRecord] { services.filter { !$0.state.isTerminal } }
+
+    /// Actually up. This is what a count worded "running" shows.
+    public var runningServices: [ServiceRecord] { services.filter(\.state.isRunning) }
 }
 
 extension Snapshot {

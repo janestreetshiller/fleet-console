@@ -306,10 +306,22 @@ final class ConsoleModel {
 
     /// The one place ⌘R and the toolbar button both call: everything the
     /// window shows, re-evidenced now.
+    /// Everything the window can re-measure, because that is what the button says.
+    ///
+    /// The storage scan and the host probe were missing. Both are deliberately off
+    /// the sampling timer — walking cache trees and ssh-probing every device costs
+    /// real I/O, and a monitor that thrashes the disk to report disk usage is its
+    /// own bug — but "not on a timer" was silently implemented as "not on demand
+    /// either". `StorageScanner.rescan()` had no caller outside its own module,
+    /// which ran it once on first appearance; every ⌘R after that left the Storage
+    /// figures frozen at whatever they were the first time the module was opened.
+    /// An explicit refresh *is* the on-demand case those probes were built for.
     func refresh(model: AppModel) {
         model.refreshAll()
         model.processes.sample()
         model.breakdown.refreshVolumes()
         model.system.sample()
+        model.storage.rescan()
+        model.hosts.probe(devices: model.deviceRows.map(\.record))
     }
 }

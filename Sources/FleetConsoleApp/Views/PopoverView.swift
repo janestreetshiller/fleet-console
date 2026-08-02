@@ -101,7 +101,7 @@ struct ServicesContent: View {
     /// The counts, stated once, as a sentence rather than as a row of numerals
     /// whose labels have to be read to know which is which.
     private var census: String {
-        let services = model.activeServices.count
+        let services = model.runningServices.count
         var parts = ["\(services) service\(services == 1 ? "" : "s") running"]
         if !model.unmanaged.isEmpty { parts.append("\(model.unmanaged.count) unmanaged") }
         return parts.joined(separator: " · ")

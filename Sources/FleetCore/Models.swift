@@ -120,6 +120,25 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
         self == .stopped || self == .crashed
     }
 
+    /// Whether the process is meant to be up *right now*.
+    ///
+    /// Narrower than `!isTerminal`, and the difference is the whole point.
+    /// `isTerminal` answers "is this record finished" — an expired lease is not,
+    /// because an expired claim is reported and left alone rather than reaped, and
+    /// it still belongs in `fleetctl list`. But it is not running either: the CLI
+    /// renders `.expired` as **GONE**, and a header that counted it said "1 service
+    /// running" about the same record. Two surfaces disagreeing about one service
+    /// is worse than either answer alone, so the count that says "running" uses
+    /// this and the list that says "what is on the books" keeps `isTerminal`.
+    public var isRunning: Bool {
+        switch self {
+        case .starting, .running, .healthy, .degraded, .unhealthy, .paused, .expiring:
+            return true
+        case .expired, .stopping, .stopped, .crashed:
+            return false
+        }
+    }
+
     public var needsAttention: Bool {
         switch self {
         case .unhealthy, .crashed, .expired, .degraded: return true

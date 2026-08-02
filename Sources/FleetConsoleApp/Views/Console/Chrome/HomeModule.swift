@@ -72,7 +72,7 @@ struct HomeModule: View {
             return "\(model.criticalCount) critical · \(model.warningCount) warning"
         }
         if model.warningCount > 0 { return "\(model.warningCount) warning" }
-        return "\(model.activeServices.count) services running · nothing needs a decision"
+        return "\(model.runningServices.count) services running · nothing needs a decision"
     }
 
     // MARK: - Priority
