@@ -11,14 +11,9 @@ import Foundation
 
 /// A `ByteCountFormatter` that can be shared across threads.
 ///
-/// The formatter is a reference type with mutable options, so a shared static of
-/// one is shared mutable state — which Swift 6 rejects, correctly. The obvious
-/// modern answer is `ByteCountFormatStyle`, a `Sendable` value, and it was
-/// measured and rejected: it renders kilobytes as **"kB"** where this app has
-/// always shown **"KB"**. A concurrency migration is not a licence to change what
-/// every storage row and transfer rate in the window reads. So the formatter is
-/// kept and the *sharing* is made safe instead. The lock is held for the length of
-/// one string conversion, on a path that is already main-thread in practice.
+/// `ByteCountFormatStyle` is the Sendable value type that would replace it, and it
+/// renders kilobytes as "kB" where this app has always shown "KB". So the
+/// formatter stays and the sharing is made safe instead.
 final class SharedByteFormatter: @unchecked Sendable {
     private let lock = NSLock()
     private let formatter: ByteCountFormatter

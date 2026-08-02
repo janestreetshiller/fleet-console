@@ -1,10 +1,8 @@
 import Foundation
 
-// Processes the controller can see but did not start.
-//
-// The whole visibility-without-authority half of the product. An unmanaged row
-// gets a name, a reason it was noticed and a "Reveal in Activity Monitor" — never
-// a stop button.
+// Processes the controller can see but did not start. An unmanaged row gets a
+// name, a reason it was noticed and a "Reveal in Activity Monitor" — never a
+// stop button.
 // MARK: - Unmanaged processes
 
 public enum UnmanagedReason: String, Codable, Sendable {

@@ -1,10 +1,8 @@
 import Foundation
 
 // Agents: their sessions, their mailbox, and the profiles the UI groups them by.
-//
-// Sessions are the coding agents actually running on the machine, which are
-// ordinary processes rather than managed services. Messages are the local mailbox
-// that lets one of them ask a question without the operator watching a terminal.
+// Sessions are ordinary processes rather than managed services; the mailbox lets
+// one ask a question without the operator watching a terminal.
 // MARK: - Agent sessions
 //
 // The coding agents you actually run — Claude Code, Codex, Gemini CLI, opencode,

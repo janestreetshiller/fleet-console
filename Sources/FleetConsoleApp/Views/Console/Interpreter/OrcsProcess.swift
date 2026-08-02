@@ -169,11 +169,9 @@ private final class OrcsInvocation: @unchecked Sendable {
         process.standardOutput = FileHandle(fileDescriptor: outPipe[1], closeOnDealloc: false)
         process.standardError = FileHandle(fileDescriptor: errPipe[1], closeOnDealloc: false)
         process.terminationHandler = { [weak self] process in
-            // Bind once and read the status here. The previous spelling reached
-            // through `self?` a second time *inside* the queue block, which meant
-            // two separate loads of a weak reference that could differ, and left
-            // `process` being touched from the queue rather than from the handler
-            // that owns it.
+            // Bind once and read the status here: the previous spelling loaded the
+            // weak reference twice and touched `process` from the queue rather than
+            // from the handler that owns it.
             guard let self else { return }
             let status = process.terminationStatus
             self.queue.async { self.handleExit(status) }

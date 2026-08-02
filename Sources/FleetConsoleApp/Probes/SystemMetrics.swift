@@ -322,12 +322,9 @@ private final class HostSampler: @unchecked Sendable {
         }
         guard status == KERN_SUCCESS else { return sample }
 
-        // `host_page_size` rather than the `vm_kernel_page_size` global: the global
-        // is a `var` the kernel fills in before main and never touches again, which
-        // Swift 6 cannot tell apart from state someone might write to. The call is
-        // also the documented pairing for the counts `host_statistics64` just
-        // returned, so this is the more correct of the two reads, not a workaround.
-        // Both report 16384 here; the point is which one is *defined* to match.
+        // `host_page_size` rather than the `vm_kernel_page_size` global, which is a
+        // `var` Swift 6 cannot tell apart from writable state. It is also the
+        // documented pairing for the counts `host_statistics64` just returned.
         var pageSize: vm_size_t = 0
         guard host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS else { return sample }
         let page = Int64(pageSize)
@@ -661,10 +658,9 @@ enum SystemThresholds {
 // MARK: - Formatting
 
 enum SystemFmt {
-    /// The same shared formatter type the console uses. It was a second private
-    /// `ByteCountFormatter` configured identically to `ConsoleFmt`'s, which is two
-    /// places for "how this app writes a byte count" to drift apart — the exact
-    /// thing the file header of `Formatters.swift` says must not happen.
+    /// The same shared formatter the console uses. This was a second
+    /// identically-configured `ByteCountFormatter`, i.e. two places for a byte
+    /// count to drift apart.
     private static let byteFormatter = SharedByteFormatter(countStyle: .file)
 
     static func size(_ value: Int64) -> String {

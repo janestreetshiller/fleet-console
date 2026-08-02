@@ -149,19 +149,14 @@ public enum TailscaleClient {
                              txBytes: (dict["TxBytes"] as? NSNumber)?.int64Value ?? 0)
     }
 
-    // `Date.ISO8601FormatStyle` rather than `ISO8601DateFormatter`: the formatter
-    // is a reference type with mutable options, so two of them shared across the
-    // daemon's queues are shared mutable state that Swift 6 rejects — correctly,
-    // since `tailscale status` is parsed off the state queue. The format style is
-    // a `Sendable` value with the options fixed at construction, which removes the
-    // sharing rather than annotating around it. Same two shapes as before:
-    // RFC 3339 with and without fractional seconds.
+    // `Date.ISO8601FormatStyle` rather than `ISO8601DateFormatter`: a Sendable
+    // value with its options fixed at construction, so there is no shared mutable
+    // formatter to guard. Same two shapes: RFC 3339 with and without fractions.
     private static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let iso = Date.ISO8601FormatStyle()
 
-    /// `0001-01-01…` is Go's zero `time.Time`, which is what tailscale sends for
-    /// "never seen" — a date, syntactically, and a lie semantically. It is
-    /// rejected before parsing so it cannot arrive as a real `lastSeen`.
+    /// `0001-01-01…` is Go's zero `time.Time` — what tailscale sends for "never
+    /// seen". Syntactically a date, so it is rejected by name before parsing.
     static func parseDate(_ string: String?) -> Date? {
         guard let string, !string.isEmpty, !string.hasPrefix("0001-01-01") else { return nil }
         return (try? isoFractional.parse(string)) ?? (try? iso.parse(string))

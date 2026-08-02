@@ -1,16 +1,11 @@
 import Foundation
 import FleetCore
 
-// The wire protocol, and nothing else.
+// The wire protocol. Split from Controller.swift so the state machine and the
+// switch that dispatches into it are not the same file.
 //
-// Split out of `Controller.swift`, which held the state machine and the 300-line
-// switch that dispatches into it in one 1,571-line file. The state machine is now
-// on its own; this file is the only place that knows what an `RPCRequest` is.
-//
-// The split costs one thing worth naming: the members reached for below are
-// `internal` rather than `private` now. `fleetd` is a seven-file executable, so
-// that is module-private either way — but it is a genuine loosening, and it is the
-// price of not having the protocol sitting on top of the machine it drives.
+// The cost: the members reached for below are `internal` rather than `private`.
+// fleetd is a seven-file executable, so that is module-private either way.
 
 extension Controller {
 
@@ -57,16 +52,11 @@ extension Controller {
 
     // MARK: - Answer shapes
     //
-    // Three shapes cover every verb. They exist because the switch below used to
-    // write each one out longhand: the same `do`/`catch` seventeen times and the
-    // same `broadcastSnapshot()` ten times. That is ten chances to add a mutating
-    // verb and forget the broadcast — and a verb that mutates without broadcasting
-    // leaves every open dashboard showing stale state until the next supervisor
-    // tick, which reads as "the app is wrong" rather than "the daemon dropped a
-    // push". Naming the shapes makes the switch routing and nothing else.
+    // Three shapes cover every verb. A mutating verb that forgets its broadcast
+    // leaves every open dashboard stale until the next supervisor tick, so the
+    // broadcast belongs in the shape rather than in ten copies of it.
 
-    /// Anything that throws answers with the error's own description. Every verb
-    /// went through this already; now it is written once.
+    /// Anything that throws answers with the error's own description.
     private func answering(_ build: () throws -> RPCResponse) -> RPCResponse {
         do {
             return try build()
@@ -75,8 +65,8 @@ extension Controller {
         }
     }
 
-    /// On the state queue, then broadcast, then answer with the record. The shape
-    /// of every verb that changes one service.
+    /// On the state queue, broadcast, answer with the record. Every verb that
+    /// changes one service.
     private func answeringWithRecord(_ body: () throws -> ServiceRecord) -> RPCResponse {
         answering {
             let record = try queue.sync(execute: body)
@@ -85,8 +75,8 @@ extension Controller {
         }
     }
 
-    /// On the state queue, then broadcast, then answer with a fresh snapshot. The
-    /// shape of every verb that changes the fleet rather than one service.
+    /// On the state queue, broadcast, answer with a fresh snapshot. Every verb
+    /// that changes the fleet rather than one service.
     private func answeringWithSnapshot(_ body: () throws -> Void) -> RPCResponse {
         answering {
             try queue.sync(execute: body)
@@ -169,9 +159,8 @@ extension Controller {
                   !target.trimmingCharacters(in: .whitespaces).isEmpty else {
                 return .failure("claim requires an unmanaged process id or a pid")
             }
-            // Captured off the state queue, like every other process probe in this
-            // daemon, and passed in so the verification and the record are built
-            // from one table rather than from two moments.
+            // Captured off the state queue and passed in, so the verification and
+            // the record are built from one table rather than two moments.
             let table = ProcessTable.capture()
             return answeringWithRecord {
                 try self.claim(unmanagedID: target,
@@ -187,8 +176,7 @@ extension Controller {
             return answeringWithSnapshot { self.runReconcile(table: table) }
 
         case .refreshDevices:
-            // No broadcast here: `probeDevices` pushes its own once the probe
-            // lands, and a second one would be a snapshot of the state before it.
+            // No broadcast: `probeDevices` pushes its own once the probe lands.
             probeDevices()
             return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
 
@@ -258,8 +246,8 @@ extension Controller {
             }
 
         case .markSeen:
-            // Answers bare rather than with a snapshot: the caller already knows
-            // which ids it marked, and the dashboards get the change by broadcast.
+            // Answers bare: the caller knows which ids it marked, and the
+            // dashboards get the change by broadcast.
             return answering {
                 try queue.sync {
                     let ids: [Int64]
@@ -279,9 +267,8 @@ extension Controller {
                   !command.trimmingCharacters(in: .whitespaces).isEmpty else {
                 return .failure("ignoreCommand requires a command name")
             }
-            // Its own `catch`, for its own message: "could not update config" tells
-            // you the allow-list was not written, which a bare error description
-            // from deep inside `save()` does not.
+            // Its own catch, for its own message: "could not update config" says
+            // the allow-list was not written; an error from inside save() does not.
             do {
                 try queue.sync {
                     guard !self.config.ignoredListenerCommands.contains(command) else { return }

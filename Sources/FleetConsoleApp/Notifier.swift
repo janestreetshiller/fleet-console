@@ -9,12 +9,10 @@ import FleetCore
 /// agent that chats every thirty seconds must not be able to turn itself into a
 /// notification storm.
 ///
-/// Main-actor isolated, and not incidentally: `authorized` is written by the
-/// authorization callback — which arrives on whatever queue UserNotifications
-/// felt like using — and read by `post(_:)` on the main actor. Both call sites
-/// are already main-actor (the app delegate at launch, `AppModel` when a
-/// snapshot brings new messages), so the isolation costs nothing and the write
-/// hops onto the actor instead of racing the read.
+/// Main-actor isolated: `authorized` is written by the authorization callback on
+/// whatever queue UserNotifications chose, and read by `post(_:)` on the main
+/// actor. Both call sites are already main-actor, so the write hops instead of
+/// racing the read.
 @MainActor
 enum Notifier {
     private static var authorized = false

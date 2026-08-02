@@ -26,12 +26,10 @@ private func posixError(_ context: String) -> FleetError {
 }
 
 /// One accepted connection. Framing is newline-delimited JSON.
-/// `@unchecked Sendable`, earned rather than asserted. Two disciplines make it
-/// true, and they are different disciplines: `buffer` is touched only by
-/// `readLine`/`takeRemainder`, which run on the one thread that owns this
-/// connection (`SocketServer` starts exactly one per accept); `closed` and every
-/// write are serialised by `writeLock`, because the broadcast path writes from the
-/// controller's queue while that owning thread is parked in `read`.
+/// `@unchecked Sendable` under two different disciplines: `buffer` is confined to
+/// the one thread the server starts per accepted connection, while `closed` and
+/// every write are serialised by `writeLock` — the broadcast path writes while
+/// that owning thread is parked in `read`.
 public final class SocketConnection: @unchecked Sendable {
     public let fd: Int32
     public let peerUID: uid_t

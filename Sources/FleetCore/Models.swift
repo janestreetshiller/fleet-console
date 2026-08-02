@@ -3,11 +3,8 @@ import Foundation
 // A service as the controller knows it: what it is, what evidence there is that
 // it is alive, and what it is allowed to consume.
 //
-// Split out of a single 1,158-line Models.swift. That file was one `import` and
-// eleven unrelated subjects, so "where is the record type" and "where is the
-// message type" had the same answer. These files are those subjects. Nothing here
-// changed except which file it sits in — the types, their members and their
-// comments are the originals.
+// One of seven files split from a 1,158-line Models.swift along its own MARKs.
+// Nothing changed but which file each type sits in.
 // MARK: - Evidence
 //
 // The central honesty rule of FleetConsole: "reachable", "process exists",

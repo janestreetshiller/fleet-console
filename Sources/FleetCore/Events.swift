@@ -1,10 +1,8 @@
 import Foundation
 
-// The append-only event log's vocabulary.
-//
-// Every state change the controller makes files one of these. The log outlives
-// the records it describes: `prune` drops terminal service rows and never touches
-// events, because the audit trail is the point.
+// The append-only event log's vocabulary. Every state change files one of these,
+// and the log outlives the records it describes — `prune` drops terminal service
+// rows and never touches events.
 // MARK: - Events (append-only)
 
 public enum EventKind: String, Codable, Sendable, CaseIterable {

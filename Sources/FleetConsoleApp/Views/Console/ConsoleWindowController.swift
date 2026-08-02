@@ -30,10 +30,9 @@ final class ConsoleWindowController {
     /// terminal must outlive every SwiftUI rebuild of the tree that shows it.
     let tools = ChromeTools()
 
-    /// Observer tokens, appended on the main thread when the window is built and
-    /// released in `deinit`. `deinit` is nonisolated in Swift 6 and the tokens'
-    /// existential type is not Sendable, so the access is spelled out as unchecked
-    /// — accurate here, since nothing off the main thread ever touches the array.
+    /// Appended on the main thread when the window is built, released in `deinit`.
+    /// `deinit` is nonisolated in Swift 6 and the tokens are not Sendable, so the
+    /// access is spelled out as unchecked.
     private nonisolated(unsafe) var navigationObservers: [NSObjectProtocol] = []
     /// `NSWindow.delegate` is a weak reference, so the observer has to be owned
     /// somewhere that outlives the window's construction or it deallocates on

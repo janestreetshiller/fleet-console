@@ -1,11 +1,9 @@
 import Foundation
 
-// One consistent view of everything, and what the client derives from it.
-//
-// The daemon pushes a `Snapshot` on every state change and the UI never polls, so
-// this type is the entire contract between them. `AttentionItem` is derived on
-// the client rather than served, so the CLI and the app cannot come to different
-// conclusions about what needs looking at.
+// One consistent view of everything, and what the client derives from it. The
+// daemon pushes a `Snapshot` on every state change and the UI never polls, so this
+// is the whole contract between them. `AttentionItem` is derived client-side, so
+// the CLI and the app cannot disagree about what needs looking at.
 // MARK: - Attention
 
 public enum AttentionSeverity: String, Codable, Sendable {

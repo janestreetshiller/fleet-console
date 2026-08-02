@@ -73,10 +73,9 @@ enum HealthChecker {
         }
         task.resume()
         if semaphore.wait(timeout: .now() + timeout + 1) == .timedOut {
-            // Settle *before* cancelling. `cancel()` completes the task with a
-            // cancellation error, so the handler above runs — and without the
-            // first-write-wins rule it would overwrite the timeout with "failed:
-            // cancelled", which reports our own cancel as the server's fault.
+            // Settle before cancelling: `cancel()` completes the task with a
+            // cancellation error, which would otherwise overwrite the timeout and
+            // report our own cancel as the server's fault.
             settled.settle(Outcome(passed: false,
                                    detail: "GET \(url.absoluteString) timed out",
                                    latencyMs: elapsed(start)))
@@ -88,12 +87,9 @@ enum HealthChecker {
 
     /// A verdict written from two threads that must only be decided once.
     ///
-    /// `httpGet` settles either from the session's completion handler or from its
-    /// own timeout branch, and those are not mutually exclusive: cancelling a
-    /// timed-out task makes the handler fire after the timeout branch has already
-    /// decided, concurrently with the read on the waiting thread. First writer
-    /// wins, under a lock, so the check reports the reason it actually stopped
-    /// rather than whichever thread happened to land last.
+    /// The completion handler and the timeout branch are not mutually exclusive —
+    /// cancelling a timed-out task fires the handler after the timeout has already
+    /// decided. First writer wins, so the check reports why it actually stopped.
     private final class SettledOutcome: @unchecked Sendable {
         private let lock = NSLock()
         private var value: Outcome?

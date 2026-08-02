@@ -10,10 +10,8 @@ import FleetCore
 /// health checks, socket writes to subscribers) happens off that queue and posts
 /// its result back onto it.
 ///
-/// That paragraph is also the whole justification for `@unchecked Sendable`: the
-/// serial queue, not a lock and not the compiler, is what makes every stored
-/// property below safe to touch from the work and broadcast queues. The
-/// annotation states the existing contract; it does not relax one.
+/// That paragraph is the justification for `@unchecked Sendable`: the serial queue
+/// is what makes every stored property safe to touch from the other two.
 final class Controller: @unchecked Sendable {
     static let version = "1.0.0"
 
@@ -85,11 +83,8 @@ final class Controller: @unchecked Sendable {
 
         let server = UnixSocketServer(path: FleetPaths.socket.path)
         server.onRejectedPeer = { [weak self] uid in
-            // The log is unconditional — a refused peer is worth a line whether or
-            // not the controller is still around to record it in the registry. The
-            // registry write binds `self` once rather than reaching through the weak
-            // reference a second time inside the queue block, which was two separate
-            // loads that could disagree.
+            // The log is unconditional; only the registry write needs `self`, and
+            // it binds once rather than loading the weak reference twice.
             FleetLog.warn("rejected connection from uid \(uid)")
             guard let self else { return }
             self.queue.async {
@@ -1222,11 +1217,9 @@ final class Controller: @unchecked Sendable {
     private func dispatchBroadcast(_ snapshot: Snapshot) {
         let targets = Array(subscribers.values)
         broadcastQueue.async { [weak self] in
-            // Bind once at the top. Every `self?` below used to be its own load of
-            // the weak reference, so a controller torn down mid-broadcast could drop
-            // a subscriber and then fail to clear `broadcastInFlight` — leaving the
-            // daemon believing a broadcast was still in flight and never sending
-            // another. One binding makes the whole block all-or-nothing.
+            // Bind once. Five separate `self?` loads meant a controller torn down
+            // mid-broadcast could drop a subscriber and then fail to clear
+            // `broadcastInFlight`, wedging every later broadcast.
             guard let self else { return }
             if let data = try? Codec.encode(RPCResponse(ok: true, snapshot: snapshot)) {
                 for conn in targets {

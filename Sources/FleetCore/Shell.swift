@@ -3,8 +3,7 @@ import Foundation
 /// Holds what one drain closure read. `run` may read it while the other closure
 /// is still writing (the wait below can time out), so the bytes live behind a lock.
 /// A `Data` written by a drain thread and read by the caller after the group
-/// waits. Every access is under the lock, which is what makes the `Sendable`
-/// conformance below a statement of fact.
+/// waits. Every access is under the lock.
 private final class DrainedOutput: @unchecked Sendable {
     private let lock = NSLock()
     private var data = Data()

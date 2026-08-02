@@ -4,11 +4,9 @@ import FleetCore
 /// Talks to fleetd over the local socket. The app is a client and a dashboard —
 /// it never supervises the controller and never touches processes directly.
 ///
-/// `@unchecked Sendable`, earned: every stored property is behind `lock`, and the
-/// only other state is the request queue, which is immutable. The subscription
-/// runs on its own `Thread` rather than a task, so the class genuinely is shared
-/// across threads and `shouldRun` genuinely is read by one while written by
-/// another — see `stop()`.
+/// `@unchecked Sendable`: every stored property is behind `lock`; the request
+/// queue is immutable. The subscription runs on its own `Thread`, so this really
+/// is shared across threads.
 final class DaemonClient: @unchecked Sendable {
     static let shared = DaemonClient()
 
@@ -18,10 +16,9 @@ final class DaemonClient: @unchecked Sendable {
     private var subscribeThread: Thread?
     private var running = true
 
-    /// Read on every pass of the subscribe loop and written by `stop()` from the
-    /// main thread. It was a plain `Bool` before, which is a torn read waiting to
-    /// happen and the reason the loop could miss a shutdown: the flag is the only
-    /// thing that ends it.
+    /// Read every pass of the subscribe loop, written by `stop()` from the main
+    /// thread. It is the only thing that ends that loop, so a missed write is a
+    /// thread that never stops.
     private var shouldRun: Bool {
         lock.withLock { running }
     }
@@ -29,12 +26,10 @@ final class DaemonClient: @unchecked Sendable {
     /// Long-lived subscription with automatic reconnect. fleetd pushes a snapshot
     /// on every state change, so the UI never polls.
     ///
-    /// The callbacks are `@MainActor` in the signature rather than by convention —
-    /// they mutate `AppModel`, which is main-actor isolated, and the previous
-    /// signature left that as something each call site had to remember. They are
-    /// delivered through `DispatchQueue.main.async` rather than `Task { @MainActor }`
-    /// deliberately: snapshots have to be applied in arrival order, and the queue
-    /// is FIFO where a series of unstructured tasks is not.
+    /// The callbacks are `@MainActor` in the signature rather than by convention.
+    /// Delivery goes through `DispatchQueue.main.async` rather than
+    /// `Task { @MainActor }` because snapshots must be applied in arrival order,
+    /// and the queue is FIFO where unstructured tasks are not.
     func startSubscription(onSnapshot: @escaping @MainActor (Snapshot) -> Void,
                            onConnection: @escaping @MainActor (Bool, String?) -> Void) {
         let thread = Thread { [weak self] in
@@ -99,12 +94,9 @@ final class DaemonClient: @unchecked Sendable {
         return result.succeeded
     }
 
-    /// Hop to the main actor while keeping `DispatchQueue.main`'s ordering.
-    ///
-    /// `assumeIsolated` inside `main.async` is the honest spelling of what this code
-    /// has always done: the block is already on the main thread, so the assumption is
-    /// a statement of fact rather than an escape hatch, and it buys FIFO delivery
-    /// that `Task { @MainActor }` does not promise.
+    /// Hop to the main actor while keeping `DispatchQueue.main`'s FIFO ordering.
+    /// The block is already on the main thread, so `assumeIsolated` states a fact
+    /// rather than escaping a check.
     private static func onMain(_ body: @escaping @MainActor () -> Void) {
         DispatchQueue.main.async { MainActor.assumeIsolated(body) }
     }

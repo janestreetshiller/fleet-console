@@ -3,19 +3,16 @@ import Foundation
 /// Deliberately boring: line-oriented, timestamped, to stderr (launchd captures it)
 /// and optionally to a 0600 file. No os_log subsystem, no remote sink.
 ///
-/// `@unchecked Sendable` rather than an actor, and the unchecked part is earned
-/// property by property: `fileHandle` is touched only inside `queue`, and
-/// `minimumLevel` is behind `levelLock`. There is no other stored state. An actor
-/// would be the tidier answer but it would make every `FleetLog.info` call an
-/// `await`, and this type is called from `deinit`, from signal-adjacent teardown
-/// paths and from every queue the daemon owns — places that cannot suspend.
+/// `@unchecked Sendable` rather than an actor: `fileHandle` is touched only inside
+/// `queue`, `minimumLevel` only behind `levelLock`, and there is no other stored
+/// state. An actor would make every `FleetLog.info` an `await`, and this is called
+/// from `deinit` and teardown paths that cannot suspend.
 public final class FleetLog: @unchecked Sendable {
     public enum Level: String, Sendable {
         case debug = "DBG", info = "INF", warn = "WRN", error = "ERR"
 
-        /// A stored rank rather than `firstIndex(of:)` over a fresh array: this is
-        /// compared on every log call, including the ones that are about to be
-        /// filtered out.
+        /// A stored rank rather than `firstIndex(of:)` over a fresh array —
+        /// compared on every log call, including the ones about to be filtered.
         fileprivate var rank: Int {
             switch self {
             case .debug: return 0
@@ -33,10 +30,9 @@ public final class FleetLog: @unchecked Sendable {
     /// Only ever read or written inside `queue`.
     private var fileHandle: FileHandle?
 
-    /// Written once at startup and read on every log call from every thread, so it
-    /// gets its own lock rather than riding `queue`: the level check is the fast
-    /// path, and routing it through `queue.sync` would put a filtered debug line
-    /// onto the very queue it is trying not to touch.
+    /// Its own lock rather than `queue`: the level check is the fast path, and
+    /// routing it through `queue.sync` would put a filtered debug line onto the
+    /// queue it is trying not to touch.
     private let levelLock = NSLock()
     private var storedMinimumLevel: Level = .info
 

@@ -13,9 +13,8 @@ import SwiftUI
 // simply have no observer — which is exactly how a menu-bar utility should
 // behave.
 
-/// `@MainActor` on the whole enum rather than on each member: every function in
-/// here touches `NSApp`, `NSMenu` or `NSMenuItem`, all of which are main-actor
-/// types. The isolation was always required; it just was not written down.
+/// `@MainActor` on the enum rather than each member: every function here touches
+/// `NSApp`, `NSMenu` or `NSMenuItem`. The isolation was always required.
 @MainActor
 enum MainMenu {
 
@@ -217,9 +216,8 @@ enum MainMenu {
 /// Obj-C reachable target for menu items. Menus outlive any one window, so the
 /// target is a shared instance rather than a view controller.
 ///
-/// `@MainActor` states what AppKit already guarantees: menu actions are dispatched
-/// on the main thread, and `openConsole` is installed from `applicationDidFinishLaunching`
-/// on the same one. Before, that was a convention holding up a mutable static.
+/// `@MainActor` states what AppKit guarantees: menu actions dispatch on the main
+/// thread, and `openConsole` is installed from `applicationDidFinishLaunching`.
 @MainActor
 @objc private final class MenuActionTarget: NSObject {
     static let shared = MenuActionTarget()
