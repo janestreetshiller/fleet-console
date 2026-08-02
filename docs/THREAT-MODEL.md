@@ -69,7 +69,8 @@ declared port survives; it then shows up as Unmanaged rather than silently vanis
 - **`claim` does not widen that.** Adopting a running process into the registry
   (`fleetctl claim`, or the button on an unmanaged row) sets `ServiceRecord.claimed`, and
   `isSignallableByController` is false for the life of the record. Every signal path in
-  `Controller.swift` consults it: the stop RPC and `restart` refuse with a message,
+  the daemon consults it: the stop RPC (`ControllerRPC.swift`) and `restart` refuse with a
+  message,
   `verifiedTarget` refuses before pause/resume/kill can resolve a pid, `beginStop` refuses
   as the invariant underneath both, and the lease reaper records the expiry and then leaves
   the process alone. The UI draws none of those controls for a claimed record rather than

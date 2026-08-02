@@ -43,8 +43,9 @@ unconditional; only the registry write is guarded.
 
 ## Where an annotation was the honest answer
 
-`@unchecked Sendable` is used five times, and in each case the safety argument is
-written at the declaration rather than assumed:
+This migration added seven `@unchecked Sendable` annotations (three others —
+`HostSampler`, `ProcessReaper`, `OrcsInvocation` — predate it). In each case the
+safety argument is written at the declaration rather than assumed:
 
 - **`SocketConnection`** — two *different* disciplines, which is why it needed
   spelling out: `buffer` is confined to the single thread the server starts per
@@ -59,13 +60,25 @@ written at the declaration rather than assumed:
   would put it on the very queue it is trying not to touch. An actor would be
   tidier and wrong — `FleetLog` is called from `deinit` and from teardown paths
   that cannot suspend.
+- **`DaemonClient`** — every stored property behind one lock, because the
+  subscription runs on its own `Thread` rather than a task and genuinely is shared
+  across them.
+- **`SharedByteFormatter`** — new, and the lock is the entire reason it exists:
+  see *Where the modern API was measured and rejected*.
 - **`DrainedOutput`**, **`HealthChecker.SettledOutcome`** — already
   fully lock-protected; they simply had never declared it.
 
-`nonisolated(unsafe)` appears three times, all of them the same situation:
-`NotificationCenter` observer tokens whose existential type is not `Sendable`,
-written on the main thread in `init` and read in `deinit` — which is nonisolated
-under Swift 6 and therefore cannot see main-actor state.
+This migration added three `nonisolated(unsafe)` properties (six more, all timers
+and file-watch handles, predate it). Two are the same situation and one is not:
+
+- `ConsoleWindowController.navigationObservers` and `PTYSurface.closeObserver` —
+  `NotificationCenter` tokens whose existential type is not `Sendable`, written on
+  the main thread in `init` and released in `deinit`, which is nonisolated under
+  Swift 6 and therefore cannot see main-actor state.
+- `PTYSurface.Bridge.session` — a weak reference, not a token. SwiftTerm's process
+  delegate has nonisolated requirements, so the bridge has to be `Sendable` to be
+  handed over at all; every callback arrives on the main queue, which is the same
+  thread that set the reference.
 
 ## Where the modern API was measured and rejected
 

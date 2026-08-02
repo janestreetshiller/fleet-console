@@ -62,7 +62,7 @@ The item's popover has four sections (`FleetSection`), switchable in
 | **Services** | "What is running, who owns it, and does anything need a decision?" A verdict line, needs-attention, then service rows that expand in place to evidence, CPU+memory sparklines and the safe actions (pause · restart · stop · kill). |
 | **Agents** | "Is anyone waiting on me?" A profile card per agent — running now, track record, projects, recent services, messages — plus *waiting on you* with an inline reply box. |
 | **Processes** | "What is this machine spending itself on?" Top five by CPU and top five by memory, with pid, owner, state and usage. Inspect opens the dashboard at that pid. **End Process** is owner-only, off by default, and re-verifies the pid's start signature before it signals. |
-| **Connections** | "Am I connected, where do my packets go, and do my machines answer?" Listening sockets · Internet · Ethernet · Wi-Fi · Tailscale · **default gateway · DNS · interfaces with addresses and subnets** · VPN · VLAN · Thunderbolt · exo · devices. Actions: copy an address, ping, traceroute, copy a sanitised support bundle. A footer opens the router's admin console. |
+| **Connections** | "Am I connected, where do my packets go, and do my machines answer?" Unmanaged listening sockets · Internet · Ethernet · Wi-Fi · Tailscale · **default gateway · DNS · interfaces with addresses and subnets** · VPN · VLAN · Thunderbolt · exo · devices. Actions: copy an address, ping, traceroute, copy a sanitised support bundle. A footer opens the router's admin console. |
 
 **Local tools.** The Services section also lists your own long-running tools —
 declared in `config.json` as `knownServices`, matched by command line or port.

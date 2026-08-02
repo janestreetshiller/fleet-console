@@ -127,7 +127,7 @@ lines and one header comment per file.
 - **The notification feed.** `Notifier` is 51 lines and deliberately narrow —
   only an awaiting-reply or a problem message interrupts, so a chatty agent
   cannot become a notification storm. The only defect is item 3.
-- **Claiming and labelling.** The claim path in `Controller.swift:669-745` is the
+- **Claiming and labelling.** The claim path (`Controller.swift`, `func claim`) is the
   most carefully reasoned code in the repository: the refusal rules are
   centralized, the "claim buys no exemption" invariant is enforced on the wire
   and in the UI, and an expired claim is reported rather than reaped. It is
