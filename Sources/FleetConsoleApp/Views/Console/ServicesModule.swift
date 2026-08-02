@@ -289,11 +289,17 @@ private struct AgentRow: View {
                     ConsoleBadge(text: "\(agent.awaitingReply) awaiting", tone: .warn,
                                  symbol: "questionmark.bubble")
                 }
-                if agent.running > 0 {
+                // Shown whenever the agent owns a record, including when none of
+                // them are running. Hiding the count at zero left an agent whose
+                // only service had expired with a blank cell beside siblings that
+                // had numbers, which reads as a row that failed to draw rather
+                // than as a zero. Blank now means one thing: owns no services.
+                if agent.owned > 0 {
                     Text("\(agent.running) svc")
                         .font(ConsoleFont.mono(.caption))
                         .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(agent.running > 0 ? AnyShapeStyle(.secondary)
+                                                           : AnyShapeStyle(.tertiary))
                 }
             }
         }

@@ -109,6 +109,7 @@ extension Snapshot {
             let mail = messagesByAgent[agent] ?? []
             var summary = AgentSummary(
                 id: agent,
+                owned: records.count,
                 // `records` is everything not finished, which is right for ports and
                 // for attention: an expired record still holds its ports. It is
                 // wrong for a number labelled "running" — see ServiceState.isRunning.
@@ -146,6 +147,7 @@ extension Snapshot {
             let mail = (messagesByAgent[name] ?? []).sorted { $0.createdAt > $1.createdAt }
 
             var profile = AgentProfile(id: name)
+            profile.owned = live.count
             profile.running = live.filter(\.state.isRunning).count
             profile.paused = live.filter { $0.state == .paused }.count
             profile.needingAttention = live.filter { $0.state.needsAttention }.count

@@ -176,6 +176,8 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
     public var id: String
 
     // Now
+    /// Records owned and not finished; see `AgentSummary.owned`.
+    public var owned = 0
     public var running = 0
     public var paused = 0
     public var needingAttention = 0
@@ -247,6 +249,12 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
 
 public struct AgentSummary: Codable, Sendable, Identifiable, Hashable {
     public var id: String            // the agent name
+    /// Records this agent owns that are not finished — the set `running` is drawn
+    /// from. It exists so a row can tell "owns nothing" apart from "owns
+    /// something, none of it running", which are the same number and not the same
+    /// fact: an agent whose only service expired had a blank where its siblings
+    /// had counts, which reads as a row that failed to render.
+    public var owned: Int = 0
     public var running: Int
     public var needingAttention: Int
     public var ports: [Int]
@@ -259,10 +267,11 @@ public struct AgentSummary: Codable, Sendable, Identifiable, Hashable {
     public var awaitingReply: Int = 0
     public var lastMessageAt: Date?
 
-    public init(id: String, running: Int = 0, needingAttention: Int = 0, ports: [Int] = [],
-                oldestStart: Date? = nil, nextLeaseExpiry: Date? = nil, totalCPU: Double = 0,
-                totalMemMB: Double = 0, purposes: [String] = []) {
+    public init(id: String, owned: Int = 0, running: Int = 0, needingAttention: Int = 0,
+                ports: [Int] = [], oldestStart: Date? = nil, nextLeaseExpiry: Date? = nil,
+                totalCPU: Double = 0, totalMemMB: Double = 0, purposes: [String] = []) {
         self.id = id
+        self.owned = owned
         self.running = running
         self.needingAttention = needingAttention
         self.ports = ports
