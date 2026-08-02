@@ -33,6 +33,28 @@ struct OverviewModule: View {
 
     private var system: SystemMonitor { model.system }
 
+    /// Width of the content column, measured rather than assumed — the sidebar
+    /// and the inspector both change it while the window stays the same size.
+    @State private var contentWidth: CGFloat = 0
+
+    private var instrumentCount: Int { system.gpu.available ? 4 : 3 }
+
+    /// How many instruments sit on a row.
+    ///
+    /// A plain `.adaptive` grid takes every column the width allows, and at the
+    /// width this module usually has that is three — which puts CPU, Memory and
+    /// Disk on one row and leaves GPU alone beside two empty slots. The hole is
+    /// the widest thing on the surface and it reads as a missing card. So the
+    /// count steps down when the last row would hold exactly one of three or
+    /// more: four cards become 2x2 rather than 3+1.
+    private var instrumentColumns: Int {
+        let gap = ConsoleMetrics.cardGap
+        let fits = max(1, Int((contentWidth + gap) / (ConsoleMetrics.cardMinWidth + gap)))
+        var count = min(fits, instrumentCount)
+        if count >= 3 && instrumentCount % count == 1 { count -= 1 }
+        return max(1, count)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
@@ -41,9 +63,10 @@ struct OverviewModule: View {
                     subtitle: subtitle,
                     symbol: ConsoleModule.overview.symbol)
 
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: ConsoleMetrics.cardMinWidth),
-                                             spacing: ConsoleMetrics.cardGap,
-                                             alignment: .top)],
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
+                                                            spacing: ConsoleMetrics.cardGap,
+                                                            alignment: .top),
+                                         count: instrumentColumns),
                           alignment: .leading,
                           spacing: ConsoleMetrics.cardGap) {
                     cpuCard
@@ -56,6 +79,10 @@ struct OverviewModule: View {
                 footer
             }
             .padding(ConsoleMetrics.gutter)
+            .background(GeometryReader { proxy in
+                Color.clear.onAppear { contentWidth = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, new in contentWidth = new }
+            })
         }
         .scrollContentBackground(.hidden)
     }

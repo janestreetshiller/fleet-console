@@ -147,6 +147,8 @@ struct LoadWaveChart: View {
         .chartLegend(.hidden)
         .chartPlotStyle { plot in
             plot.padding(ConsoleMetrics.chartPlotInset)
+                .padding(.trailing, window.zoomed ? ConsoleMetrics.chartAxisGutter
+                                                 : ConsoleMetrics.chartPlotInset)
         }
         .frame(height: height)
         .accessibilityLabel(accessibilityLabel(window))
@@ -219,6 +221,8 @@ struct ThroughputChart: View {
             .chartLegend(.hidden)
             .chartPlotStyle { plot in
                 plot.padding(ConsoleMetrics.chartPlotInset)
+                    .padding(.trailing, labelsFit ? ConsoleMetrics.chartAxisGutter
+                                                  : ConsoleMetrics.chartPlotInset)
             }
             .frame(height: height)
             .accessibilityLabel("Disk throughput, read \(ConsoleFmt.byteRate(read.last)), "

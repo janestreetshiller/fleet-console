@@ -135,6 +135,12 @@ enum ConsoleMetrics {
     /// line are two weights of one mark, not two steps of a size hierarchy.
     static let chartStroke: CGFloat = 1.5
     static let chartPlotInset: CGFloat = 2
+    /// Room held clear on the trailing edge for the two labels that state the y
+    /// window. Without it the plot runs the full width and a trace that reaches
+    /// its own upper bound — which auto-ranging guarantees it does — is drawn
+    /// through the label naming that bound. 55 is the rung that clears the widest
+    /// label these charts produce ("38.2 MB/s").
+    static let chartAxisGutter: CGFloat = 55
     /// Below this a chart has no room for the two labels that state its y
     /// window, so it keeps its plain domain instead of auto-ranging. A zoomed
     /// axis nobody can read is worse than a flat one.
