@@ -1,0 +1,13 @@
+-- FleetConsole's Yazi surface.
+--
+-- The panel borrows Yazi as a file *view*. It is not a terminal the operator
+-- lives in, and it is not their own Yazi: `FilesPanel` points YAZI_CONFIG_HOME
+-- at this directory, so nothing here inherits ~/.config/yazi and nothing here
+-- changes it.
+--
+-- The status line is removed. Yazi's footer carries mode, size, permissions,
+-- position and a second copy of the hovered name — all of it either duplicated
+-- by the inspector column two feet to the left, or irrelevant in a panel that
+-- cannot be operated as a shell. What it mostly did was put a second, differently
+-- formatted path under a panel that already has one in its header.
+Status.redraw = function() return {} end

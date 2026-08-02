@@ -1,0 +1,12 @@
+# SwiftPM. Package.resolved is committed on purpose: this ships as a signed app,
+# so the SwiftTerm revision has to be pinned, not resolved afresh per machine.
+/.build/
+
+# Built app bundle and generated design surfaces
+/build/
+
+# Rust
+/rust/target/
+
+# macOS
+.DS_Store

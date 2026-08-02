@@ -1,0 +1,241 @@
+# FleetConsole's Yazi surface — white and grey, nothing else.
+#
+# Yazi's stock theme colours by file type: green executables, magenta archives,
+# cyan links, a dozen hues down the column. That is a legible scheme in a
+# full-window file manager and the wrong one here. In this app colour is a status
+# vocabulary — `StatusTone` spends green, amber and red on healthy, degraded and
+# failing, and every surface honours that. A file browser spending the same green
+# on "this file has +x" puts a second, unrelated meaning on the console's most
+# loaded signal, two feet from a services list where green means verified.
+#
+# So the file column is achromatic and attention is carried by *weight and
+# reversal* instead: the hovered row is the only high-contrast thing on screen.
+
+# One ramp, four steps. Named here rather than repeated, because the whole point
+# is that no fifth value quietly appears.
+#   ink    #F2F3F5  the focused row
+#   plain  #C8C9CD  ordinary entries
+#   muted  #86878C  directories' chrome, parent column, metadata
+#   faint  #55565A  dividers and rules
+
+[mgr]
+cwd = { fg = "#86878C" }
+
+# Reversed, not tinted. This is the "focus attention to a specific path" rule:
+# one row is inverted, everything else is flat, and the eye has exactly one place
+# to land no matter how long the listing is.
+hovered = { fg = "#0B0D11", bg = "#F2F3F5", bold = true }
+preview_hovered = { fg = "#0B0D11", bg = "#C8C9CD" }
+
+find_keyword = { fg = "#F2F3F5", bold = true, underline = true }
+find_position = { fg = "#86878C" }
+
+marker_copied = { fg = "#C8C9CD", bg = "#C8C9CD" }
+marker_cut = { fg = "#86878C", bg = "#86878C" }
+marker_marked = { fg = "#F2F3F5", bg = "#F2F3F5" }
+marker_selected = { fg = "#F2F3F5", bg = "#F2F3F5" }
+
+count_copied = { fg = "#0B0D11", bg = "#C8C9CD" }
+count_cut = { fg = "#0B0D11", bg = "#86878C" }
+count_selected = { fg = "#0B0D11", bg = "#F2F3F5" }
+
+# The dividers, fixed rather than inherited. One glyph, one weight, one colour,
+# dim enough to read as structure instead of as content.
+border_symbol = "│"
+border_style = { fg = "#55565A" }
+
+syntect_theme = ""
+
+[tabs]
+active = { fg = "#0B0D11", bg = "#F2F3F5", bold = true }
+inactive = { fg = "#86878C" }
+
+[mode]
+normal_main = { fg = "#0B0D11", bg = "#F2F3F5", bold = true }
+normal_alt = { fg = "#F2F3F5", bg = "#55565A" }
+select_main = { fg = "#0B0D11", bg = "#C8C9CD", bold = true }
+select_alt = { fg = "#C8C9CD", bg = "#55565A" }
+unset_main = { fg = "#0B0D11", bg = "#86878C", bold = true }
+unset_alt = { fg = "#86878C", bg = "#55565A" }
+
+[which]
+cols = 3
+mask = { bg = "#0B0D11" }
+cand = { fg = "#F2F3F5" }
+rest = { fg = "#86878C" }
+desc = { fg = "#C8C9CD" }
+separator = "  ·  "
+separator_style = { fg = "#55565A" }
+
+[confirm]
+border = { fg = "#55565A" }
+title = { fg = "#F2F3F5" }
+content = { fg = "#C8C9CD" }
+list = { fg = "#C8C9CD" }
+btn_yes = { fg = "#0B0D11", bg = "#F2F3F5" }
+btn_no = { fg = "#C8C9CD" }
+btn_labels = [ "  Yes  ", "  (n)o  " ]
+
+[spot]
+border = { fg = "#55565A" }
+title = { fg = "#F2F3F5" }
+tbl_col = { fg = "#F2F3F5" }
+tbl_cell = { fg = "#0B0D11", bg = "#C8C9CD" }
+
+[notify]
+title_info = { fg = "#F2F3F5" }
+title_warn = { fg = "#C8C9CD" }
+title_error = { fg = "#F2F3F5" }
+icon_info = "·"
+icon_warn = "!"
+icon_error = "x"
+
+[pick]
+border = { fg = "#55565A" }
+active = { fg = "#0B0D11", bg = "#F2F3F5", bold = true }
+inactive = { fg = "#C8C9CD" }
+
+[input]
+border = { fg = "#55565A" }
+title = { fg = "#F2F3F5" }
+value = { fg = "#F2F3F5" }
+selected = { fg = "#0B0D11", bg = "#C8C9CD" }
+
+[cmp]
+border = { fg = "#55565A" }
+active = { fg = "#0B0D11", bg = "#F2F3F5" }
+inactive = { fg = "#C8C9CD" }
+
+[tasks]
+border = { fg = "#55565A" }
+title = { fg = "#F2F3F5" }
+hovered = { fg = "#0B0D11", bg = "#F2F3F5" }
+
+[help]
+on = { fg = "#F2F3F5" }
+run = { fg = "#C8C9CD" }
+desc = { fg = "#86878C" }
+hovered = { fg = "#0B0D11", bg = "#F2F3F5" }
+footer = { fg = "#86878C" }
+
+# One rule per structural distinction, and no rule that encodes a *status*.
+# Directories read brightest because they are the thing you navigate; everything
+# else is one step down; unreadable entries drop to muted so a permission problem
+# is still visible without spending a hue on it.
+[filetype]
+#
+# `url`, not `name`: a filetype rule matches on url or mime and is rejected at
+# parse time otherwise — the same rule [open] enforces.
+rules = [
+	{ url = "*/", fg = "#F2F3F5" },
+	{ url = "*", is = "orphan", fg = "#86878C", italic = true },
+	{ url = "*", is = "link", fg = "#C8C9CD", italic = true },
+	{ url = "*", is = "dummy", fg = "#86878C", italic = true },
+	{ url = "*", fg = "#C8C9CD" },
+]
+
+# Icons.
+#
+# `[filetype]` colours the *name*; the glyph in front of it is coloured by these
+# rules, which are a separate set with their own `fg`. Leaving them at Yazi's
+# defaults left an orange Rust glyph and a blue TOML glyph in a column that is
+# otherwise achromatic — the exact thing this theme exists to prevent. Declaring
+# `[icon]` replaces the default set outright, so the set below is deliberately
+# a working operator's set rather than an exhaustive one: the file kinds that
+# actually appear next to a supervised service.
+#
+# Every glyph is a Nerd Font codepoint. `TerminalFont` resolves a Nerd Font for
+# the panel and falls back to SF Mono when none is installed — in that case these
+# render as tofu, which is why the panel says so rather than pretending.
+[icon]
+
+dirs = [
+	{ name = "*", text = "" },
+	{ name = ".git", text = "" },
+	{ name = ".github", text = "" },
+	{ name = "node_modules", text = "" },
+	{ name = "Sources", text = "" },
+	{ name = "Tests", text = "" },
+	{ name = "Scripts", text = "" },
+	{ name = "docs", text = "" },
+	{ name = "build", text = "" },
+	{ name = ".build", text = "" },
+	{ name = "target", text = "" },
+	{ name = "Resources", text = "" },
+]
+
+files = [
+	{ name = "Package.swift", text = "" },
+	{ name = "Package.resolved", text = "" },
+	{ name = "Cargo.toml", text = "" },
+	{ name = "Cargo.lock", text = "" },
+	{ name = "Makefile", text = "" },
+	{ name = "Dockerfile", text = "" },
+	{ name = "README.md", text = "" },
+	{ name = "LICENSE", text = "" },
+	{ name = ".gitignore", text = "" },
+	{ name = ".DS_Store", text = "" },
+]
+
+exts = [
+	# Code
+	{ name = "swift", text = "" },
+	{ name = "rs", text = "" },
+	{ name = "py", text = "" },
+	{ name = "js", text = "" },
+	{ name = "ts", text = "" },
+	{ name = "tsx", text = "" },
+	{ name = "go", text = "" },
+	{ name = "c", text = "" },
+	{ name = "h", text = "" },
+	{ name = "cpp", text = "" },
+	{ name = "lua", text = "" },
+	{ name = "sh", text = "" },
+	{ name = "bash", text = "" },
+	{ name = "zsh", text = "" },
+	{ name = "metal", text = "" },
+	# Config and data
+	{ name = "toml", text = "" },
+	{ name = "json", text = "" },
+	{ name = "yaml", text = "" },
+	{ name = "yml", text = "" },
+	{ name = "plist", text = "" },
+	{ name = "sqlite3", text = "" },
+	{ name = "db", text = "" },
+	{ name = "env", text = "" },
+	# Operational — what a supervised service leaves behind
+	{ name = "log", text = "" },
+	{ name = "out", text = "" },
+	{ name = "err", text = "" },
+	{ name = "sock", text = "" },
+	{ name = "pid", text = "" },
+	# Docs and media
+	{ name = "md", text = "" },
+	{ name = "txt", text = "" },
+	{ name = "pdf", text = "" },
+	{ name = "png", text = "" },
+	{ name = "jpg", text = "" },
+	{ name = "jpeg", text = "" },
+	{ name = "svg", text = "" },
+	{ name = "icns", text = "" },
+	{ name = "gguf", text = "" },
+	# Archives
+	{ name = "zip", text = "" },
+	{ name = "gz", text = "" },
+	{ name = "tar", text = "" },
+	{ name = "dmg", text = "" },
+]
+
+# The fallbacks, in order. `conds` is consulted last, so these catch everything
+# the lists above do not name.
+conds = [
+	{ if = "orphan", text = "" },
+	{ if = "link", text = "" },
+	{ if = "block", text = "" },
+	{ if = "char", text = "" },
+	{ if = "fifo", text = "" },
+	{ if = "sock", text = "" },
+	{ if = "exec", text = "" },
+	{ if = "dir", text = "" },
+	{ if = "!dir", text = "" },
+]
