@@ -77,7 +77,7 @@ cancellation error instead of the timeout, or read a torn value. Separately, the
 blocking `semaphore.wait` parks a `workQueue` thread for the whole check
 duration; `async`/`await` removes both problems at once.
 
-### 5. `fleetd/Controller.swift` is 1,555 lines and 38 `queue.sync` call sites
+### 5. `fleetd/Controller.swift` is 1,555 lines and 38 `queue.sync` call sites — **done**
 
 The single largest file, and the only one where size is a genuine hazard rather
 than an aesthetic complaint. It holds RPC dispatch, lease reaping, reconcile,
@@ -89,6 +89,19 @@ from inside the queue deadlocks), and that risk is invisible to the reader and t
 the compiler. Splitting the RPC dispatch table out from the state machine is the
 highest-value structural change in the repo, and it is a change that wants git
 underneath it first.
+
+*Resolved:* the wire protocol moved to `Sources/fleetd/ControllerRPC.swift` as an
+extension. `Controller.swift` is 1,264 lines and 12 `queue.sync` sites; the RPC
+file is 323 and 18. Three named answer shapes — `answering`,
+`answeringWithRecord`, `answeringWithSnapshot` — replaced seventeen hand-written
+`do`/`catch` blocks (six remain, each for a message a bare error description
+would not give) and ten hand-written `broadcastSnapshot()` calls. That last count
+is the real win: a mutating verb added without its broadcast used to leave every
+open dashboard stale until the next supervisor tick, and the shape now carries it.
+
+The cost, stated plainly: the twenty-one members the extension reaches for are
+`internal` rather than `private`. `fleetd` is a seven-file executable, so that is
+module-private either way — but it is a genuine loosening and not a free move.
 
 ### 6. `FleetCore/Models.swift` is 1,158 lines
 

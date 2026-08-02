@@ -17,23 +17,23 @@ import FleetCore
 final class Controller: @unchecked Sendable {
     static let version = "1.0.0"
 
-    private let queue = DispatchQueue(label: "com.fleetconsole.controller")
+    let queue = DispatchQueue(label: "com.fleetconsole.controller")
     private let workQueue = DispatchQueue(label: "com.fleetconsole.work", attributes: .concurrent)
     private let broadcastQueue = DispatchQueue(label: "com.fleetconsole.broadcast")
 
-    private let registry: Registry
-    private var config: FleetConfig
+    let registry: Registry
+    var config: FleetConfig
     private var configWarning: String?
 
-    private var services: [String: ServiceRecord] = [:]
+    var services: [String: ServiceRecord] = [:]
     private var unmanagedList: [UnmanagedProcess] = []
     private var externalList: [ExternalService] = []
     private var sessionList: [AgentSession] = []
     private var deviceList: [DeviceRecord] = []
     private var tailscale: TailscaleStatus?
 
-    private var subscribers: [ObjectIdentifier: SocketConnection] = [:]
-    private var daemon: DaemonInfo
+    var subscribers: [ObjectIdentifier: SocketConnection] = [:]
+    var daemon: DaemonInfo
 
     /// Broadcast coalescing state, owned by `queue`: one write in flight, one pending.
     private var broadcastInFlight = false
@@ -554,7 +554,7 @@ final class Controller: @unchecked Sendable {
 
     // MARK: - Reconciliation
 
-    private func runReconcile(table: ProcessTable) {
+    func runReconcile(table: ProcessTable) {
         // A failed `ps`/`lsof` is not an empty machine. Sweeping on one would delete
         // every unmanaged row (losing `firstSeen`) and then re-emit the whole set as new
         // `becameUnmanaged` events on the next good sweep — 447 of 867 events in the live
@@ -593,7 +593,7 @@ final class Controller: @unchecked Sendable {
         daemon.lastReconcileAt = lastReconcileAt
     }
 
-    private func probeDevices() {
+    func probeDevices() {
         workQueue.async { [weak self] in
             guard let self else { return }
             let status = TailscaleClient.status().status
@@ -611,7 +611,7 @@ final class Controller: @unchecked Sendable {
 
     // MARK: - Mutating operations
 
-    private func launch(_ request: LaunchRequest) throws -> ServiceRecord {
+    func launch(_ request: LaunchRequest) throws -> ServiceRecord {
         var request = request
         request.leaseTTLSec = min(max(request.leaseTTLSec, 60), config.maxLeaseSec)
 
@@ -677,7 +677,7 @@ final class Controller: @unchecked Sendable {
     /// found it: an `UnmanagedProcess.id` is `pid:hash(startSignature)`, so a pid
     /// recycled between the sweep and the click is caught by the same comparison
     /// that guards every signal (threat model T2).
-    private func claim(unmanagedID: String, friendlyName: String?, owner: String?,
+    func claim(unmanagedID: String, friendlyName: String?, owner: String?,
                        purpose: String?, ttl: Double?, table: ProcessTable) throws -> ServiceRecord {
         guard !table.processProbeFailed else {
             throw FleetError.rejected("the process probe failed; nothing can be verified this moment")
@@ -767,13 +767,13 @@ final class Controller: @unchecked Sendable {
     /// Every controller-initiated signal goes through here or through
     /// `verifiedTarget`, so a claimed record cannot be stopped, restarted, paused,
     /// resumed, killed or reaped by us — only reported on.
-    private func requireSignallable(_ record: ServiceRecord) throws {
+    func requireSignallable(_ record: ServiceRecord) throws {
         if let refusal = record.signalRefusal {
             throw FleetError.rejected(refusal)
         }
     }
 
-    private func renew(_ id: String, ttl: Double?) throws -> ServiceRecord {
+    func renew(_ id: String, ttl: Double?) throws -> ServiceRecord {
         guard var record = try registry.resolve(idOrPrefix: id), let live = services[record.id] else {
             throw FleetError.notFound("no service matching '\(id)'")
         }
@@ -798,7 +798,7 @@ final class Controller: @unchecked Sendable {
 
     /// Verify-then-signal. Nothing is ever signalled without re-proving the target
     /// is still the process we started (threat model T2).
-    private func beginStop(_ record: ServiceRecord, reason: String, requestedBy: String) {
+    func beginStop(_ record: ServiceRecord, reason: String, requestedBy: String) {
         var record = record
         // Defence in depth. The two callers that can be reached from outside —
         // the stop RPC and `restart` — refuse a claimed record with a message
@@ -884,7 +884,7 @@ final class Controller: @unchecked Sendable {
     ///
     /// Restart re-executes the argv recorded at launch — it is not a general
     /// "run a command" entry point, which is why the UI can expose it safely.
-    private func restart(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
+    func restart(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
         let (previous, grace) = try queue.sync { () -> (ServiceRecord, Double) in
             let resolved = try resolveID(idOrPrefix)
             guard let record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
@@ -964,7 +964,7 @@ final class Controller: @unchecked Sendable {
         return (pid, pgid)
     }
 
-    private func pause(_ idOrPrefix: String) throws -> ServiceRecord {
+    func pause(_ idOrPrefix: String) throws -> ServiceRecord {
         let resolved = try resolveID(idOrPrefix)
         guard var record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
         guard !record.state.isTerminal else {
@@ -985,7 +985,7 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    private func resume(_ idOrPrefix: String) throws -> ServiceRecord {
+    func resume(_ idOrPrefix: String) throws -> ServiceRecord {
         let resolved = try resolveID(idOrPrefix)
         guard var record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
         guard record.state == .paused else {
@@ -1007,7 +1007,7 @@ final class Controller: @unchecked Sendable {
     }
 
     /// No grace period, by explicit request. Same verification as every other signal.
-    private func forceKill(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
+    func forceKill(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
         let resolved = try resolveID(idOrPrefix)
         guard var record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
         guard !record.state.isTerminal else {
@@ -1031,14 +1031,14 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    private func resolveID(_ idOrPrefix: String) throws -> String {
+    func resolveID(_ idOrPrefix: String) throws -> String {
         guard let record = try registry.resolve(idOrPrefix: idOrPrefix) else {
             throw FleetError.notFound("no service matching '\(idOrPrefix)'")
         }
         return record.id
     }
 
-    private func tailLog(_ id: String, stream: String, maxBytes: Int) throws -> LogChunk {
+    func tailLog(_ id: String, stream: String, maxBytes: Int) throws -> LogChunk {
         let serviceID = try resolveID(id)
         guard let record = services[serviceID] else { throw FleetError.notFound(id) }
         let path = stream == "err" ? record.stderrPath : record.stdoutPath
@@ -1067,7 +1067,7 @@ final class Controller: @unchecked Sendable {
 
     // MARK: - Snapshot
 
-    private func makeSnapshot() -> Snapshot {
+    func makeSnapshot() -> Snapshot {
         let all = services.values.sorted { $0.startedAt > $1.startedAt }
         // Read once and share: the attention rules need the same history the UI shows.
         let recent = (try? registry.events(limit: 60)) ?? []
@@ -1197,7 +1197,7 @@ final class Controller: @unchecked Sendable {
 
     /// Always hops onto the state queue asynchronously: callers may or may not
     /// already be running on it, and `queue.sync` from within the queue deadlocks.
-    private func broadcastSnapshot() {
+    func broadcastSnapshot() {
         queue.async { [weak self] in self?.broadcastLocked() }
     }
 
@@ -1254,313 +1254,6 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    // MARK: - Connection handling
-
-    private func handleConnection(_ conn: SocketConnection) {
-        defer {
-            queue.sync { _ = subscribers.removeValue(forKey: ObjectIdentifier(conn)) }
-            conn.close()
-        }
-        while true {
-            let line: Data?
-            do {
-                line = try conn.readLine()
-            } catch {
-                FleetLog.debug("connection read error: \(error.localizedDescription)")
-                return
-            }
-            guard let line else { return }
-
-            let request: RPCRequest
-            do {
-                request = try Codec.decode(RPCRequest.self, from: line)
-            } catch {
-                try? conn.writeJSON(RPCResponse.failure("malformed request: \(error.localizedDescription)"))
-                continue
-            }
-
-            if request.op == .subscribe {
-                queue.sync { subscribers[ObjectIdentifier(conn)] = conn }
-                let snapshot = queue.sync { makeSnapshot() }
-                try? conn.writeJSON(RPCResponse(ok: true, snapshot: snapshot))
-                continue    // further pushes come from broadcastSnapshot()
-            }
-
-            let response = handle(request)
-            do {
-                try conn.writeJSON(response)
-            } catch {
-                return
-            }
-        }
-    }
-
-    private func handle(_ request: RPCRequest) -> RPCResponse {
-        switch request.op {
-        case .ping:
-            return RPCResponse(ok: true, daemon: queue.sync { daemon })
-
-        case .snapshot:
-            return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-
-        case .subscribe:
-            return RPCResponse.failure("subscribe is handled per-connection")
-
-        case .launch:
-            guard let launchRequest = request.launch else {
-                return .failure("launch requires a request body")
-            }
-            do {
-                let record = try queue.sync { try launch(launchRequest) }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .renew:
-            guard let id = request.serviceID else { return .failure("renew requires a service id") }
-            do {
-                let record = try queue.sync { try renew(id, ttl: request.ttlSec) }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .stop:
-            guard let id = request.serviceID else { return .failure("stop requires a service id") }
-            do {
-                let record: ServiceRecord = try queue.sync {
-                    let resolved = try resolveID(id)
-                    guard let record = services[resolved] else { throw FleetError.notFound(id) }
-                    guard !record.state.isTerminal else {
-                        throw FleetError.rejected("\(record.friendlyName) is already \(record.state.rawValue)")
-                    }
-                    try requireSignallable(record)
-                    beginStop(record, reason: request.reason ?? "requested by operator",
-                              requestedBy: "operator")
-                    return services[resolved] ?? record
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .restart:
-            guard let id = request.serviceID else { return .failure("restart requires a service id") }
-            do {
-                let record = try restart(id, reason: request.reason ?? "requested by operator")
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .events:
-            do {
-                let events = try queue.sync { () -> [ServiceEvent] in
-                    // An unknown id must fail loudly. Silently widening to the global
-                    // log would answer a question nobody asked.
-                    let resolved = try request.serviceID.map { try resolveID($0) }
-                    return try registry.events(serviceID: resolved,
-                                               limit: min(request.limit ?? 200, 2000))
-                }
-                return RPCResponse(ok: true, events: events)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .logs:
-            guard let id = request.serviceID else { return .failure("logs requires a service id") }
-            do {
-                let chunk = try queue.sync {
-                    try tailLog(id, stream: request.stream ?? "out",
-                                maxBytes: min(request.maxBytes ?? 64_000, 1_000_000))
-                }
-                return RPCResponse(ok: true, logs: chunk)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .claim:
-            guard let target = request.unmanagedID,
-                  !target.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return .failure("claim requires an unmanaged process id or a pid")
-            }
-            do {
-                // Captured off the state queue, like every other process probe in
-                // this file, and passed in so the verification and the record are
-                // built from one table rather than from two moments.
-                let table = ProcessTable.capture()
-                let record = try queue.sync {
-                    try claim(unmanagedID: target,
-                              friendlyName: request.friendlyName,
-                              owner: request.agent,
-                              purpose: request.purpose,
-                              ttl: request.ttlSec,
-                              table: table)
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .reconcile:
-            let table = ProcessTable.capture()
-            queue.sync { runReconcile(table: table) }
-            broadcastSnapshot()
-            return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-
-        case .refreshDevices:
-            probeDevices()
-            return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-
-        case .pause, .resume, .kill:
-            guard let id = request.serviceID else { return .failure("\(request.op.rawValue) requires a service id") }
-            do {
-                let record = try queue.sync { () -> ServiceRecord in
-                    switch request.op {
-                    case .pause: return try pause(id)
-                    case .resume: return try resume(id)
-                    default: return try forceKill(id, reason: request.reason ?? "requested by operator")
-                    }
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, service: record)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .postMessage:
-            guard let agent = request.agent, !agent.isEmpty else {
-                return .failure("a message needs --agent")
-            }
-            guard let body = request.body, !body.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return .failure("a message needs --message")
-            }
-            do {
-                let stored = try queue.sync { () -> AgentMessage in
-                    let service = try request.serviceID.flatMap { try registry.resolve(idOrPrefix: $0) }
-                    let message = AgentMessage(agent: agent,
-                                               serviceID: service?.id,
-                                               serviceName: service?.friendlyName,
-                                               kind: request.kind ?? .status,
-                                               body: body,
-                                               needsReply: request.needsReply ?? false)
-                    let saved = try registry.post(message)
-                    try registry.append(.messagePosted, service: service,
-                                        detail: "\(agent) [\(saved.kind.rawValue)]"
-                                            + (saved.needsReply ? " (awaiting reply)" : "")
-                                            + ": \(body.prefix(160))")
-                    return saved
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, message: stored)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .messages:
-            do {
-                let list = try queue.sync {
-                    try registry.messages(agent: request.agent,
-                                          limit: min(request.limit ?? 100, 1000),
-                                          unansweredOnly: request.unansweredOnly ?? false)
-                }
-                return RPCResponse(ok: true, messages: list)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .reply:
-            guard let messageID = request.messageID else { return .failure("reply requires a message id") }
-            guard let body = request.body, !body.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return .failure("reply requires text")
-            }
-            do {
-                let updated = try queue.sync { () -> AgentMessage in
-                    let answered = try registry.reply(to: messageID, with: body)
-                    try registry.append(.messageAnswered, service: nil,
-                                        detail: "answered \(answered.agent) message \(messageID): \(body.prefix(160))")
-                    return answered
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, message: updated)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .markSeen:
-            do {
-                try queue.sync {
-                    let ids: [Int64]
-                    if let single = request.messageID {
-                        ids = [single]
-                    } else {
-                        ids = try registry.messages(limit: 200).filter { $0.seenAt == nil }.map(\.id)
-                    }
-                    try registry.markSeen(ids)
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true)
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .ignoreCommand:
-            guard let command = request.command,
-                  !command.trimmingCharacters(in: .whitespaces).isEmpty else {
-                return .failure("ignoreCommand requires a command name")
-            }
-            do {
-                try queue.sync {
-                    guard !config.ignoredListenerCommands.contains(command) else { return }
-                    config.ignoredListenerCommands.append(command)
-                    try config.save()
-                    try registry.append(.registered, service: nil,
-                                        detail: "'\(command)' added to the expected-listener allow-list by the operator")
-                }
-                let table = ProcessTable.capture()
-                queue.sync { runReconcile(table: table) }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-            } catch {
-                return .failure("could not update config: \(error.localizedDescription)")
-            }
-
-        case .prune:
-            do {
-                // Terminal service rows only. The event log is append-only and is
-                // never touched by this — the audit trail outlives the records.
-                let age = request.ttlSec ?? 3600
-                try queue.sync {
-                    try registry.pruneTerminated(olderThan: age)
-                    let keep = Set(try registry.services().map(\.id))
-                    services = services.filter { keep.contains($0.key) }
-                }
-                broadcastSnapshot()
-                return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-            } catch {
-                return .failure(error.localizedDescription)
-            }
-
-        case .reloadConfig:
-            do {
-                let fresh = try FleetConfig.load()
-                queue.sync {
-                    config = fresh
-                    daemon.tickIntervalSec = fresh.supervisorTickSec
-                }
-                probeDevices()
-                return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
-            } catch {
-                return .failure("could not reload config: \(error.localizedDescription)")
-            }
-        }
-    }
 }
 
 private extension String {
