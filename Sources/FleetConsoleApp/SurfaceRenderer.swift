@@ -567,7 +567,34 @@ enum Fixtures {
                 evidence: Evidence(processExists: false, portScanRan: true,
                                    checkedAt: ago(600)),
                 restartCount: 2, lastExitCode: 101),
+
+            // Claimed, expired, three ports. The case the row layout actually
+            // fails on: every accessory in a row is `fixedSize`, so "Claimed" +
+            // "Expired" + a three-port list claimed the whole width and the row
+            // took it out of the only compressible thing left — the title. The
+            // real fleet had one of these and 42 surfaces had none, so the sheet
+            // showed rows with names while the app showed one without.
+            ServiceRecord(
+                id: "svc-claimed", friendlyName: "llama-server", ownerAgent: "operator",
+                purpose: "claimed from the unmanaged list",
+                command: ["llama-server", "--port", "8080"],
+                cwd: "\(NSHomeDirectory())/Workspace/models",
+                pid: 92416, pgid: 92416, startSignature: "s1t2u3",
+                declaredPorts: [8080, 8081, 8082], startedAt: ago(93_600),
+                leaseExpiresAt: ago(70_200), leaseTTLSec: 7_200,
+                state: .expired,
+                evidence: Evidence(processExists: true, listeningPorts: [8080, 8081, 8082],
+                                   portScanRan: true, checkedAt: ago(6)),
+                resources: ResourceSample(cpuPct: 0.4, memMB: 5_120, processCount: 1,
+                                          sampledAt: ago(6))),
         ]
+        .map { record -> ServiceRecord in
+            guard record.id == "svc-claimed" else { return record }
+            var claimed = record
+            claimed.claimed = true
+            claimed.claimedAt = ago(93_000)
+            return claimed
+        }
     }
 
     private static func unmanaged() -> [UnmanagedProcess] {

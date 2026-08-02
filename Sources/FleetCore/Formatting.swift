@@ -26,6 +26,20 @@ public enum Fmt {
         ports.isEmpty ? "—" : ports.sorted().map { ":\($0)" }.joined(separator: " ")
     }
 
+    /// The same list, capped, for rows where the ports are one accessory among
+    /// several. Every accessory in a row is `fixedSize`, so a three-port service
+    /// claims its full width unconditionally and the row takes it out of the only
+    /// compressible thing left — the title. The Services popover drew a claimed,
+    /// expired service as an icon, "Claimed", "Expired" and ":8080 :8081 :8082"
+    /// with no name at all. The full list is still in the row's detail.
+    public static func ports(_ ports: [Int], limit: Int) -> String {
+        guard !ports.isEmpty else { return "—" }
+        let sorted = ports.sorted()
+        guard sorted.count > limit else { return sorted.map { ":\($0)" }.joined(separator: " ") }
+        let shown = sorted.prefix(limit).map { ":\($0)" }.joined(separator: " ")
+        return "\(shown) +\(sorted.count - limit)"
+    }
+
     public static func mem(_ mb: Double?) -> String {
         guard let mb else { return "—" }
         if mb >= 1024 { return String(format: "%.1f GB", mb / 1024) }

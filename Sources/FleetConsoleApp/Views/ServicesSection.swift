@@ -69,7 +69,7 @@ struct ServiceRowView: View {
                     Tag(text: service.state == .expired ? "Expired" : leaseCountdown,
                         tone: service.state == .expired ? .bad : .warn)
                 }
-                Text(Fmt.ports(service.effectivePorts))
+                Text(Fmt.ports(service.effectivePorts, limit: 1))
                     .font(FleetFont.mono())
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
