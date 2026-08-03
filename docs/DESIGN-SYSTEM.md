@@ -529,13 +529,21 @@ and inspector both open the content column is around 420pt and one card is a
 screenful, and with both closed it is over 900pt and a card is a 900pt-wide chart
 of sixty samples beside 500pt of nothing.
 
-Modules now lay their cards out in a `LazyVGrid` of `.adaptive(minimum:)`
-columns — `ConsoleMetrics.cardMinWidth` for telemetry cards,
+Modules lay their cards out in a `LazyVGrid` whose column count comes from a
+minimum width — `ConsoleMetrics.cardMinWidth` for telemetry cards,
 `ConsoleMetrics.reclaimRowMinWidth` for catalogue rows — so width is spent when
 there is width and the grid falls to one column when there is not. The minimum is
 the width below which the content stops being honest rather than merely tight: a
 trace where sixty samples are still distinguishable, a catalogue row where the
 size does not collide with the name.
+
+Catalogue rows take that minimum straight to `.adaptive`. The telemetry cards do
+not, because `.adaptive` takes every column the width allows and at the usual
+content width that is three — which put CPU, Memory and Disk on one row and left
+GPU alone beside two empty slots, the largest thing on the surface and the one
+that reads as a missing card. Overview derives the count itself and steps down
+when the last row would hold exactly one of three or more, so four instruments lay
+out 2x2 rather than 3+1.
 
 Treemaps are the exception and stay full width. Halving a squarified map's width
 does not halve its information — it makes the fortieth tile unclickable.

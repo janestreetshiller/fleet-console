@@ -171,10 +171,15 @@ enum ConsoleMetrics {
     /// The width a catalogue row needs before another fits beside it: icon, two
     /// lines of label, a right-aligned size and its button.
     ///
-    /// Same correction as `cardMinWidth`, same cause. 377 gave the Reclaimable
-    /// Space catalogue two columns; 233 gives it four at the composed width,
-    /// which is what makes the whole catalogue readable without scrolling.
-    static let reclaimRowMinWidth: CGFloat = 233
+    /// 233 was tried, on the argument that four columns make the whole catalogue
+    /// readable without scrolling. It does not give four — the module column is
+    /// around 900pt, so it gives three — and the width it takes comes out of the
+    /// name: nine of thirteen entries truncated to "Spotify offline ca…",
+    /// "Hugging Face m…", "Xcode Derived…". A catalogue you cannot read the names
+    /// in is not readable, whatever it costs in scrolling, and the module has the
+    /// vertical room regardless: the bottom half of the window was empty while
+    /// those names were being clipped.
+    static let reclaimRowMinWidth: CGFloat = 377
     /// Heatmaps. A squarified map needs far more room than a trace — under
     /// ~250pt the fortieth tile stops being clickable. The disk map gets the
     /// taller one because it is its module's subject, not one card of five.
