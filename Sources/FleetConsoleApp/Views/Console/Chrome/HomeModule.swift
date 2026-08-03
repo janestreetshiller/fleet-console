@@ -197,7 +197,11 @@ struct HomeModule: View {
             return "\(ConsoleFmt.bytes(system.storage.availableBytes)) free of "
                 + "\(ConsoleFmt.bytes(system.storage.totalBytes))"
         case .services:
-            var parts = ["\(model.activeServices.count) managed"]
+            // "active", not "managed", because this row is the Services module's
+            // own summary and that module's header says active. They are the same
+            // number from the same set, and a stopped service is still managed —
+            // so "managed" was both the wrong word and the wrong count for it.
+            var parts = ["\(model.activeServices.count) active"]
             if !model.unmanaged.isEmpty { parts.append("\(model.unmanaged.count) unmanaged") }
             if !model.agentProfiles.isEmpty { parts.append("\(model.agentProfiles.count) agents") }
             return parts.joined(separator: " · ")

@@ -10,7 +10,7 @@ struct ServicesSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             SectionHeader(title: "Services",
-                          subtitle: "\(model.activeServices.count) managed · \(model.unmanaged.count) unmanaged") {
+                          subtitle: "\(model.activeServices.count) active · \(model.unmanaged.count) unmanaged") {
                 IconButton(symbol: "arrow.triangle.2.circlepath", help: "Run a reconciliation sweep now") {
                     model.reconcileNow()
                 }
