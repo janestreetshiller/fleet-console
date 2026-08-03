@@ -118,7 +118,10 @@ struct ServiceInspectorView: View {
             InspectorLine(key: "Expires", value: record.state.isTerminal ? "—"
                           : "\(Fmt.duration(max(0, record.leaseRemaining))) from now", mono: true)
             InspectorLine(key: "TTL", value: Fmt.duration(record.leaseTTLSec), mono: true)
-            InspectorLine(key: "Uptime", value: Fmt.duration(record.uptime), mono: true)
+            // "Ran for" once it is over. A terminal record's figure is a span that
+            // ended, not a clock still going.
+            InspectorLine(key: record.state.isTerminal ? "Ran for" : "Uptime",
+                          value: Fmt.duration(record.uptime), mono: true)
             if record.restartCount > 0 {
                 InspectorLine(key: "Restarts", value: "\(record.restartCount)", mono: true)
             }

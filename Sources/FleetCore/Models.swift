@@ -337,7 +337,22 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
     public var projectFolderName: String { (cwd as NSString).lastPathComponent }
 
     public var leaseRemaining: TimeInterval { leaseExpiresAt.timeIntervalSinceNow }
-    public var uptime: TimeInterval { Date().timeIntervalSince(startedAt) }
+    /// Wall time since `startedAt`, frozen at the moment the record went terminal.
+    ///
+    /// It ran off `Date()` unconditionally, so a service that crashed on Tuesday was
+    /// still accruing uptime on Friday: the inspector drew the crashed `indexer`
+    /// with no pid, "0 in group", every Activity figure an em dash — and
+    /// "Uptime 3h 26m" underneath, which is a claim about a process that does not
+    /// exist. `updatedAt` is stamped on every terminal transition, so it is when the
+    /// record stopped.
+    ///
+    /// Only `isTerminal` freezes. An expired lease or a paused process has not
+    /// stopped running — expired means the lease is up, and a claimed record that
+    /// expires is reported and left alone — so those keep counting.
+    public var uptime: TimeInterval {
+        let end = state.isTerminal ? updatedAt : Date()
+        return max(0, end.timeIntervalSince(startedAt))
+    }
 
     /// Ports we *see* listening, falling back to what was declared (clearly labelled in UI).
     public var effectivePorts: [Int] {
