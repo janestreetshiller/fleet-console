@@ -663,29 +663,37 @@ enum Fixtures {
         ]
     }
 
+    /// Newest first, and monotonic — which is what the daemon delivers.
+    ///
+    /// `registry.events` is `ORDER BY seq DESC` and the module does not re-sort, so
+    /// the header's "newest first" is a claim the daemon backs and the view passes
+    /// through. This fixture used to be in neither order, which rendered a scrambled
+    /// log on the one surface anybody reviews the Event Log from — a sheet that
+    /// disagrees with the app teaches reviewers to stop trusting the sheet.
     private static func events() -> [ServiceEvent] {
-        var seq: Int64 = 4_100
-        func next() -> Int64 { seq += 1; return seq }
+        // Descending age, so `seq` and `ts` agree the way an append-only log's do.
+        var seq: Int64 = 4_108
+        func next() -> Int64 { seq -= 1; return seq + 1 }
         return [
-            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
-                         ts: ago(7_400), kind: .registered,
-                         detail: "claude — local API for triage"),
-            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
-                         ts: ago(7_398), kind: .started, detail: "pid 48122, port 8787"),
-            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
-                         ts: ago(7_380), kind: .healthPassed, detail: "200 in 12 ms"),
+            ServiceEvent(seq: next(), serviceID: "svc-tunnel", serviceName: "tunnel",
+                         ts: ago(120), kind: .leaseExpiring, detail: "94s remaining"),
+            ServiceEvent(seq: next(), serviceID: "svc-embed", serviceName: "embed",
+                         ts: ago(420), kind: .budgetWarning,
+                         detail: "cpu 88% over 60% warn threshold"),
             ServiceEvent(seq: next(), serviceID: crashedServiceID, serviceName: "indexer",
                          ts: ago(600), kind: .restarted, detail: "exit 101 — restart 2 of 3"),
             ServiceEvent(seq: next(), serviceID: "svc-search", serviceName: "search",
                          ts: ago(760), kind: .healthFailed,
                          detail: "connection refused (6 consecutive)"),
-            ServiceEvent(seq: next(), serviceID: "svc-embed", serviceName: "embed",
-                         ts: ago(420), kind: .budgetWarning,
-                         detail: "cpu 88% over 60% warn threshold"),
-            ServiceEvent(seq: next(), serviceID: "svc-tunnel", serviceName: "tunnel",
-                         ts: ago(120), kind: .leaseExpiring, detail: "94s remaining"),
             ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
                          ts: ago(3_020), kind: .leaseRenewed, detail: "+2h by claude"),
+            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
+                         ts: ago(7_380), kind: .healthPassed, detail: "200 in 12 ms"),
+            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
+                         ts: ago(7_398), kind: .started, detail: "pid 48122, port 8787"),
+            ServiceEvent(seq: next(), serviceID: healthyServiceID, serviceName: "api",
+                         ts: ago(7_400), kind: .registered,
+                         detail: "claude — local API for triage"),
         ]
     }
 }
