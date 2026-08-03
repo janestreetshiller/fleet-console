@@ -295,7 +295,7 @@ private struct AgentRow: View {
                 // had numbers, which reads as a row that failed to draw rather
                 // than as a zero. Blank now means one thing: owns no services.
                 if agent.owned > 0 {
-                    Text("\(agent.running) svc")
+                    Text("\(agent.running) running")
                         .font(ConsoleFont.mono(.caption))
                         .monospacedDigit()
                         .foregroundStyle(agent.running > 0 ? AnyShapeStyle(.secondary)
