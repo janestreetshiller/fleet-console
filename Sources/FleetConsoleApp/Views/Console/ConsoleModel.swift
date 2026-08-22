@@ -29,6 +29,9 @@ enum InspectorTarget: Equatable {
 /// Menu-bar and keyboard commands reach the window through these. The main
 /// menu is AppKit (the app bootstraps with AppKit for the status items), so
 /// `CommandGroup` does not apply; notifications are the honest bridge.
+///
+/// `showHome` is also the welcome window's exit — its "Open Console" button
+/// lands on Home, the one place that can honestly say "start here".
 enum ConsoleCommand {
     static let focusSearch = Notification.Name("com.fleetconsole.console.focusSearch")
     static let refresh = Notification.Name("com.fleetconsole.console.refresh")
@@ -110,6 +113,12 @@ final class ConsoleModel {
         case heavyweight = "Heavyweight"
 
         var id: String { rawValue }
+
+        /// The scope filter is the "advanced heatmap filters" premium feature:
+        /// the process table's own filter is also the heatmap's, because the
+        /// heatmap is drawn from the filtered rows. `all` — the unfiltered
+        /// view — is free; everything that narrows it is not.
+        var isPremium: Bool { self != .all }
     }
 
     var isLocalDeviceSelected: Bool { selectedDeviceID == "self" }

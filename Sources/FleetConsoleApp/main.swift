@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let model = AppModel()
     private var fleetItem: MenuBarItemController!
     private var consoleWindow: ConsoleWindowController?
+    private var welcomeWindow: WelcomeWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance, two items. Without this guard a second launch adds another
@@ -59,11 +60,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         registerHelperIfPossible()
         observeModel()
+        showWelcomeIfDue()
 
         if CommandLine.arguments.contains("--dashboard")
             || ProcessInfo.processInfo.environment["FLEETCONSOLE_DASHBOARD"] == "1" {
             showDashboard()
         }
+    }
+
+    /// The welcome shows once, on the first launch that was not handed off to
+    /// a running instance. `consumePending()` marks it as shown in the same
+    /// read, so a `--dashboard` first launch still counts — burying the
+    /// welcome because the console opened headless would be the app skipping
+    /// its own onboarding.
+    ///
+    /// The *skip* preference is premium-gated at render: the setting can be
+    /// toggled only where the license allows (see WelcomeView), and it is
+    /// honoured here without re-checking the licence, so downgrading cannot
+    /// resurrect the window.
+    private func showWelcomeIfDue() {
+        guard WelcomeState.consumePending(),
+              !UserDefaults.standard.bool(forKey: "fleetconsole.skipWelcome") else { return }
+        let welcome = WelcomeWindowController(model: model)
+        welcome.show()
+        welcomeWindow = welcome
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -164,6 +184,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                               action: #selector(revealLogs), keyEquivalent: "")
         logs.target = self
         menu.addItem(logs)
+        // The welcome is shown once; this is the way back for a support call
+        // or a fresh look — re-marking it unseen and presenting it now.
+        let welcome = NSMenuItem(title: "Replay Welcome",
+                                 action: #selector(replayWelcome), keyEquivalent: "")
+        welcome.target = self
+        menu.addItem(welcome)
 
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit FleetConsole",
@@ -183,6 +209,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func reconcile() { model.reconcileNow() }
     @objc private func openConfig() { model.openConfigFile() }
     @objc private func revealLogs() { model.revealInFinder(FleetPaths.logs.path) }
+
+    /// Replays the first-launch welcome. Resets the once-flag *and* honours
+    /// the premium skip preference — replaying is an explicit ask, so the skip
+    /// setting does not apply to it (it governs launches, not requests).
+    @objc private func replayWelcome() {
+        WelcomeState.reset()
+        let welcome = WelcomeWindowController(model: model)
+        welcome.show()
+        welcomeWindow = welcome
+    }
 
     @objc func showDashboard() {
         fleetItem?.closePopover()

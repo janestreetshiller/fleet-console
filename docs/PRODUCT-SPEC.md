@@ -192,6 +192,24 @@ SIGTERM, then SIGKILL after 10s if it does not exit.
 Restart adds: `Ports :8787 will be released and re-bound.`
 No confirmation is required for read-only actions (logs, reveal, refresh, open folder).
 
+### 2.5 First launch — the welcome
+
+Shown exactly once, persisted in `UserDefaults`. One borderless panel: a
+one-sentence pitch, a live `RetroGauge` sweeping 0 → 78% → 12% (the instrument
+a new user has not met yet, demonstrating itself), and three numbered steps.
+Skippable from the first frame (Skip button, Escape). The *option to suppress
+it* is premium (`skipWelcomeAnimation`); the onboarding is part of what a
+trial evaluates. A context-menu item replays it for support calls.
+
+### 2.6 Trial and licence
+
+A 14-day trial starts at first launch and unlocks everything; when it ends,
+three features gate — SMC sensors, the welcome-skip, and the heatmap's
+advanced filters. Keys are `FLT1-<date>.<base32 HMAC-SHA256>`, validated
+offline. Trial status lives in the popover footer; entering a key is a button
+there, not a sheet you have to find. This is scaffolding (see
+`FleetCore/License.swift`): the honest version of the gate, not a storefront.
+
 ---
 
 ## 3. The controller (`fleetd`) and the launcher (`fleetctl`)

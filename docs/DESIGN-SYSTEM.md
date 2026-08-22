@@ -585,7 +585,9 @@ names the picker and the View menu use, and a section label names its contents
 rather than instructing the reader.
 
 The six modules are `OverviewModule` (CPU wave + core grid, memory, process map,
-disk I/O, GPU), `ProcessModule` (below), `StorageModule` (`SegmentedStorageBar` +
+disk I/O, GPU, and the SMC **Sensors** card — fan RPM and CPU/GPU die
+temperature, a premium feature that renders its three states honestly: locked,
+no SMC (VMs, very old Macs), no keys (Apple silicon)), `ProcessModule` (below), `StorageModule` (`SegmentedStorageBar` +
 disk map + volumes + reclaim), `ServicesModule`, `EventsModule`, and
 `PlistsModule` — **Launch Services**, the launchd jobs on this machine across
 three scopes (`~/Library/LaunchAgents`, `/Library/LaunchAgents`,

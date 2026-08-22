@@ -40,7 +40,14 @@ struct ProcessModule: View {
     private var filtered: [ProcessRow] {
         var rows = model.processes.rows
 
-        switch console.processScope {
+        // A premium scope without a licence silently widens to `all` rather
+        // than rendering an empty table under a locked label. The subtitle
+        // says what happened, so the fallback is stated, not hidden.
+        let scope = console.processScope
+        let effectiveScope: ConsoleModel.ProcessScope =
+            scope.isPremium && !model.license.isUnlocked(.advancedHeatmapFilters) ? .all : scope
+
+        switch effectiveScope {
         case .all:
             break
         case .managed:
@@ -156,7 +163,14 @@ struct ProcessModule: View {
         ) {
             Picker("Scope", selection: $console.processScope) {
                 ForEach(ConsoleModel.ProcessScope.allCases) { scope in
-                    Text(scope.rawValue).tag(scope)
+                    // Premium scopes are labelled, not locked away: a paywalled
+                    // segment you cannot see is a feature you cannot buy. The
+                    // picker still lets the selection land on it — the module
+                    // applies `all` and says why, which is the same honesty the
+                    // Sensors card uses.
+                    Text(scope.isPremium && !model.license.isUnlocked(.advancedHeatmapFilters)
+                         ? "\(scope.rawValue) ◊" : scope.rawValue)
+                        .tag(scope)
                 }
             }
             .pickerStyle(.segmented)
@@ -170,7 +184,13 @@ struct ProcessModule: View {
     private var headerSubtitle: String {
         let total = model.processes.rows.count
         let shown = filtered.count
-        let base = shown == total ? "\(total) processes" : "\(shown) of \(total)"
+        var base = shown == total ? "\(total) processes" : "\(shown) of \(total)"
+        // State the fallback from the filter above, where the reader can see
+        // it — a scope that widened itself without saying so is a silent lie.
+        if console.processScope.isPremium,
+           !model.license.isUnlocked(.advancedHeatmapFilters) {
+            base += " · \(console.processScope.rawValue) is premium"
+        }
         if let captured = model.processes.capturedAt {
             return base + " · sampled " + ConsoleFmt.timestamp(captured)
         }

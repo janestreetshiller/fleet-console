@@ -156,6 +156,10 @@ struct PopoverFooter: View {
     var trailingLabel: String = "Open Dashboard"
     var openDashboard: () -> Void
 
+    @State private var enteringLicense = false
+    @State private var licenseKeyDraft = ""
+    @State private var licenseRejected = false
+
     var body: some View {
         HStack(spacing: 6) {
             if model.connected, let daemon = model.daemon {
@@ -164,11 +168,66 @@ struct PopoverFooter: View {
                 ConnectionPip(connected: false, label: "controller not running")
             }
             Spacer()
+            licenseControl
             Button(trailingLabel) { openDashboard() }
                 .buttonStyle(.link)
                 .font(FleetFont.subtitle)
         }
         .padding(.horizontal, FleetMetrics.gutter)
         .padding(.vertical, 7)
+        .alert(licenseAlertTitle, isPresented: $enteringLicense) {
+            TextField("FLT1-…", text: $licenseKeyDraft)
+            Button("Install") { installDraft() }
+            Button("Cancel", role: .cancel) { licenseRejected = false }
+        } message: {
+            if licenseRejected {
+                Text("That key did not validate. Check the characters and try again.")
+            } else {
+                Text("Keys are validated offline — no network, no account.")
+            }
+        }
+    }
+
+    /// The trial clock, stated where every popover shows it. A licensed seat
+    /// collapses to a quiet badge; a running trial names its days; an expired
+    /// trial is the one case that asks for anything (a key).
+    @ViewBuilder
+    private var licenseControl: some View {
+        switch model.license.status {
+        case .licensed:
+            Text("licensed")
+                .font(FleetFont.micro)
+                .foregroundStyle(.secondary)
+        case .trial(let days):
+            Button("Trial · \(days)d left") { enteringLicense = true }
+                .buttonStyle(.link)
+                .font(FleetFont.micro)
+                .help("Enter a license key")
+        case .expired:
+            Button("Trial over — enter key") { enteringLicense = true }
+                .buttonStyle(.link)
+                .font(FleetFont.micro)
+                .tint(StatusTone.warn.ink)
+                .help("Enter a license key")
+        }
+    }
+
+    private var licenseAlertTitle: String {
+        switch model.license.status {
+        case .licensed: return "Replace license key"
+        default: return "Enter license key"
+        }
+    }
+
+    private func installDraft() {
+        if model.license.install(key: licenseKeyDraft) {
+            licenseKeyDraft = ""
+            licenseRejected = false
+        } else {
+            // Keep the sheet up with the rejection stated — a rejected key
+            // that silently closes the alert is a rejected key nobody saw.
+            licenseRejected = true
+            enteringLicense = true
+        }
     }
 }

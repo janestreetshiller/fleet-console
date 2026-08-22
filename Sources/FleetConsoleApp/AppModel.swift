@@ -51,7 +51,11 @@ final class AppModel {
 
     let network: NetworkMonitor
     let actions = NetworkActions()
-    let system = SystemMonitor()
+    /// Licensing and the trial clock. Declared before the probes that gate on
+    /// it (`system` reads its answer every sample), so property order is also
+    /// the dependency order. See FleetCore/License.swift.
+    let license = LicenseManager()
+    let system: SystemMonitor
     let storage = StorageScanner()
     let breakdown = StorageBreakdown()
     let processes: ProcessInventory
@@ -75,6 +79,7 @@ final class AppModel {
         // timers, and the honest cost of editing a sampling rate is a relaunch.
         let intervals = settings.intervals
         network = NetworkMonitor(interval: intervals.clampedNetworkRefresh)
+        system = SystemMonitor { [license] feature in license.isUnlocked(feature) }
         processes = ProcessInventory(interval: intervals.clampedProcessSample)
 
         DaemonClient.shared.startSubscription { [weak self] snapshot in

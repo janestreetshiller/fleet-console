@@ -1,4 +1,5 @@
 import Foundation
+import FleetCore
 import IOKit
 import Darwin
 
@@ -518,6 +519,9 @@ final class SystemMonitor {
     private(set) var storage = StorageSample()
     private(set) var thermal = ThermalSample()
     private(set) var topology = CPUTopology()
+    /// Fan and die temperatures from the SMC. `available == false` is a
+    /// normal answer on VMs and very old Macs; see FleetCore's SMC.swift.
+    private(set) var sensors = SensorSample()
 
     /// Ring buffers behind the live charts. Bounded so a long-running app
     /// cannot grow them without limit. Disk I/O is kept as separate read/write
@@ -533,12 +537,22 @@ final class SystemMonitor {
     static let interval: TimeInterval = 2
 
     private let sampler = HostSampler()
+    private let smc = SMCSampler()
+    /// Premium gate for the SMC. Injected so the monitor can be exercised
+    /// without dragging a UserDefaults suite into every preview.
+    @ObservationIgnored private let isPremiumUnlocked: (PremiumFeature) -> Bool
     private let queue = DispatchQueue(label: "com.fleetconsole.app.system")
     // Nonisolated so `deinit` can invalidate it; nothing observes this handle.
     @ObservationIgnored nonisolated(unsafe) private var timer: Timer?
     private var sampling = false
 
-    init() {
+    // The default is *unlocked*, not locked: a monitor constructed without a
+    // licence is one being previewed, tested, or run by the developer, and a
+    // preview whose premium card is a lock screen previews the wrong product.
+    // The app injects the real gate; the default exists so every other call
+    // site reads the hardware.
+    init(isPremiumUnlocked: @escaping (PremiumFeature) -> Bool = { _ in true }) {
+        self.isPremiumUnlocked = isPremiumUnlocked
         topology = sampler.topology
         timer = Timer.scheduledTimer(withTimeInterval: Self.interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sample() }
@@ -558,13 +572,20 @@ final class SystemMonitor {
         guard !sampling else { return }
         sampling = true
         let sampler = self.sampler
+        let smc = self.smc
+        // The SMC is premium-gated at the source, not at the card: when it is
+        // locked the keys are never read, so the free tier cannot pay the I/O
+        // cost of a feature it cannot see.
+        let readSensors = isPremiumUnlocked(.smcSensors)
         queue.async { [weak self] in
             let cpu = sampler.cpu()
             let gpu = sampler.gpu()
             let memory = sampler.memory()
             let storage = sampler.storage()
+            let sensors = readSensors ? smc.sample() : SensorSample()
             Task { @MainActor in
-                self?.publish(cpu: cpu, gpu: gpu, memory: memory, storage: storage)
+                self?.publish(cpu: cpu, gpu: gpu, memory: memory, storage: storage,
+                              sensors: sensors)
             }
         }
     }
@@ -572,11 +593,12 @@ final class SystemMonitor {
     /// Assigns only what changed, so one moving number does not invalidate every
     /// row that reads this object.
     private func publish(cpu: CPUSample, gpu: GPUSample, memory: MemorySample,
-                         storage: StorageSample) {
+                         storage: StorageSample, sensors: SensorSample) {
         if self.cpu != cpu { self.cpu = cpu }
         if self.gpu != gpu { self.gpu = gpu }
         if self.memory != memory { self.memory = memory }
         if self.storage != storage { self.storage = storage }
+        if self.sensors != sensors { self.sensors = sensors }
         let thermal = ThermalSample(state: ProcessInfo.processInfo.thermalState)
         if self.thermal != thermal { self.thermal = thermal }
 
@@ -678,5 +700,19 @@ enum SystemFmt {
     static func percent(_ value: Double?) -> String {
         guard let value else { return "—" }
         return "\(Int((value * 100).rounded()))%"
+    }
+
+    /// Whole degrees. The SMC reports tenths; a tenth of a degree on a
+    /// two-second sample is noise wearing a decimal point.
+    static func temperature(_ celsius: Double?) -> String {
+        guard let celsius else { return "—" }
+        return "\(Int(celsius.rounded()))°C"
+    }
+
+    /// Whole RPM, thousands-separated ("1,912 rpm" reads at a glance;
+    /// "1912 rpm" makes the eye count digits).
+    static func rpm(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        return "\(Int(value.rounded()).formatted()) rpm"
     }
 }

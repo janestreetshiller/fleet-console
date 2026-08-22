@@ -14,14 +14,25 @@ import FleetCore
 enum ConsoleFont {
     /// Module heading at the top of the content column.
     static let moduleTitle = Font.system(.title2, weight: .semibold)
+    /// The welcome's one-line pitch. The only display-size text in the app,
+    /// and it exists because a first-run window that types like a settings
+    /// pane is a first-run window that says nothing.
+    static let heroTitle = Font.system(.title, weight: .semibold)
     /// Card and group headings inside a module.
     static let cardTitle = Font.system(.headline, weight: .semibold)
     /// Primary row text in the content column.
     static let rowTitle = Font.system(.body)
+    /// Card numerals beside a gauge — the same emphasis as the dial's own
+    /// readout plate, in text form.
+    static let cardValue = Font.system(.title3, weight: .semibold)
+    /// Body copy in a card or a welcome paragraph.
+    static let body = Font.system(.body)
     /// Secondary row text, evidence, hints.
     static let subtitle = Font.system(.subheadline)
     /// Timestamps, units, legend labels.
     static let caption = Font.system(.caption)
+    /// Smaller than caption: the sensor metric's unit line.
+    static let micro = Font.system(.caption2)
     /// Badge numerals and micro labels.
     static let badge = Font.system(.caption2, weight: .medium)
     /// A glyph that annotates a row without becoming part of its text — the
@@ -56,6 +67,10 @@ enum ConsoleMetrics {
     /// Content-column gutter. Windows want more air than menus.
     static let gutter: CGFloat = 21
     static let cardPadding: CGFloat = 13
+    /// Inset a panel's content from its own edges — the welcome's header and
+    /// footer bars. Smaller than a card's interior, because a panel edge is
+    /// already a boundary and needs less air than content inside it.
+    static let panelInset: CGFloat = 8
     /// Corner ramp, one rung per level of nesting: card, then a row inside it,
     /// then a control inside that, then a bar, then a heatmap tile. Adjacent
     /// rungs are a φ ratio apart, which is what makes a highlighted row inside a
@@ -168,6 +183,10 @@ enum ConsoleMetrics {
     static let cardMinWidth: CGFloat = 377
     /// Gap between cards in the module grid, in both axes.
     static let cardGap: CGFloat = 13
+    /// Vertical rhythm between stacked cards in a scrolling module and between
+    /// the welcome's zones. Same Fibonacci rung as `cardGap` — the gap is a
+    /// gap whether it separates horizontally or vertically.
+    static let sectionGap: CGFloat = 13
     /// The width a catalogue row needs before another fits beside it: icon, two
     /// lines of label, a right-aligned size and its button.
     ///
@@ -209,6 +228,9 @@ enum ConsoleColor {
     /// background so light mode gets white cards on grey and dark mode gets
     /// lifted panels, exactly like System Settings.
     static var card: Color { Color(nsColor: .controlBackgroundColor) }
+    /// The window background. Separate from `card` so the console can lift
+    /// cards off it in both appearances without a second colour decision.
+    static var window: Color { Color(nsColor: .windowBackgroundColor) }
     static var cardShadow: Color { Color.black.opacity(0.18) }
 
     /// Selected-row fill. The same value `RowBackground` uses in the popover
@@ -375,4 +397,20 @@ enum ConsoleAnimation {
     /// point of animating it at all is that you can see *this tile became that
     /// tile* instead of the map simply being different.
     static let mapLayout = Animation.spring(response: 0.55, dampingFraction: 0.9)
+}
+
+/// One-off, non-repeating motion. The welcome's entrance and its gauge sweep
+/// are the two places the app moves *at* you rather than with you, and they
+/// are named here so a third one-off cannot quietly invent its own timing.
+enum ConsoleMotion {
+    /// Short fade-and-rise for content appearing on a stage.
+    static let micro = Animation.easeOut(duration: 0.6)
+    /// The welcome gauge's 0 → 78% → 12% spin-up. 3.2 s is long enough to
+    /// read as a demonstration and short enough that the Skip button is never
+    /// impatient.
+    static let welcomeSweep = Animation.easeInOut(duration: 3.2)
+    /// The welcome window's entrance as a whole — the panel fading in while
+    /// the gauge sweeps. Slightly quicker than the sweep so the stage is
+    /// present before the demonstration is over.
+    static let welcomeEntrance = Animation.easeOut(duration: 0.45)
 }
