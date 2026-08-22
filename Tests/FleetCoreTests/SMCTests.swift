@@ -116,6 +116,13 @@ final class SensorSampleTests: XCTestCase {
 /// the sampler believes more hardware exists, and removing one is a silent
 /// regression for a machine that has it.
 final class SMCKeyListTests: XCTestCase {
+    func testIOKitRequestUsesAppleSMCStructureSize() {
+        #if canImport(IOKit)
+        XCTAssertEqual(SMCConnection.ioStructSize, 80,
+                       "AppleSMC rejects requests with the old 60-byte layout")
+        #endif
+    }
+
     func testFanKeysCoverKnownLayouts() {
         XCTAssertEqual(SMCKeys.fanActual(0), "F0Ac")
         XCTAssertEqual(SMCKeys.fanActual(3), "F3Ac")

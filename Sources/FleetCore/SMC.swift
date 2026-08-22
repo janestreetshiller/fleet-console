@@ -182,6 +182,60 @@ public final class SMCConnection: @unchecked Sendable {
 
     #if canImport(IOKit)
     private var connection: io_connect_t = 0
+
+    // This mirrors AppleSMC's SMCKeyData_t. The key-info fields are separate
+    // fields in the kernel ABI; packing them into one UInt32 makes Swift send
+    // a 60-byte struct and the driver rejects every call with invalid input
+    // structure size. The ABI is 80 bytes, including the explicit padding.
+    private struct KeyDataVersion {
+        var major: UInt8 = 0
+        var minor: UInt8 = 0
+        var build: UInt8 = 0
+        var reserved: UInt8 = 0
+        var release: UInt16 = 0
+    }
+
+    private struct KeyDataPLimit {
+        var version: UInt16 = 0
+        var length: UInt16 = 0
+        var cpuPLimit: UInt32 = 0
+        var gpuPLimit: UInt32 = 0
+        var memPLimit: UInt32 = 0
+    }
+
+    private struct KeyDataInfo {
+        var dataSize: UInt32 = 0
+        var dataType: UInt32 = 0
+        var dataAttributes: UInt8 = 0
+    }
+
+    private typealias KeyBytes = (
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
+        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8
+    )
+
+    private struct KeyData {
+        var key: UInt32 = 0
+        var vers = KeyDataVersion()
+        var pLimitData = KeyDataPLimit()
+        var keyInfo = KeyDataInfo()
+        var padding: UInt16 = 0
+        var result: UInt8 = 0
+        var status: UInt8 = 0
+        var data8: UInt8 = 0
+        var data32: UInt32 = 0
+        var bytes: KeyBytes = (
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0
+        )
+    }
+
+    /// The input/output size required by the AppleSMC kernel ABI.
+    public static var ioStructSize: Int { MemoryLayout<KeyData>.stride }
     #endif
 
     public init() {}
@@ -217,24 +271,6 @@ public final class SMCConnection: @unchecked Sendable {
         // Kernel constants from AppleSMC Family, stable since the service
         // existed: 0 is the connection's own index, 5 is the "read one key"
         // selector, 9 is "describe this key".
-        struct KeyData {
-            var key: UInt32 = 0
-            var version: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
-            var pLimit: (UInt8, UInt8, UInt8, UInt8) = (0, 0, 0, 0)
-            var keyInfo: UInt32 = 0
-            var type: UInt32 = 0
-            var result: UInt8 = 0
-            var status: UInt8 = 0
-            var data8: UInt8 = 0
-            var data32: UInt32 = 0
-            var bytes: (UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8,
-                        UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8, UInt8) =
-                (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
-        }
-
         func call(_ selector: UInt32, _ input: inout KeyData) throws -> KeyData {
             var inputCopy = input
             var output = KeyData()
@@ -258,7 +294,7 @@ public final class SMCConnection: @unchecked Sendable {
         }
         guard info.result == 0 else { throw SMCError.keyNotFound(String(fourCC: key.value)) }
 
-        let size = Int(info.keyInfo >> 16)
+        let size = Int(info.keyInfo.dataSize)
         guard size > 0 else { throw SMCError.keyNotFound(String(fourCC: key.value)) }
 
         var readInput = KeyData()
@@ -268,7 +304,7 @@ public final class SMCConnection: @unchecked Sendable {
         let value = try call(2, &readInput)
         let bytes = withUnsafeBytes(of: value.bytes) { Array($0.prefix(size)) }
 
-        let typeString = String(fourCC: value.type)
+        let typeString = String(fourCC: value.keyInfo.dataType)
         guard let type = SMCDataType(rawValue: typeString) else {
             // A type we do not decode is the same to the UI as no key: the
             // alternative is rendering a number we cannot vouch for.

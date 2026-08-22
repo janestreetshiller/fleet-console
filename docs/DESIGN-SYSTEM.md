@@ -35,7 +35,6 @@ immediately readable as *not a Mac app*.
 | `marker` | 8 | a glyph that annotates a row without being part of its text |
 | `nano` | 10 | stat-tile captions |
 | `micro` | 10 medium | tags, badges, evidence chips |
-| `microPlain` | 10 | the same size unemphasised |
 | `chevron` | 10 semibold | the disclosure chevron, used only by `DisclosureRow` |
 | `subtitle` | 11 | secondary line under a row title |
 | `caption` | 11 | timestamps, counts, hints |
@@ -44,7 +43,6 @@ immediately readable as *not a Mac app*.
 | `body` | 12 | body copy, table cells |
 | `rowTitle` | 13 | primary text of a standard row — AppKit's menu item size |
 | `title` | 13 semibold | popover title |
-| `heading` | 15 semibold | inspector and window titles |
 | `stat` | 22 medium rounded | stat-tile numerals |
 | `mono(_:)` | — | ports, PIDs, paths, addresses |
 
@@ -60,9 +58,9 @@ checks for every *enumerated* surface: modules, tools, popover sections,
 menu-bar items. Nothing read the tokens, which is precisely why they were the
 part that rotted. The audit reads both tables now, in both directions.
 
-Three sizes carry more than one name, and the collisions are deliberate rather
-than drift: `subtitle`/`caption` are both 11 and `micro`/`microPlain`/`nano` are
-all 10, differing by weight and by the job the name states. That is a weaker
+Two sizes carry more than one name, and the collisions are deliberate rather
+than drift: `subtitle`/`caption` are both 11 and `micro`/`nano` are both 10,
+differing by weight and by the job the name states. That is a weaker
 guarantee than the rest of the ramp gives, and it is the pair the next audit
 should look at — but merging them is a decision about what the names *mean*, not
 a correction, so they are written down as they are rather than quietly collapsed.
@@ -83,7 +81,6 @@ a correction, so they are written down as they are rather than quietly collapsed
 | `iconCompact` | 26 | icon in a fixed-height row |
 | `iconRow` | 28 | icon in a standard row |
 | `iconRowLarge` | 30 | icon in a standard row that leads a section |
-| `iconInspector` | 38 | icon in an inspector header |
 | `iconButtonSize` | 18 | one `IconButton`'s hit target |
 | `actionSlot` | — | `iconButtonSize` × 2 + 2 — a trailing cluster of two icon buttons, reserved at a constant width |
 | `meterWidth` | 54 | utilisation meter — 5% and 15% distinguishable, still fits a row |
@@ -199,15 +196,15 @@ resident-memory figure at the same weight as the word beside it) ·
 that is absent, or a control that is unavailable) · `outline` / `outlineStrong`
 (an untinted border; the strong one survives a saturated fill under it).
 
-Both ramps expose these — `FleetColor.*` and `ConsoleColor.*` — and both resolve
+The ramps share these through `SurfaceInk` and `ConsoleColor`, and both resolve
 to the same values. That is deliberate, and it is a refinement of the sentence at
 the top of this file: the ramps differ in **type and metrics**, because a 13pt
 menu row and a dynamic-type window row are different reading distances. They do
 not differ in what a colour *means*. Giving each its own `numeral` at 0.80 and
 0.85 would be the 9/9.5 pair again, one layer down.
 
-`FleetColor` adds one popover-only name, `countPill`, for the shape behind a
-count in a section header.
+`FleetColor` keeps only the popover-specific names still used by the popover
+surface: `numeral`, `surfaceWash`, `indicatorOn`, `indicatorOff` and `countPill`.
 
 ---
 

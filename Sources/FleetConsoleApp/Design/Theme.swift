@@ -12,8 +12,6 @@ import SwiftUI
 // which is Xcode-inspector density, not menu density — technically legible and
 // immediately readable as "not a Mac app".
 enum FleetFont {
-    /// Inspector and window headings.
-    static let heading = Font.system(size: 15, weight: .semibold)
     /// Popover title.
     static let title = Font.system(size: 13, weight: .semibold)
     /// Primary text of a standard row — AppKit's menu item size.
@@ -28,8 +26,6 @@ enum FleetFont {
     static let caption = Font.system(size: 11)
     /// Tags, badges, evidence chips.
     static let micro = Font.system(size: 10, weight: .medium)
-    /// Same size as `micro` but unemphasised.
-    static let microPlain = Font.system(size: 10)
     /// The smallest label in the system: stat-tile captions.
     static let nano = Font.system(size: 10)
     /// Disclosure chevron, used only by `DisclosureRow`.
@@ -64,8 +60,6 @@ enum FleetMetrics {
     static let iconCompact: CGFloat = 26
     static let iconRow: CGFloat = 28
     static let iconRowLarge: CGFloat = 30
-    static let iconInspector: CGFloat = 38
-
     /// Utilisation meters. Wide enough that 5% and 15% are distinguishable at a
     /// glance, narrow enough to sit in a row's accessory slot without pushing the
     /// subtitle into truncation.
@@ -147,12 +141,8 @@ enum FleetMetrics {
 enum FleetColor {
     static var numeral: Color { SurfaceInk.numeral }
     static var surfaceWash: Color { SurfaceInk.surfaceWash }
-    static var hoverWash: Color { SurfaceInk.hoverWash }
-    static var selectedWash: Color { SurfaceInk.selectedWash }
     static var indicatorOn: Color { SurfaceInk.indicatorOn }
     static var indicatorOff: Color { SurfaceInk.indicatorOff }
-    static var dim: Color { SurfaceInk.dim }
-    static var outline: Color { SurfaceInk.outline }
 
     /// The pill behind a count in a section header — a shape whose job is to
     /// separate a numeral from the words either side of it, carrying no state.

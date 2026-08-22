@@ -124,7 +124,7 @@ private struct WelcomeView: View {
         // Escape dismisses; the animation's own skip affordance is the button.
         .onExitCommand { dismiss() }
         .onAppear {
-            withAnimation(ConsoleMotion.micro) { entered = true }
+            withAnimation(ConsoleMotion.welcomeEntrance) { entered = true }
             startSweep()
         }
     }

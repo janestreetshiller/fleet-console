@@ -141,7 +141,6 @@ enum ConsoleMetrics {
     static let iconRowGlyph: CGFloat = 13
     /// Live charts.
     static let chartHeight: CGFloat = 89
-    static let chartHeightTall: CGFloat = 89
     /// Trace weight, and the inset that keeps it whole. A stroke centred on the
     /// plot boundary loses half its width to the edge, so the plot area is held
     /// off the frame by more than half a line — the trace is the content here,
@@ -200,10 +199,9 @@ enum ConsoleMetrics {
     /// those names were being clipped.
     static let reclaimRowMinWidth: CGFloat = 377
     /// Heatmaps. A squarified map needs far more room than a trace — under
-    /// ~250pt the fortieth tile stops being clickable. The disk map gets the
-    /// taller one because it is its module's subject, not one card of five.
+    /// ~250pt the fortieth tile stops being clickable. One shared height keeps
+    /// the process and disk maps aligned while preserving readable tiles.
     static let mapHeight: CGFloat = 233
-    static let mapHeightTall: CGFloat = 233
     /// The colour swatch in a legend chip or a hover readout: identity by
     /// colour only, with the label beside it.
     static let legendDot: CGFloat = 8
@@ -403,8 +401,6 @@ enum ConsoleAnimation {
 /// are the two places the app moves *at* you rather than with you, and they
 /// are named here so a third one-off cannot quietly invent its own timing.
 enum ConsoleMotion {
-    /// Short fade-and-rise for content appearing on a stage.
-    static let micro = Animation.easeOut(duration: 0.6)
     /// The welcome gauge's 0 → 78% → 12% spin-up. 3.2 s is long enough to
     /// read as a demonstration and short enough that the Skip button is never
     /// impatient.

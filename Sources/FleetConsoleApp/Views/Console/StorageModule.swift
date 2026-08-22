@@ -191,7 +191,7 @@ struct StorageModule: View {
                         summary: "Measured directories cover \(ConsoleFmt.bytes(breakdown.breakdown.measuredBytes)) of "
                                + "\(ConsoleFmt.bytes(used)) used — the remainder is system data and "
                                + "unsurveyed folders (the “System & Other” segment above).")
-                .frame(height: ConsoleMetrics.mapHeightTall)
+                .frame(height: ConsoleMetrics.mapHeight)
         }
         .elevatedCard()
     }
