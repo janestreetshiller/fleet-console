@@ -343,7 +343,13 @@ private final class HostSampler: @unchecked Sendable {
         sample.compressedBytes = compressed
         sample.cachedBytes = max(0, external + purgeable)
         sample.appBytes = max(0, active + inactive + speculative - sample.cachedBytes)
-        sample.usedBytes = sample.appBytes + wired + compressed
+        // The buckets this sums are counters the kernel updates independently, and
+        // under heavy compressor churn their total can drift above physical RAM —
+        // a real reading, but one that renders "18.2 GB of 17.2 GB" on the one card
+        // whose arithmetic a reader checks first. A used figure is clamped to what it
+        // is used *of*; the overshoot is noise in the counters, not extra memory.
+        sample.usedBytes = min(sample.totalBytes,
+                               sample.appBytes + wired + compressed)
         sample.pressure = Self.memoryPressure()
 
         var swap = xsw_usage()
