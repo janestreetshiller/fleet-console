@@ -73,6 +73,7 @@ struct OverviewModule: View {
                     memoryCard
                     diskCard
                     if system.gpu.available { gpuCard }
+                    sensorCard
                 }
 
                 processMapCard
@@ -91,6 +92,76 @@ struct OverviewModule: View {
         var parts = [system.topology.brand]
         if !system.topology.coreSummary.isEmpty { parts.append(system.topology.coreSummary) }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: Sensors
+
+    /// The SMC card: fan speed and die temperature from the hardware, not from
+    /// `thermalState`'s four bands.
+    ///
+    /// The card is premium-gated, and the three states it renders are three
+    /// different sentences on purpose:
+    ///   * locked — what the feature *is*, so the paywall advertises honestly;
+    ///   * available but no keys — the SMC answered and held nothing (the
+    ///     normal Apple silicon answer), said as "no keys", not as zeros;
+    ///   * unavailable — no SMC at all (VMs, very old Macs).
+    /// A fourth state — a licensed machine reporting a number — needs no
+    /// prose; the number is the sentence.
+    private var sensorCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                Text("Sensors")
+                    .font(ConsoleFont.cardTitle)
+                if !model.license.isUnlocked(.smcSensors) {
+                    ConsoleBadge(text: "PRO", tone: .warn)
+                }
+                Spacer()
+                if model.license.isUnlocked(.smcSensors), system.sensors.available {
+                    Text("\(system.sensors.fans.count) fan\(system.sensors.fans.count == 1 ? "" : "s")")
+                        .font(ConsoleFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if !model.license.isUnlocked(.smcSensors) {
+                Text("Fan speed and die temperature, read straight from the SMC.")
+                    .font(ConsoleFont.body)
+                    .foregroundStyle(.secondary)
+            } else if system.sensors.available {
+                HStack(spacing: 16) {
+                    sensorMetric(title: "Fan",
+                                 value: SystemFmt.rpm(system.sensors.maxRPM),
+                                 caption: system.sensors.fans.count > 1
+                                    ? "fastest of \(system.sensors.fans.count)" : "actual speed")
+                    sensorMetric(title: "CPU die",
+                                 value: SystemFmt.temperature(system.sensors.cpuTempC),
+                                 caption: "SMC, not thermal state")
+                    sensorMetric(title: "GPU",
+                                 value: SystemFmt.temperature(system.sensors.gpuTempC),
+                                 caption: system.sensors.gpuTempC == nil
+                                    ? "no GPU key on this Mac" : "die proximity")
+                }
+            } else {
+                Text("No SMC on this machine — VMs and very old Macs have none.")
+                    .font(ConsoleFont.body)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .elevatedCard()
+    }
+
+    private func sensorMetric(title: String, value: String, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(ConsoleFont.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(ConsoleFont.cardValue)
+            Text(caption)
+                .font(ConsoleFont.micro)
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: CPU
@@ -297,6 +368,14 @@ struct OverviewModule: View {
             Text("Thermal state \(system.thermal.label)")
                 .font(ConsoleFont.caption)
                 .foregroundStyle(.secondary)
+            // When the SMC is unlocked, the footer names what the band is
+            // standing in for — a state plus its degrees and RPM is a claim
+            // you can check against the card above.
+            if model.license.isUnlocked(.smcSensors), system.sensors.available {
+                Text("· \(SystemFmt.temperature(system.sensors.cpuTempC)) · \(SystemFmt.rpm(system.sensors.maxRPM))")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(.tertiary)
+            }
             Spacer()
             if let captured = model.processes.capturedAt {
                 Text("process table \(Fmt.relative(captured))")
