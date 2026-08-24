@@ -123,7 +123,7 @@ final class ProcessInventory {
     private let queue = DispatchQueue(label: "com.fleetconsole.app.processes")
     // Nonisolated so `deinit` can invalidate it; nothing observes this handle.
     @ObservationIgnored nonisolated(unsafe) private var timer: Timer?
-    private var sampling = false
+    @ObservationIgnored private var sampling = false
 
     init(interval: TimeInterval = FleetConfig.UIConfig.Intervals().clampedProcessSample) {
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in

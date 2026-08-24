@@ -152,7 +152,15 @@ struct ProcessModule: View {
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
         }
-        .onAppear { model.processes.sample() }
+        // Deferred to the next runloop tick: `.onAppear` fires while the table
+        // is still inside its first NSTableView delegate pass, and any observed
+        // state touched here re-enters the delegate mid-reload (macOS logs the
+        // "reentrant operation in its NSTableView delegate" warning there, and
+        // will assert on it). Sampling from a fresh tick keeps the delegate
+        // callback read-only.
+        .onAppear {
+            Task { @MainActor in model.processes.sample() }
+        }
     }
 
     private var header: some View {

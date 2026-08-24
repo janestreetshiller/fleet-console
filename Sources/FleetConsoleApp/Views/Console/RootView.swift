@@ -113,8 +113,16 @@ struct ConsoleRootView: View {
             console.selectedPID = pid
         }
         // Live data deletes rows; selections pointing at ghosts clear themselves.
-        .onChange(of: model.lastSnapshotAt) { console.reconcileSelection(model: model) }
-        .onChange(of: model.processes.capturedAt) { console.reconcileSelection(model: model) }
+        // Deferred one runloop tick: these fire while SwiftUI is still pushing
+        // new rows through the table's NSTableView delegate, and clearing a
+        // selection bound to that table re-enters the delegate mid-pass (the
+        // "reentrant operation" warning macOS will assert on).
+        .onChange(of: model.lastSnapshotAt) {
+            Task { @MainActor in console.reconcileSelection(model: model) }
+        }
+        .onChange(of: model.processes.capturedAt) {
+            Task { @MainActor in console.reconcileSelection(model: model) }
+        }
         .onChange(of: console.selectedDeviceID) {
             // Remote nodes have one module — their own detail. Switching back
             // to This Mac restores the last module implicitly via state.
