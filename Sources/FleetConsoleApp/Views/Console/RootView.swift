@@ -81,6 +81,7 @@ struct ConsoleRootView: View {
             // this, so reading it from inside the inset would be circular.
             GeometryReader { geometry in
                 Color.clear
+                    .paperTexture(seed: 11, opacity: 0.03)
                     .onAppear { contentWidth = geometry.size.width }
                     .onChange(of: geometry.size.width) { _, width in contentWidth = width }
             }

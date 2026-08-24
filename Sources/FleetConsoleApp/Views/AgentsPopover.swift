@@ -17,6 +17,24 @@ struct AgentsContent: View {
     var openDashboard: () -> Void
 
     @State private var expandedAgent: String?
+
+    /// The roster count, plus today's spend when the feature is on.
+    ///
+    /// The `+` marks a total that is short by an agent you can see: it is
+    /// counted over the *rendered* profiles only, because `gemini` and `aider`
+    /// publish nothing and would otherwise pin a permanent, meaningless `+` to
+    /// the header. An agent with a row and no figure explains itself when you
+    /// open it.
+    private var profilesTrailing: String? {
+        guard !model.agentProfiles.isEmpty else { return nil }
+        let count = "\(model.agentProfiles.count)"
+        guard model.settings.features.showAgentSpend,
+              let totals = model.agentCost.totals
+        else { return count }
+        let shown = Set(model.agentProfiles.map(\.id))
+        let unpriced = totals.snapshots.filter { shown.contains($0.id) && !$0.isKnown }.count
+        return "\(count) · \(Fmt.money(totals.knownTotalUSD))\(unpriced > 0 ? "+" : "")"
+    }
     @State private var replyingTo: AgentMessage?
     @State private var replyText = ""
     @FocusState private var replyFocused: Bool
@@ -32,8 +50,7 @@ struct AgentsContent: View {
                 // nothing about *which* agent is in trouble. The roster answers
                 // that directly, and the per-card state is the same fact the
                 // tiles were aggregating away.
-                CompactHeader(title: "Profiles",
-                              trailing: model.agentProfiles.isEmpty ? nil : "\(model.agentProfiles.count)")
+                CompactHeader(title: "Profiles", trailing: profilesTrailing)
                 if model.agentProfiles.isEmpty {
                     EmptyLine(text: model.connected
                               ? "no agent has launched anything or said anything yet"
@@ -85,6 +102,13 @@ struct AgentsContent: View {
             }
         }
         .frame(maxHeight: FleetMetrics.sectionMaxHeight)
+        .paperTexture(seed: 29, opacity: 0.03)
+        // The scan needs no controller, so it must not wait for one: without
+        // this, spend never appears while the daemon is down, because the only
+        // other caller rides the snapshot tick.
+        .onAppear {
+            if model.settings.features.showAgentSpend { model.agentCost.refresh() }
+        }
     }
 
 }

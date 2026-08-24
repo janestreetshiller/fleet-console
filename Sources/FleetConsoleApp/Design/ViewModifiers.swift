@@ -74,6 +74,7 @@ struct ElevatedCard: ViewModifier {
             .background(
                 RoundedRectangle(cornerRadius: ConsoleMetrics.cardCorner, style: .continuous)
                     .fill(ConsoleColor.card)
+                    .paperTexture()
             )
             .overlay(
                 RoundedRectangle(cornerRadius: ConsoleMetrics.cardCorner, style: .continuous)

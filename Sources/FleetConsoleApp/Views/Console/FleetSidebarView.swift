@@ -33,6 +33,21 @@ struct FleetSidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            // The stamped brand plate: the one place the console signs itself.
+            HStack(spacing: 8) {
+                FleetMark(size: 20)
+                Text("FLEETCONSOLE")
+                    .font(StampFont.display(16))
+                    .tracking(StampFont.tracking)
+                    .foregroundStyle(ConsoleColor.numeral)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+        }
         // The column width is set by `ConsoleRootView`, not here: the resting
         // width is the golden section of whatever the split view has to divide,
         // which is a function of the window and of whether a tool panel is open.
@@ -104,6 +119,11 @@ private struct ThisMacRow: View {
                     .font(ConsoleFont.caption)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
+                    .truncationMode(.tail)
+                    // The "NN% CPU · NN% RAM" line sat right at the sidebar's
+                    // width and clipped mid-glyph under the selection fill.
+                    // One scale step keeps the whole fact visible instead.
+                    .minimumScaleFactor(0.8)
                     .monospacedDigit()
             }
             Spacer(minLength: 4)

@@ -498,25 +498,37 @@ struct ModuleHeader<Trailing: View>: View {
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: symbol)
-                .font(ConsoleFont.moduleTitle)
-                .foregroundStyle(.secondary)
-                .symbolRenderingMode(.hierarchical)
-            Text(title)
-                .font(ConsoleFont.moduleTitle)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-            if let subtitle {
-                Text(subtitle)
-                    .font(ConsoleFont.subtitle)
-                    .foregroundStyle(.tertiary)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Image(systemName: symbol)
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .symbolRenderingMode(.hierarchical)
+                Text(title.uppercased())
+                    // Stamped treatment: bundled ink face at ≥16pt with
+                    // letter-tracking and a pressed rule beneath.
+                    .font(StampFont.display(17))
+                    .tracking(StampFont.tracking)
+                    .foregroundStyle(ConsoleColor.numeral)
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(-1)
+                    .fixedSize(horizontal: true, vertical: false)
+                if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
+                    Text(subtitle)
+                        .font(ConsoleFont.subtitle)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(-1)
+                }
+                Spacer(minLength: 4)
+                trailing
             }
-            Spacer(minLength: 4)
-            trailing
+            Rectangle()
+                .fill(ConsoleColor.hairlineStrong)
+                .frame(height: 1)
+            Rectangle()
+                .fill(ConsoleColor.hairline)
+                .frame(height: 1)
         }
         .accessibilityElement(children: .combine)
     }

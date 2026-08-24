@@ -16,6 +16,14 @@ struct AgentProfileCard: View {
 
     private var isExpanded: Bool { expanded == profile.id }
 
+    /// `nil` when the feature is off or nothing has been sampled yet. A
+    /// snapshot whose `amountUSD` is nil is a different thing entirely — the
+    /// agent exists and could not be priced — and the detail says so.
+    private var spend: AgentCostSnapshot? {
+        guard model.settings.features.showAgentSpend else { return nil }
+        return model.agentCost.snapshot(for: profile.id)
+    }
+
     private var tone: StatusTone {
         switch profile.tone {
         case .waiting: return .warn
@@ -68,9 +76,21 @@ struct AgentProfileCard: View {
                            size: FleetMetrics.iconRowLarge,
                            badge: profile.awaitingReply > 0 ? .warn : nil)
                 VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 6) {
-                        Text(profile.id).font(FleetFont.rowTitle)
+                        HStack(spacing: 6) {
+                        Text(profile.id)
+                            .font(StampFont.display(16))
+                            .tracking(0.6)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                         Tag(text: statusWord, tone: tone)
+                        // Knowns only. An agent nobody can price says so in its
+                        // detail rather than putting a caveat in the title row.
+                        if let amount = spend?.amountUSD {
+                            Text(Fmt.money(amount))
+                                .font(FleetFont.mono(10))
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                        }
                     }
                     Text(profile.headline)
                         .font(FleetFont.caption)
@@ -129,6 +149,19 @@ struct AgentProfileCard: View {
                     if !profile.purposes.isEmpty {
                         KeyValue(key: "Doing", value: profile.purposes.joined(separator: "; "))
                     }
+                }
+            }
+
+            if let spend {
+                group("Cost today") {
+                    // The unknown is spelled out rather than shown as a zero,
+                    // and the source line is what makes it actionable: a tool
+                    // that publishes nothing is not the same as one whose log
+                    // would not open.
+                    KeyValue(key: "Spend",
+                             value: spend.amountUSD.map(Fmt.money) ?? "Unknown",
+                             monospaced: spend.isKnown)
+                    KeyValue(key: "Source", value: spend.source.explanation)
                 }
             }
 
