@@ -285,6 +285,12 @@ struct ThroughputChart: View {
 /// side in the grid instead of stacking.
 struct TelemetryCard<Content: View>: View {
     let title: String
+    /// The plotted legend struck into this plate's top border — "01 · CPU".
+    /// Given at the call site rather than derived from `title`, because the
+    /// number is the card's position in the module's grid and the grid is the
+    /// caller's. A card that numbered itself would be a card that renumbered
+    /// itself when the GPU withheld its key and the module dropped to three.
+    let plate: String
     var tone: StatusTone = .neutral
     /// The formatted current value, shown on the dial's face.
     let value: String
@@ -332,7 +338,7 @@ struct TelemetryCard<Content: View>: View {
                 content
             }
         }
-        .elevatedCard()
+        .elevatedCard(plate)
         .accessibilityElement(children: .contain)
     }
 }

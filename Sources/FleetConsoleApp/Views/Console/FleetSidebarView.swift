@@ -33,13 +33,21 @@ struct FleetSidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        // The mesh sits on the page like everything else. Without this the
+        // sidebar column paints AppKit's own vibrancy over the field, and the
+        // window has one column that is not on the same sheet of paper as the
+        // other two.
+        .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .top, spacing: 0) {
-            // The stamped brand plate: the one place the console signs itself.
+            // The signature: the one place the console signs itself. The mark
+            // is drawn on its construction circle and the name is set as a
+            // plotted legend beside it — the same treatment every plate label
+            // in the app wears, at the one place it is the app's own name.
             HStack(spacing: 8) {
                 FleetMark(size: 20)
                 Text("FLEETCONSOLE")
-                    .font(StampFont.display(16))
-                    .tracking(StampFont.tracking)
+                    .font(ConsoleFont.plateLabel)
+                    .tracking(SketchMetrics.plateLabelTracking)
                     .foregroundStyle(ConsoleColor.numeral)
                     .lineLimit(1)
                 Spacer(minLength: 0)

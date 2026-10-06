@@ -11,3 +11,8 @@
 # macOS
 .DS_Store
 .worktrees/
+
+# The seeded design canvas is a build product of docs/design-canvas/*.dc.html
+# and canvas.json — re-seed it, do not track two megabytes of editor.
+docs/design-canvas/*.html
+!docs/design-canvas/*.dc.html

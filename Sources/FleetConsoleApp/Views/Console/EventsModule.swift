@@ -55,6 +55,11 @@ struct EventsModule: View {
             }
         }
         .listStyle(.inset)
+        // The table sits on the page like every other surface: without
+        // this it paints AppKit's own table background over the field and
+        // the module reads as a panel dropped on top of the window rather
+        // than as part of it.
+        .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .top) {
             ModuleHeader(
                 title: "Event Log",

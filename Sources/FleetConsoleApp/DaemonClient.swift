@@ -87,6 +87,14 @@ final class DaemonClient: @unchecked Sendable {
         }
     }
 
+    /// The one verb the Task Composer uses: hand the controller a supervised
+    /// service. It is a request, not a command — the controller alone launches
+    /// and reaps, and this reply carries the resulting `ServiceRecord`.
+    func launch(_ request: LaunchRequest,
+                completion: @escaping @MainActor (Result<RPCResponse, Error>) -> Void) {
+        send(RPCRequest(op: .launch, launch: request), completion: completion)
+    }
+
     /// Whether the launchd agent is registered, so the UI can tell "not installed"
     /// apart from "installed but down".
     func agentIsRegistered() -> Bool {

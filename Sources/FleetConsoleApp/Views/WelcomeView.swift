@@ -120,7 +120,7 @@ private struct WelcomeView: View {
             footer
         }
         .frame(width: 560, height: 420)
-        .background(ConsoleColor.window)
+        .sketchSubstrate(seed: 0.61, grainSeed: 61)
         // Escape dismisses; the animation's own skip affordance is the button.
         .onExitCommand { dismiss() }
         .onAppear {

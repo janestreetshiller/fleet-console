@@ -96,6 +96,11 @@ struct ServicesModule: View {
             }
         }
         .listStyle(.inset)
+        // The table sits on the page like every other surface: without
+        // this it paints AppKit's own table background over the field and
+        // the module reads as a panel dropped on top of the window rather
+        // than as part of it.
+        .scrollContentBackground(.hidden)
         .overlay(alignment: .top) {
             // The module header sits above the list so the title does not scroll
             // away — every other module does the same.

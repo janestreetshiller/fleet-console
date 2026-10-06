@@ -36,12 +36,18 @@ public enum PremiumFeature: String, CaseIterable, Sendable {
     case skipWelcomeAnimation
     /// The heatmap's advanced filtering (anything past the default view).
     case advancedHeatmapFilters
+    /// Reconcile runs through the console: take a snapshot, compare it to the
+    /// registry's desired state, apply the diff with an undo log. The free
+    /// tier can *see* drift (the overview shows mismatches as they happen),
+    /// but only a licence can act on it.
+    case reconcile
 
     public var displayName: String {
         switch self {
         case .smcSensors: return "SMC fan & temperature sensors"
         case .skipWelcomeAnimation: return "Skip welcome animation"
         case .advancedHeatmapFilters: return "Advanced heatmap filters"
+        case .reconcile: return "Reconcile — apply desired state"
         }
     }
 }

@@ -46,6 +46,15 @@ public enum Fmt {
         return String(format: "%.0f MB", mb)
     }
 
+    /// A spend figure. Two decimals, because that is what a bill has — but a
+    /// real amount below a cent reads as `<$0.01` rather than `$0.00`, for the
+    /// same reason an unknown is never rendered as zero: a turn that cost
+    /// something must not display as having been free.
+    public static func money(_ usd: Double) -> String {
+        if usd > 0, usd < 0.005 { return "<$0.01" }
+        return String(format: "$%.2f", usd)
+    }
+
     public static func cpu(_ pct: Double?) -> String {
         guard let pct else { return "—" }
         return String(format: "%.1f%%", pct)

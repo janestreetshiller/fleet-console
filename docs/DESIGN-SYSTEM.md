@@ -4,11 +4,15 @@ Every surface in FleetConsole (menu-bar item, popover Overview, popover Details,
 console window, inspectors) is built from the components below. Nothing draws its
 own row chrome any more.
 
-The toolbox has two scales. `Design/Theme.swift` is the **popover ramp** (menu
-density, 13pt rows). `Design/Tokens.swift` is the **window ramp** (`ConsoleFont`
-on dynamic text styles, `ConsoleMetrics`, `ConsoleColor`, `StorageCategory`
-colours) used by the console window and its inspectors. A surface uses one ramp
-or the other, never a mixture.
+The toolbox has two scales and one substrate. `Design/Theme.swift` is the
+**popover ramp** (menu density, 13pt rows). `Design/Tokens.swift` is the **window
+ramp** (`ConsoleFont` on dynamic text styles, `ConsoleMetrics`, `ConsoleColor`,
+`StorageCategory` colours) used by the console window and its inspectors. A
+surface uses one ramp or the other, never a mixture.
+
+`Design/Sketchfield.swift` is neither: it is how everything is *drawn*, at both
+scales — the page a window is on and the plate a card is. See **The substrate**
+below.
 
 **Why this exists.** The first build grew four separate row implementations that
 each re-did hover state, highlight background, chevron rotation, expansion
@@ -33,6 +37,7 @@ immediately readable as *not a Mac app*.
 | Token | Size | Used for |
 |---|---|---|
 | `marker` | 8 | a glyph that annotates a row without being part of its text |
+| `plateLabel` | 8 mono | the plotted legend struck into a plate's top border |
 | `nano` | 10 | stat-tile captions |
 | `micro` | 10 medium | tags, badges, evidence chips |
 | `chevron` | 10 semibold | the disclosure chevron, used only by `DisclosureRow` |
@@ -132,6 +137,73 @@ chose 560. It was typed beside the longest section, which is also the only one
 carrying an admin footer — so the outlier was adding height to the tab that
 least needed it, and the popover grew 20pt when you moved to Connections and
 shrank 20pt when you moved away.
+
+---
+
+## The substrate — `Design/Sketchfield.swift`
+
+The window is a sketchbook page with a shader running under it. Three things
+carry that, and nothing else in the app is allowed to.
+
+**The field.** Three blurred spectral lobes — aqua, violet, rose — drifting
+under everything on 34, 47 and 41-second cycles. It is the one place in the app
+with saturated colour that is not a status, and it is allowed to be there
+precisely because it means nothing: no lobe encodes a value, so no lobe can be
+misread as one. Reduce Motion parks it. A `seed` slides the arrangement, so the
+popover open over the window is not the same picture as the window.
+
+**The ruling.** Graph paper at 13pt with a heavy line every fifth — the rungs
+`ConsoleMetrics` already lays out on. The grid is not decoration; it is the
+ladder made visible.
+
+**The plate.** Every card, panel and popover: a translucent fill, one hairline
+border, and a second pass 3pt down and right. The second pass replaced the drop
+shadow — a blur behind a translucent plate over a blurred field is three soft
+things stacked, and the plate stops having an edge at all. A plate that is one
+of several instruments on a surface also carries a **plate label**, a plotted
+mono legend struck into a break in its own top border ("01 · CPU"). The break is
+measured from the label, not assumed, so the border never runs under a letter.
+
+| Token | Value | What it is |
+|---|---|---|
+| `SketchMetrics.plateOffset` | 3 | how far down and right the second pass sits |
+| `SketchMetrics.ruleFine` | 13 | graph-paper pitch |
+| `SketchMetrics.ruleHeavy` | `ruleFine × 5` | every fifth line, drawn heavier |
+| `SketchMetrics.plateLabelInset` | 13 | where the label breaks the top border |
+| `SketchMetrics.plateLabelPadding` | 5 | air either side of it inside the break |
+| `SketchMetrics.plateLabelRise` | 6 | how far it rides above the border |
+| `SketchMetrics.lobeBlur` | 89 | a field lobe's blur — large enough that no lobe has an edge |
+| `SketchMetrics.lobeSpan` | 0.55 | a lobe's diameter, as a share of the surface's long side |
+| `SketchMetrics.lobeDrift` | 0.13 | how far it travels, as a share of its own diameter |
+| `SketchMetrics.fieldOverMaterial` | 0.55 | the field's strength on a surface it does not own |
+
+`SketchInk` carries the four decisions the pass actually makes — `ground`,
+`plate`, the three `field*` hues, and `accent` / `accentAlt` / `accentWarm`.
+Each is a resolved light/dark pair rather than an opacity on a system colour,
+because "the window background is `windowBackgroundColor`" is the thing this
+treatment exists to stop being. The accents are **not** statuses and must never
+stand in for one: they mark the things the eye should find first that carry no
+verdict — the mark, a live trace, a selected segment, a performance core.
+
+**What it replaced.** Stampwork: paper grain, a vendored typewriter face, and a
+mark struck like a rubber stamp, applied on top of a System-Settings window. The
+two were arguing — a stamped header over a `controlBackgroundColor` card is a
+texture on a form, not a page. The grain survives as `Grain`, which was the one
+part of it making a surface feel like a surface. The bundled face does not: SF
+stays the reading face at every size the ramps already name, and the character
+comes from the drawing. One type token was added for the whole pass —
+`plateLabel`, in both ramps.
+
+**A surface applies the substrate; a plate never does.** `.sketchSubstrate()` is
+for a window or a popover. A card is a plate floating on one and has no page of
+its own. The popover passes `ground: false`, because `NSPopover` draws its own
+frame and arrow in the system's material and content that paints an opaque page
+inside it gives you a dark rectangle joined to a light arrow.
+
+**Any surface that paints its own background has to stop.** Lists, tables and
+scroll views all do by default, and one column that keeps AppKit's own material
+is one column that is not on the same sheet of paper as the other two. Every
+such surface in the app carries `.scrollContentBackground(.hidden)`.
 
 ---
 
@@ -359,7 +431,7 @@ digits it exists to show.
 | Primitive | What it is |
 |---|---|
 | `Hairline` / `.hairline()` | `Color.primary.opacity(0.08)` surface edges. Replaces `Divider()` wherever a *boundary*, not a separator, is drawn |
-| `.elevatedCard()` | The one elevated surface: control-background fill + hairline + one soft shadow |
+| `.elevatedCard(_:)` | The one elevated surface: a plate — translucent fill + hairline border + second pass, with an optional plotted plate label. See **The substrate** |
 | `.hoverHighlight()` | 6% fill on hover; rows never scale or change weight |
 | `StatusPip(tone:pulsing:)` | The live health dot; reachable nodes breathe on the probe cadence, Reduced Motion stills it |
 | `ConsoleBadge` | Mono-digit capsule for counts and latencies |
@@ -383,16 +455,25 @@ Modules: `TelemetryCard` (an instrument — dial, trace and facts on one card),
 ### `RetroGauge(value:tone:caption:readout:)` — `Design/RetroGauge.swift`
 
 A 240° analog dial for a bounded 0…1 metric, beside the trace that carries its
-history. The one skeuomorphic object in the app, and it earns the exception by
-doing something the flat vocabulary cannot: a needle is read as a *position on a
-fixed scale* without being decoded, while a numeral has to be compared against a
-range you hold in your head. "77%" does not tell you whether 77% is anywhere near
-the top; a needle two ticks under the red band does, before you have read the
-number.
+history. It earns its place by doing something the flat vocabulary cannot: a
+needle is read as a *position on a fixed scale* without being decoded, while a
+numeral has to be compared against a range you hold in your head. "77%" does not
+tell you whether 77% is anywhere near the top; a needle two ticks under the red
+band does, before you have read the number.
+
+It used to be a machined instrument — a filled face, a radial shade to recess
+it, a two-stop gradient bezel lighting it from the top-left, and an Aqua
+highlight over the top third. All four were arguing with the substrate: a lit
+plastic dial floating over a drifting field is an object photographed onto a
+page, and the page is the point. What is drawn now is what a compass leaves —
+the outer circle, the dashed inner circle the tick ladder was measured from, and
+a pivot in the plate's own colour with an ink ring round it. Nothing is filled,
+so the plate and the field show through the scale. Every dimension, threshold
+and accessibility behaviour below is unchanged.
 
 It inherits the rest of the system unchanged:
 
-* **Colour stays a status vocabulary.** Bezel, face, ticks, hub and readout are
+* **Colour stays a status vocabulary.** Construction, ticks, hub and readout are
   achromatic in both appearances. The only hue is the tone, in exactly two
   places — the value arc and the needle.
 * **Nothing depends on colour alone.** The angle carries the value, the readout

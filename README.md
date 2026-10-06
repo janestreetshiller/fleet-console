@@ -187,6 +187,7 @@ rust/fleet-conformance         proves those types agree with the live Swift daem
 Scripts/design-audit.sh        checks the view layer against the design rules
 Scripts/churn.sh               boots the live model and counts what republishes
 docs/DESIGN-SYSTEM.md          the UI toolbox: tokens, components, rules
+docs/RUNBOOKS.md               what a model is allowed to do, and why it is a closed list
 docs/CLI.md                    the operations toolbox: every fleetctl verb
 docs/PRODUCT-SPEC.md           screen-by-screen spec
 docs/THREAT-MODEL.md           process leaks, unsafe stops, stale records, bypass
@@ -197,8 +198,13 @@ docs/AGENTS.md                 the contract for agents
 
 **FleetKit** (`docs/DESIGN-SYSTEM.md`) — one type ramp, one metrics set, one status
 vocabulary, and two row primitives (`FleetRowLabel`, `DisclosureRow`) that every
-surface composes. Rows supply content, never chrome. `Scripts/design-audit.sh`
-checks the parts of that contract a script can check.
+surface composes. Rows supply content, never chrome. Everything is drawn on one
+substrate — a drifting spectral field under graph-paper ruling, with every card,
+panel and popover floating on it as a plate: one hairline, a second pass 3pt down
+and right, and a plotted label struck into its own top border.
+`Scripts/design-audit.sh` checks the parts of that contract a script can check,
+and `Scripts/surface-sheet.sh` renders all 42 surfaces to `build/design/surfaces`
+in both appearances.
 
 **fleetctl** (`docs/CLI.md`) — `launch · renew · stop · restart · list · show ·
 agents · events · logs · ping · doctor · reconcile · ignore · prune · config`,
@@ -228,7 +234,7 @@ exists so a section can be turned **off**, not so one can be turned on.
   "sections":  { "services": true, "agents": true, "processes": true,
                  "network": true, "devices": true, "listening": true },
   "intervals": { "networkRefreshSec": 20, "processSampleSec": 4 },
-  "features":  { "allowProcessTermination": false },
+  "features":  { "allowProcessTermination": false, "showAgentSpend": false },
   "consoles":  { "network": null, "vlan": null }
 }
 ```
@@ -248,6 +254,17 @@ alongside a registered `VLANSource`.
 `allowProcessTermination` unlocks **End Process** on the Processes section. It is
 off by default and it does not weaken the controller's rule — see
 [docs/DESIGN-SYSTEM.md](docs/DESIGN-SYSTEM.md) for the three gates it holds.
+
+`showAgentSpend` puts today's cost on each agent in the **Agents** section, read
+out of each tool's own usage record — Claude Code and Codex transcripts priced
+against a table in `AgentPricing`, opencode's own database read as-is. It is off
+by default because the prices are written down rather than fetched, and an
+unverified spend figure is worse than none: it will be believed. Compare a day
+against a provider's bill, then turn it on.
+
+**An agent that cannot be priced reads as `Unknown`, never as `$0.00`.** Gemini
+CLI and aider publish no usage record at all, so no figure for them is honest;
+a total that is short by an agent you can see is marked with a trailing `+`.
 
 ### `networkSegments` — naming your VLANs
 

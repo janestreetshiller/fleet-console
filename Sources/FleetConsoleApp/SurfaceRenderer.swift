@@ -161,7 +161,40 @@ enum SurfaceRenderer {
             NSApp.appearance = NSAppearance(named: appearance.name)
             renderPopover(model: model, fixture: fixture, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
+            renderTaskComposer(appearance: appearance, into: out)
         }
+    }
+
+    /// The Task Composer window on its own — a surface the sheet should prove
+    /// renders without defects (the assign picker, the plate labels, the launch
+    /// footer) before it ever reaches a launch.
+    private static func renderTaskComposer(appearance: Appearance, into out: URL) {
+        let roster = ["claude", "codex", "operator"].map { AgentProfile(id: $0) }
+        let composer = TaskComposerModel(agentProfiles: roster)
+        composer.taskName = "embed index"
+        composer.ownerAgent = "claude"
+        composer.purpose = "local api for triage"
+        composer.command = "python3 -m http.server"
+        composer.cwd = "/Users/main"
+        composer.leaseMinutes = 120
+        composer.port = "8787"
+
+        let hosting = NSHostingView(rootView: TaskComposerView(model: composer, dismiss: {}))
+        hosting.appearance = NSAppearance(named: appearance.name)
+        hosting.frame = NSRect(x: 0, y: 0, width: 480, height: 560)
+        let window = NSWindow(contentRect: hosting.frame,
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: appearance.name)
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
+        window.contentView = hosting
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.orderFront(nil)
+        let fitted = hosting.fittingSize
+        window.setContentSize(NSSize(width: 480, height: max(fitted.height, 560)))
+        settle(turns: 6)
+        capture(window, to: out.appendingPathComponent("task-composer-\(appearance.rawValue).png"))
+        window.orderOut(nil)
     }
 
     /// Apply a state change with animation suppressed. Every surface here is

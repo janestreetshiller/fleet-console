@@ -40,7 +40,6 @@ struct ServicesContent: View {
                 Spacer(minLength: 8)
             }
         }
-        .paperTexture(seed: 23, opacity: 0.03)
         .frame(maxHeight: FleetMetrics.sectionMaxHeight)
         .destructiveActionAlert($pendingAction, model: model)
         .actionErrorAlert(model: model)

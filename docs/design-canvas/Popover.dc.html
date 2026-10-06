@@ -1,0 +1,183 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #070a0d; }
+    a { color: #5fe3d0; } a:hover { color: #8df0e2; }
+    .plate { position: relative; }
+    .plate::after {
+      content: "";
+      position: absolute;
+      left: 3px; top: 3px; right: -3px; bottom: -3px;
+      border-right: 1px solid rgba(232,237,242,0.07);
+      border-bottom: 1px solid rgba(232,237,242,0.07);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+  </style>
+</helmet>
+
+<div style="width: 560px; height: 760px; position: relative; overflow: hidden; background: #070a0d; font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; color: #e8edf2; -webkit-font-smoothing: antialiased;">
+
+  <div style="position: absolute; inset: 0; pointer-events: none;">
+    <div style="position: absolute; left: -120px; top: -80px; width: 520px; height: 460px; border-radius: 50%; background: radial-gradient(closest-side, #1c6f77, transparent 72%); filter: blur(80px); opacity: 0.5;"></div>
+    <div style="position: absolute; right: -160px; bottom: -180px; width: 560px; height: 520px; border-radius: 50%; background: radial-gradient(closest-side, #5a2f7a, transparent 70%); filter: blur(100px); opacity: 0.5;"></div>
+  </div>
+  <div style="position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(232,237,242,0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(232,237,242,0.035) 1px, transparent 1px); background-size: 13px 13px;"></div>
+
+  <!-- ── the menu bar, with FleetConsole's extra ─────────────── -->
+  <div style="position: absolute; left: 0; right: 0; top: 0; height: 26px; display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 0 14px; background: rgba(6,9,12,0.86); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(232,237,242,0.07);">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(232,237,242,0.55)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M12 18 a6 6 0 0 0 0-12 M5 12 h1 M18 12 h1"></path></svg>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="rgba(232,237,242,0.55)" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M4 8 h16 M4 12 h16 M4 16 h10"></path></svg>
+
+    <!-- the extra: mark + live count, highlighted because the popover is open -->
+    <div style="display: flex; align-items: center; gap: 6px; height: 20px; padding: 0 7px; border-radius: 4px; background: rgba(95,227,208,0.16);">
+      <svg width="14" height="14" viewBox="0 0 26 26" aria-hidden="true">
+        <circle cx="13" cy="13" r="11" fill="none" stroke="rgba(95,227,208,0.35)" stroke-width="1.4"></circle>
+        <path d="M8.5 19.5 L8.5 7 L18 7 M8.5 12.6 L15.2 12.6" fill="none" stroke="#5fe3d0" stroke-width="1.8" stroke-linecap="round"></path>
+      </svg>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: #5fe3d0;">7</span>
+    </div>
+
+    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(232,237,242,0.62);">Tue 14:08</span>
+  </div>
+
+  <!-- the notch of the popover, pointing at the extra -->
+  <svg width="20" height="10" viewBox="0 0 20 10" style="position: absolute; right: 118px; top: 30px;" aria-hidden="true">
+    <path d="M0 10 L10 0 L20 10" fill="rgba(12,16,21,0.92)" stroke="rgba(232,237,242,0.14)" stroke-width="1"></path>
+    <path d="M0 10 L20 10" stroke="rgba(12,16,21,0.92)" stroke-width="2"></path>
+  </svg>
+
+  <!-- ── the popover: 380pt, the app's only fixed width ─────── -->
+  <div class="plate" style="position: absolute; right: 20px; top: 39px; width: 380px; border: 1px solid rgba(232,237,242,0.14); border-radius: 10px; background: rgba(12,16,21,0.92); backdrop-filter: blur(30px); overflow: hidden; box-shadow: 0 22px 60px rgba(0,0,0,0.62);">
+
+    <!-- header -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 11px 16px 0 16px;">
+      <svg width="18" height="18" viewBox="0 0 26 26" aria-hidden="true">
+        <circle cx="13" cy="13" r="11" fill="none" stroke="rgba(232,237,242,0.16)" stroke-width="1"></circle>
+        <path d="M8.5 19.5 L8.5 7 L18 7 M8.5 12.6 L15.2 12.6" fill="none" stroke="#5fe3d0" stroke-width="1.6" stroke-linecap="round"></path>
+      </svg>
+      <span style="font-size: 13px; font-weight: 600;">FleetConsole</span>
+      <div style="flex-grow: 1;"></div>
+      <!-- action slot: two hit targets wide, reserved whether or not both show -->
+      <div style="display: flex; gap: 2px; width: 38px; justify-content: flex-end;">
+        <div style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(232,237,242,0.62)" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M3 12 a9 9 0 1 0 3-6.7 M3 4 v5 h5"></path></svg>
+        </div>
+        <div style="width: 18px; height: 18px; display: flex; align-items: center; justify-content: center;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(232,237,242,0.62)" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3 v2 M12 19 v2 M3 12 h2 M19 12 h2"></path></svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- section picker -->
+    <div style="display: flex; gap: 0; margin: 11px 16px 0 16px; border: 1px solid rgba(232,237,242,0.14); border-radius: 5px; overflow: hidden;">
+      <sc-for list="{{sections}}" as="s" hint-placeholder-count="4">
+        <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center; height: 24px; background: {{s.fill}}; border-right: 1px solid rgba(232,237,242,0.09);">
+          <span style="font-size: 11px; color: {{s.ink}};">{{s.name}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- section body -->
+    <div style="display: flex; flex-direction: column; padding: 11px 10px 0 10px;">
+      <div style="display: flex; align-items: center; gap: 8px; padding: 0 6px 7px 6px;">
+        <span style="font-size: 11px; font-weight: 600; color: rgba(232,237,242,0.62);">Managed services</span>
+        <span style="padding: 0 6px; border-radius: 3px; background: rgba(232,237,242,0.12); font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: rgba(232,237,242,0.72);">7</span>
+        <div style="flex-grow: 1;"></div>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: rgba(232,237,242,0.34);">swept 4 s ago</span>
+      </div>
+
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="6">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 5px; background: {{r.bg}};">
+          <!-- entity tile: a ruled plate with a status badge struck into its corner -->
+          <div style="position: relative; width: 28px; height: 28px; flex-shrink: 0;">
+            <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+              <rect x="0.6" y="0.6" width="26.8" height="26.8" rx="7.3" fill="{{r.tileFill}}" stroke="{{r.tileStroke}}" stroke-width="1"></rect>
+              <path d="{{r.glyph}}" fill="none" stroke="{{r.tone}}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" transform="translate(7 7) scale(0.58)"></path>
+            </svg>
+            <svg width="10" height="10" viewBox="0 0 10 10" style="position: absolute; right: -1px; bottom: -1px;" aria-hidden="true">
+              <circle cx="5" cy="5" r="4.2" fill="{{r.tone}}" stroke="#0c1015" stroke-width="1.5"></circle>
+            </svg>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0;">
+            <span style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{r.name}}</span>
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(232,237,242,0.42);">{{r.sub}}</span>
+          </div>
+
+          <!-- utilisation meter: 54 × 5, the one width every row agrees on -->
+          <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0;">
+            <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; color: rgba(232,237,242,0.86);">{{r.value}}</span>
+            <div style="width: 54px; height: 5px; border-radius: 2px; background: rgba(232,237,242,0.08); overflow: hidden;">
+              <div style="width: {{r.meter}}; height: 100%; background: {{r.tone}}; border-radius: 2px;"></div>
+            </div>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- footer -->
+    <div style="display: flex; align-items: center; gap: 13px; margin-top: 9px; padding: 9px 16px; border-top: 1px solid rgba(232,237,242,0.09); background: rgba(232,237,242,0.02);">
+      <span style="display: flex; align-items: center; gap: 6px;">
+        <span style="width: 5px; height: 5px; border-radius: 50%; background: #6ee7a8; box-shadow: 0 0 8px rgba(110,231,168,0.8);"></span>
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: #6ee7a8;">fleetd healthy</span>
+      </span>
+      <div style="flex-grow: 1;"></div>
+      <span style="font-size: 11px; color: rgba(232,237,242,0.58);">Open Console</span>
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: rgba(232,237,242,0.34);">⌘0</span>
+    </div>
+  </div>
+
+  <!-- the plate's caption, written on the page beside it -->
+  <div style="position: absolute; left: 24px; bottom: 24px; width: 168px; display: flex; flex-direction: column; gap: 7px;">
+    <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.16em; color: rgba(232,237,242,0.34);">PLATE 04 · POPOVER</span>
+    <span style="font-size: 11px; line-height: 1.5; color: rgba(232,237,242,0.44); text-wrap: pretty;">380pt at every section — the picker and the footer are the same views on all four tabs, so nothing under them may move when you switch.</span>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":560,"height":760}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const aqua = '#5fe3d0', mint = '#6ee7a8', amber = '#f2b85c', coral = '#ff7a6b', violet = '#9d8bff';
+
+    const sections = ['Services', 'Agents', 'Processes', 'Connections'].map((name, i) => ({
+      name,
+      fill: i === 0 ? 'rgba(95,227,208,0.16)' : 'transparent',
+      ink: i === 0 ? '#5fe3d0' : 'rgba(232,237,242,0.62)'
+    }));
+
+    const tile = (tone, alpha) => ({
+      tileFill: 'rgba(232,237,242,0.04)',
+      tileStroke: 'rgba(232,237,242,0.12)',
+      tone
+    });
+
+    const rows = [
+      { name: 'fleetd', sub: 'pid 1284 · 3 d 04:12', value: '2.1%', meter: '11%', tone: mint,
+        glyph: 'M4 6 h16 v12 H4 z M8 11 l3 2 l-3 2', bg: 'rgba(232,237,242,0.05)', ...tile(mint) },
+      { name: 'ollama', sub: 'pid 9134 · port 11434', value: '18%', meter: '18%', tone: mint,
+        glyph: 'M12 3 a9 9 0 1 0 0.01 0 M12 8 v8', bg: 'transparent', ...tile(mint) },
+      { name: 'tailscaled', sub: 'pid 442 · 4 peers', value: '0.4%', meter: '4%', tone: mint,
+        glyph: 'M4 12 h16 M12 4 v16', bg: 'transparent', ...tile(mint) },
+      { name: 'postgres', sub: 'pid 2210 · port 5432', value: '61%', meter: '61%', tone: amber,
+        glyph: 'M6 6 h12 v12 H6 z M9 10 h6', bg: 'transparent', ...tile(amber) },
+      { name: 'hermes-gateway', sub: 'restarting · 3rd attempt', value: '—', meter: '0%', tone: coral,
+        glyph: 'M12 4 v9 M12 17 v1', bg: 'transparent', ...tile(coral) },
+      { name: 'gemma-bridge', sub: 'pid 7788 · port 8081', value: '7.3%', meter: '7%', tone: violet,
+        glyph: 'M5 12 h4 l2-5 l4 10 l2-5 h2', bg: 'transparent', ...tile(violet) }
+    ];
+
+    return { sections, rows };
+  }
+}
+</script>
+</body>
+</html>

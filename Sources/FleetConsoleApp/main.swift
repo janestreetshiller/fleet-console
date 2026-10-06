@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var fleetItem: MenuBarItemController!
     private var consoleWindow: ConsoleWindowController?
     private var welcomeWindow: WelcomeWindowController?
+    private var taskComposer: TaskComposerWindowController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // One instance, two items. Without this guard a second launch adds another
@@ -166,6 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for item in MainMenu.moduleItems() { menu.addItem(item) }
 
         menu.addItem(.sectionHeader(title: "Fleet"))
+        let newTask = NSMenuItem(title: "New Task…", action: #selector(showNewTask), keyEquivalent: "n")
+        newTask.keyEquivalentModifierMask = [.command]
+        newTask.target = self
+        menu.addItem(newTask)
         let network = NSMenuItem(title: FleetSection.connections.menuTitle,
                                  action: #selector(showNetwork), keyEquivalent: "")
         network.target = self
@@ -204,6 +209,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showNetwork() {
         model.requestedSection = .connections
         fleetItem?.showPopover()
+    }
+
+    /// Opens the Task Composer: compose a task and hand it to the controller.
+    @objc private func showNewTask() {
+        let composer = TaskComposerWindowController(agentProfiles: model.agentProfiles)
+        taskComposer = composer
+        composer.show()
     }
 
     @objc private func reconcile() { model.reconcileNow() }

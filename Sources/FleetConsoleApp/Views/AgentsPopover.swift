@@ -102,7 +102,6 @@ struct AgentsContent: View {
             }
         }
         .frame(maxHeight: FleetMetrics.sectionMaxHeight)
-        .paperTexture(seed: 29, opacity: 0.03)
         // The scan needs no controller, so it must not wait for one: without
         // this, spend never appears while the daemon is down, because the only
         // other caller rides the snapshot tick.

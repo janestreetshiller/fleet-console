@@ -78,8 +78,7 @@ struct AgentProfileCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                         Text(profile.id)
-                            .font(StampFont.display(16))
-                            .tracking(0.6)
+                            .font(FleetFont.mono(12, weight: .medium))
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Tag(text: statusWord, tone: tone)

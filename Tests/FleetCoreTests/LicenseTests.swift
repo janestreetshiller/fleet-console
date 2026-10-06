@@ -125,7 +125,7 @@ final class LicenseTests: XCTestCase {
     /// The feature list is the product's paywall, stated once. A feature
     /// added to the enum without being gated here would silently be free.
     func testPremiumFeatureListIsComplete() {
-        XCTAssertEqual(PremiumFeature.allCases.count, 3,
+        XCTAssertEqual(PremiumFeature.allCases.count, 4,
                        "gating lives in isUnlocked(_:); a new case must be deliberate")
     }
 

@@ -122,6 +122,11 @@ struct FleetPopover: View {
             PopoverFooter(model: model, openDashboard: openDashboard)
         }
         .frame(width: FleetMetrics.popoverWidth)
+        // One substrate for the popover, not one per section. The two sections
+        // that carried their own texture were the two that happened to be
+        // written last, and a page whose grain restarts when you switch tabs is
+        // not a page.
+        .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
         .onAppear {
             // An explicit request from the dropdown wins; it is the one case
             // where the user named the destination. Otherwise open on whichever

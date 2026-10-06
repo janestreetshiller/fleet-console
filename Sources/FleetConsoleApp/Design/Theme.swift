@@ -34,6 +34,10 @@ enum FleetFont {
     /// reply arrow on an answered agent message, and marks like it. The popover
     /// ramp's counterpart to `ConsoleFont.marker`.
     static let marker = Font.system(size: 8)
+    /// The plotted legend struck into a plate's top border. The popover ramp's
+    /// counterpart to `ConsoleFont.plateLabel`, one point smaller for the same
+    /// reason every token here is: menu density, not window density.
+    static let plateLabel = Font.system(size: 8, weight: .regular, design: .monospaced)
     /// Section labels — sentence case, secondary. Apple stopped shipping
     /// kerned all-caps headers in menus years ago.
     static let sectionLabel = Font.system(size: 11, weight: .semibold)

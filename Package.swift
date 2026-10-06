@@ -30,7 +30,6 @@ let package = Package(
         .executableTarget(
             name: "FleetConsoleApp",
             dependencies: ["FleetCore", .product(name: "SwiftTerm", package: "SwiftTerm")],
-            resources: [.process("Resources")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

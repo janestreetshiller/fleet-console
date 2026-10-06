@@ -151,6 +151,11 @@ struct ProcessModule: View {
                 }
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
+            // The table sits on the page like every other surface: without
+            // this it paints AppKit's own table background over the field and
+            // the module reads as a panel dropped on top of the window rather
+            // than as part of it.
+            .scrollContentBackground(.hidden)
         }
         // Deferred to the next runloop tick: `.onAppear` fires while the table
         // is still inside its first NSTableView delegate pass, and any observed

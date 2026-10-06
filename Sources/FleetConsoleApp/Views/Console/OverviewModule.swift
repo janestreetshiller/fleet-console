@@ -147,7 +147,7 @@ struct OverviewModule: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .elevatedCard()
+        .elevatedCard("05 · SMC")
     }
 
     private func sensorMetric(title: String, value: String, caption: String) -> some View {
@@ -169,6 +169,7 @@ struct OverviewModule: View {
     private var cpuCard: some View {
         TelemetryCard(
             title: "CPU",
+            plate: "01 · CPU",
             tone: system.cpu.sampled ? SystemThresholds.utilization(system.cpu.usage) : .unknown,
             value: system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—",
             // Nil until two tick samples have been differenced, which parks the
@@ -209,6 +210,7 @@ struct OverviewModule: View {
     private var memoryCard: some View {
         TelemetryCard(
             title: "Memory",
+            plate: "02 · MEM",
             tone: SystemThresholds.memory(system.memory),
             value: ConsoleFmt.utilPercent(system.memory.usedShare),
             // Always sampled: a share of physical memory is a ratio of two
@@ -284,7 +286,7 @@ struct OverviewModule: View {
                     .frame(height: ConsoleMetrics.mapHeight)
             }
         }
-        .elevatedCard()
+        .elevatedCard("06 · MAP")
     }
 
     // MARK: Disk
@@ -292,6 +294,7 @@ struct OverviewModule: View {
     private var diskCard: some View {
         TelemetryCard(
             title: "Disk",
+            plate: "03 · I/O",
             // Was `.neutral`, because throughput has no good or bad value. The
             // dial reads capacity, which does — and it gets the early-warning
             // band, since by the time a volume is 99% full macOS is failing
@@ -338,6 +341,7 @@ struct OverviewModule: View {
     private var gpuCard: some View {
         TelemetryCard(
             title: "GPU",
+            plate: "04 · GPU",
             tone: system.gpu.utilization.map { SystemThresholds.utilization($0) } ?? .unknown,
             value: ConsoleFmt.utilPercent(system.gpu.utilization),
             // Nil when the accelerator is present but withheld the key — the
@@ -497,24 +501,43 @@ struct ModuleHeader<Trailing: View>: View {
         self.trailing = trailing()
     }
 
+    /// The plate number this module carries — "MODULE 03 / 06" — taken from the
+    /// picker's own order rather than typed, so a seventh module renumbers the
+    /// set instead of leaving five headers lying about how many there are.
+    /// Surfaces that are not modules (Home, a remote device's detail) have no
+    /// number and say so by having none.
+    private var eyebrow: String? {
+        guard let module = ConsoleModule(rawValue: title) else { return nil }
+        return String(format: "MODULE %02d / %02d",
+                      module.shortcutIndex, ConsoleModule.allCases.count)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if let eyebrow {
+                Text(eyebrow)
+                    .font(ConsoleFont.plateLabel)
+                    .tracking(SketchMetrics.plateLabelTracking)
+                    .foregroundStyle(SketchInk.accent)
+            }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: symbol)
-                    .font(.system(size: 15))
-                    .foregroundStyle(.secondary)
+                    .font(ConsoleFont.cardTitle)
+                    .foregroundStyle(SketchInk.accent)
                     .symbolRenderingMode(.hierarchical)
-                Text(title.uppercased())
-                    // Stamped treatment: bundled ink face at ≥16pt with
-                    // letter-tracking and a pressed rule beneath.
-                    .font(StampFont.display(17))
-                    .tracking(StampFont.tracking)
+                // Sentence case at the module ramp's own size. The stamped
+                // all-caps line this replaces was set in a bundled typewriter
+                // face at a fixed 17pt — the one piece of text in the app that
+                // ignored Dynamic Type, in the one position where a module
+                // announces what you are looking at.
+                Text(title)
+                    .font(ConsoleFont.moduleTitle)
                     .foregroundStyle(ConsoleColor.numeral)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
                     Text(subtitle)
-                        .font(ConsoleFont.subtitle)
+                        .font(ConsoleFont.mono(.caption))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -523,12 +546,15 @@ struct ModuleHeader<Trailing: View>: View {
                 Spacer(minLength: 4)
                 trailing
             }
+            // Two rules, the second offset — the plate's second pass, applied to
+            // a line rather than to a border.
             Rectangle()
                 .fill(ConsoleColor.hairlineStrong)
-                .frame(height: 1)
+                .frame(height: SketchMetrics.hairline)
             Rectangle()
-                .fill(ConsoleColor.hairline)
-                .frame(height: 1)
+                .fill(SketchInk.secondPass)
+                .frame(height: SketchMetrics.hairline)
+                .padding(.leading, SketchMetrics.plateOffset)
         }
         .accessibilityElement(children: .combine)
     }

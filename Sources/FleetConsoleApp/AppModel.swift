@@ -60,6 +60,9 @@ final class AppModel {
     let breakdown = StorageBreakdown()
     let processes: ProcessInventory
     let hosts = HostProbe()
+    /// Today's agent spend. Sampled on its own slow cadence rather than the
+    /// snapshot's — see `AgentCostProbe` — and only when the feature is on.
+    let agentCost = AgentCostProbe()
 
     /// Drives lease countdowns and "x ago" labels without touching the data model.
     var clockTick: Int = 0
@@ -164,6 +167,10 @@ final class AppModel {
         if unmanaged != snapshot.unmanaged { unmanaged = snapshot.unmanaged }
         if attention != snapshot.attention { attention = snapshot.attention }
         if recentEvents != snapshot.recentEvents { recentEvents = snapshot.recentEvents }
+
+        // Rides the snapshot tick as a heartbeat only: the probe throttles
+        // itself, so this asks far more often than it scans.
+        if settings.features.showAgentSpend { agentCost.refresh() }
     }
 
     // MARK: - Derived state

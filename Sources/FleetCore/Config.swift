@@ -180,8 +180,20 @@ public struct FleetConfig: Codable, Sendable {
             /// which have to hold; this is the one you control.
             public var allowProcessTermination: Bool
 
-            public init(allowProcessTermination: Bool = false) {
+            /// Shows what each agent cost you today in the Agents section.
+            ///
+            /// Off until the figures have been checked against a provider's own
+            /// bill on this machine. The prices are a table written down in
+            /// `AgentPricing` rather than fetched, so the first thing a wrong
+            /// entry does is put a confident, wrong number on screen — and a
+            /// spend figure nobody has verified is worse than no figure, because
+            /// it will be believed. Turn it on once, deliberately, after
+            /// comparing a day.
+            public var showAgentSpend: Bool
+
+            public init(allowProcessTermination: Bool = false, showAgentSpend: Bool = false) {
                 self.allowProcessTermination = allowProcessTermination
+                self.showAgentSpend = showAgentSpend
             }
 
             public init(from decoder: Decoder) throws {
@@ -189,6 +201,8 @@ public struct FleetConfig: Codable, Sendable {
                 let d = Features()
                 allowProcessTermination = try c.decodeIfPresent(Bool.self, forKey: .allowProcessTermination)
                     ?? d.allowProcessTermination
+                showAgentSpend = try c.decodeIfPresent(Bool.self, forKey: .showAgentSpend)
+                    ?? d.showAgentSpend
             }
         }
 

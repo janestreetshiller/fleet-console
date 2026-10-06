@@ -95,13 +95,49 @@ struct Sheet: View {
                 }
             }
 
+            Group_(title: "Sketchfield — the substrate and the plate") {
+                Row(name: "the mark") {
+                    HStack(spacing: 14) {
+                        FleetMark(size: FleetMetrics.iconRowLarge)
+                        FleetMark(size: FleetMetrics.iconRow, construction: false)
+                    }
+                }
+                Row(name: "plate label") {
+                    PlateLabel(text: "01 · CPU")
+                }
+                Row(name: "plate") {
+                    HStack(spacing: 21) {
+                        Text("labelled")
+                            .font(ConsoleFont.subtitle)
+                            .frame(width: 89, height: 34)
+                            .plate("02 · MEM")
+                        Text("bare")
+                            .font(ConsoleFont.subtitle)
+                            .frame(width: 89, height: 34)
+                            .plate()
+                    }
+                }
+                // The whole substrate, at a size where all three layers are
+                // separable: the field's wash, the 13/65 ruling over it, the
+                // grain over that. Anything that turns into a flat rectangle in
+                // the desaturated pair has lost a layer.
+                Row(name: "substrate") {
+                    Color.clear
+                        .frame(width: 233, height: 89)
+                        .sketchSubstrate(seed: 0.11, grainSeed: 11)
+                        // The substrate ignores the safe area, which is right on
+                        // a window and wrong in a swatch on a contact sheet.
+                        .clipShape(Rectangle())
+                }
+            }
+
             Group_(title: "EntityIcon — badge containment at every size") {
                 Row(name: "unbadged") {
                     HStack(spacing: 14) {
                         EntityIcon(symbol: "server.rack", tone: .good, size: FleetMetrics.iconCompact)
                         EntityIcon(symbol: "curlybraces", tone: .warn, size: FleetMetrics.iconRow)
                         EntityIcon(symbol: "hexagon", tone: .bad, size: FleetMetrics.iconRowLarge)
-                        EntityIcon(symbol: "cylinder.split.1x2", tone: .neutral, size: FleetMetrics.iconInspector)
+                        EntityIcon(symbol: "cylinder.split.1x2", tone: .neutral, size: ConsoleMetrics.iconInspector)
                     }
                 }
                 Row(name: "badged") {
@@ -109,7 +145,7 @@ struct Sheet: View {
                         EntityIcon(symbol: "server.rack", tone: .good, size: FleetMetrics.iconCompact, badge: .good)
                         EntityIcon(symbol: "curlybraces", tone: .warn, size: FleetMetrics.iconRow, badge: .warn)
                         EntityIcon(symbol: "hexagon", tone: .bad, size: FleetMetrics.iconRowLarge, badge: .bad)
-                        EntityIcon(symbol: "cylinder.split.1x2", tone: .neutral, size: FleetMetrics.iconInspector, badge: .unknown)
+                        EntityIcon(symbol: "cylinder.split.1x2", tone: .neutral, size: ConsoleMetrics.iconInspector, badge: .unknown)
                     }
                 }
                 // The alignment proof: badged and unbadged rows must start on the

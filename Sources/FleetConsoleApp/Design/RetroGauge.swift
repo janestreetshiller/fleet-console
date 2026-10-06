@@ -10,8 +10,14 @@ import SwiftUI
 // before you have read the number. The five stacked cards this replaces each
 // spent a full card header on a numeral that told you nothing without that
 // context. So the dial is not nostalgia looking for a job — it is the densest
-// honest encoding of "where in its range is this, right now", and the retro
-// styling is what makes a dial legible as a dial at 92pt.
+// honest encoding of "where in its range is this, right now".
+//
+// The name is older than the drawing. It was a machined instrument once: a
+// filled face, a gradient bezel, an Aqua highlight. The Sketchfield pass took
+// all three off — a lit plastic dial floating over a drifting field is an
+// object photographed onto a page — and what is left is the construction a
+// compass leaves. Nothing about the geometry, the thresholds or the
+// accessibility behaviour changed with it.
 //
 // Why it lives in Design/ rather than beside the module that uses it: this is
 // where the design audit allows a hue and an opacity literal to be written down,
@@ -64,7 +70,8 @@ struct RetroGauge: View {
     /// Ring widths as a share of the diameter, so a gauge at any size keeps its
     /// proportions. Solved at 92pt and then expressed as ratios.
     private static let arcWidthRatio: CGFloat = 0.075
-    private static let bezelWidthRatio: CGFloat = 0.035
+    /// How far inside the outer circle the dashed construction circle sits.
+    private static let constructionInset: CGFloat = 0.09
     private static let majorTickRatio: CGFloat = 0.085
     private static let minorTickRatio: CGFloat = 0.045
     private static let hubRatio: CGFloat = 0.14
@@ -81,7 +88,6 @@ struct RetroGauge: View {
             if value != nil { valueArc }
             needle
             hub
-            glass
             labels
         }
         .frame(width: diameter, height: diameter)
@@ -98,40 +104,26 @@ struct RetroGauge: View {
 
     // MARK: Face and bezel
 
-    /// The machined ring and the recessed face under it.
+    /// The construction the dial was struck against, left on the page.
     ///
-    /// Two gradients, both achromatic and both driven by `Color.primary` /
-    /// `Color.white`, so the dial is lit from the top-left in light mode and
-    /// stays a lifted panel in dark mode without a second hand-tuned palette.
+    /// This used to be a machined instrument: a filled face, a radial shade to
+    /// recess it, a two-stop gradient bezel lighting it from the top-left, and
+    /// an Aqua highlight over the top third. All four were arguing with the
+    /// substrate — a lit plastic dial floating over a drifting field is an
+    /// object photographed onto a page, and the page is the point. What is left
+    /// is what a compass leaves: the outer circle, and the dashed inner circle
+    /// the tick ladder was measured from. Nothing is filled, so the plate — and
+    /// the field through it — shows behind the scale.
     private var face: some View {
         ZStack {
             Circle()
-                .fill(ConsoleColor.card)
+                .strokeBorder(ConsoleColor.hairline, lineWidth: SketchMetrics.hairline)
             Circle()
-                .fill(RadialGradient(colors: [Color.black.opacity(0.10), Color.clear],
-                                     center: .center,
-                                     startRadius: diameter * 0.10,
-                                     endRadius: diameter * 0.50))
-            Circle()
-                .strokeBorder(LinearGradient(colors: [Color.white.opacity(0.55),
-                                                      Color.primary.opacity(0.18)],
-                                             startPoint: .topLeading,
-                                             endPoint: .bottomTrailing),
-                              lineWidth: diameter * Self.bezelWidthRatio)
-            Circle()
-                .strokeBorder(ConsoleColor.hairlineStrong, lineWidth: 0.5)
+                .strokeBorder(ConsoleColor.hairlineStrong,
+                              style: StrokeStyle(lineWidth: SketchMetrics.hairline,
+                                                 dash: [2, 4]))
+                .padding(diameter * Self.constructionInset)
         }
-    }
-
-    /// The Aqua signature, kept to one soft ellipse over the top third. Any more
-    /// and it stops being a lit instrument and starts being a plastic button.
-    private var glass: some View {
-        Ellipse()
-            .fill(LinearGradient(colors: [Color.white.opacity(0.22), Color.clear],
-                                 startPoint: .top, endPoint: .bottom))
-            .frame(width: diameter * 0.62, height: diameter * 0.34)
-            .offset(y: -diameter * 0.22)
-            .allowsHitTesting(false)
     }
 
     // MARK: Scale
@@ -199,19 +191,18 @@ struct RetroGauge: View {
             .fill(value == nil ? AnyShapeStyle(SurfaceInk.dim) : AnyShapeStyle(tone.color))
             .frame(width: diameter, height: diameter)
             .rotationEffect(.degrees(needleAngle))
-            .shadow(color: Color.black.opacity(0.25), radius: 1, y: 0.5)
     }
 
+    /// The pivot, drawn rather than machined: the plate's own colour with an ink
+    /// ring around it, so the needle reads as pinned *through* the page instead
+    /// of resting on a metal boss.
     private var hub: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(colors: [Color.primary.opacity(0.55),
-                                              Color.primary.opacity(0.30)],
-                                     startPoint: .topLeading, endPoint: .bottomTrailing))
-            Circle()
-                .strokeBorder(Color.white.opacity(0.35), lineWidth: 0.5)
-        }
-        .frame(width: diameter * Self.hubRatio, height: diameter * Self.hubRatio)
+        Circle()
+            .fill(SketchInk.plate)
+            .overlay {
+                Circle().strokeBorder(ConsoleColor.numeral, lineWidth: SketchMetrics.hairline)
+            }
+            .frame(width: diameter * Self.hubRatio, height: diameter * Self.hubRatio)
     }
 
     // MARK: Legend

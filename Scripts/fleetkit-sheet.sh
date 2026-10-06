@@ -30,6 +30,7 @@ ln -s "$ROOT/Sources/FleetCore" "$WORK/Sources/FleetCore"
 
 for f in Design/Theme.swift \
          Design/Tokens.swift \
+         Design/Sketchfield.swift \
          Design/StatusTone.swift \
          Design/ConsoleModule.swift \
          Design/ViewModifiers.swift \

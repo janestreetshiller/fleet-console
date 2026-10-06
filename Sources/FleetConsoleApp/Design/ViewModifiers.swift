@@ -61,33 +61,22 @@ extension View {
 
 // MARK: - Elevation
 
-/// The one elevated surface in the console: a card over the window background.
-/// Fill, hairline and shadow are a single treatment — a card with a shadow but
-/// no border, or a border but the wrong fill, is a different component that
-/// does not exist here.
-struct ElevatedCard: ViewModifier {
-    var padding: CGFloat = ConsoleMetrics.cardPadding
-
-    func body(content: Content) -> some View {
-        content
-            .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: ConsoleMetrics.cardCorner, style: .continuous)
-                    .fill(ConsoleColor.card)
-                    .paperTexture()
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: ConsoleMetrics.cardCorner, style: .continuous)
-                    .strokeBorder(ConsoleColor.hairline, lineWidth: 1)
-            )
-            .shadow(color: ConsoleColor.cardShadow, radius: ConsoleMetrics.cardShadowRadius,
-                    x: 0, y: ConsoleMetrics.cardShadowY)
-    }
-}
-
+/// The one elevated surface in the console: a plate over the field.
+///
+/// Kept as `elevatedCard` because that is the name every module calls, but the
+/// treatment underneath it is `Sketchfield`'s: a translucent fill, one hairline
+/// border, and a second pass 3pt down and right in place of the drop shadow.
+/// Fill, border and second pass are a single treatment — a plate with an edge
+/// but no second pass is a different component that does not exist here.
+///
+/// `label` is the plotted legend struck into the top border. It is optional and
+/// almost always given: a module's instruments are the plates the module is
+/// made of, and they number themselves. Nested plates — a chip inside a card —
+/// pass nothing.
 extension View {
-    func elevatedCard(padding: CGFloat = ConsoleMetrics.cardPadding) -> some View {
-        modifier(ElevatedCard(padding: padding))
+    func elevatedCard(_ label: String? = nil,
+                      padding: CGFloat = ConsoleMetrics.cardPadding) -> some View {
+        plate(label, corner: ConsoleMetrics.cardCorner, padding: padding)
     }
 }
 

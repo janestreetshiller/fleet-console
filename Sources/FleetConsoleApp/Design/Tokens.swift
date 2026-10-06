@@ -39,6 +39,17 @@ enum ConsoleFont {
     /// supervised-by-the-controller shield, and anything else that sits after a
     /// title as a mark rather than a word.
     static let marker = Font.system(size: 9)
+
+    /// The plotted legend struck into a plate's top border — "03 · I/O".
+    ///
+    /// The one type token the Sketchfield pass adds, and the only fixed size in
+    /// the console ramp besides `marker`. It is fixed because it is drawn *into
+    /// a border*: the break in the stroke is measured from this text, and a
+    /// label that grew with Dynamic Type would open a gap wider than the plate
+    /// while the border it interrupts stayed put. Everything a plate label says
+    /// is repeated by the card title beside it in a ramped size, so nothing is
+    /// only legible here.
+    static let plateLabel = Font.system(size: 9, weight: .regular, design: .monospaced)
     /// The single large glyph over an empty panel. A dynamic `.title` rather than
     /// a fixed 22pt: it lands on the same size at the default text setting and,
     /// unlike the literal it replaces, grows when the user asks the system for
@@ -208,9 +219,10 @@ enum ConsoleMetrics {
     /// The you-are-here marker in the process tree. Smaller than a swatch on
     /// purpose: it marks a row, it does not name a colour.
     static let treeMarker: CGFloat = 5
-    /// The one shadow the app uses, so elevation cannot drift.
-    static let cardShadowRadius: CGFloat = 8
-    static let cardShadowY: CGFloat = 2
+    // The two shadow tokens that were here are gone with the shadow itself.
+    // Elevation in this app is `PlateSecondPass` — one hairline 3pt down and
+    // right — because a blur behind a translucent plate over a blurred field is
+    // three soft things stacked, and the plate stops having an edge at all.
 }
 
 // MARK: - Color
@@ -222,19 +234,26 @@ enum ConsoleColor {
     static var hairline: Color { Color.primary.opacity(0.08) }
     static var hairlineStrong: Color { Color.primary.opacity(0.14) }
 
-    /// Card fill over the window background. Uses the system's grouped-content
-    /// background so light mode gets white cards on grey and dark mode gets
-    /// lifted panels, exactly like System Settings.
-    static var card: Color { Color(nsColor: .controlBackgroundColor) }
-    /// The window background. Separate from `card` so the console can lift
-    /// cards off it in both appearances without a second colour decision.
-    static var window: Color { Color(nsColor: .windowBackgroundColor) }
-    static var cardShadow: Color { Color.black.opacity(0.18) }
+    /// A plate's fill, over the field. `SketchInk.plate` and nothing else — the
+    /// name is kept because forty call sites read it, but the value is no
+    /// longer a system surface colour.
+    ///
+    /// It used to be `controlBackgroundColor`: white cards on grey in light,
+    /// lifted panels in dark, exactly like System Settings. That is the right
+    /// answer for a settings pane and the wrong one for this app, because it is
+    /// opaque — and an opaque card over a drifting field is a hole cut in the
+    /// page. A plate is glass held over the sketch; you can see the field
+    /// through it, which is what makes it read as *on* the page rather than
+    /// *instead of* it.
+    static var card: Color { SketchInk.plate }
+    /// The page. Every window and popover is drawn on this and then has the
+    /// field, the ruling and the tooth laid over it — see `sketchSubstrate`.
+    static var window: Color { SketchInk.ground }
 
     /// Selected-row fill. The same value `RowBackground` uses in the popover
     /// ramp, named here so a selected row in the window cannot be a different
     /// strength of the same idea.
-    static var selectionFill: Color { Color.accentColor.opacity(0.16) }
+    static var selectionFill: Color { SketchInk.accent.opacity(0.16) }
 
     // The achromatic inks are `SurfaceInk`, shared with the popover ramp. The
     // ramps differ in type and metrics, not in what a colour means — see the
@@ -305,8 +324,8 @@ enum TelemetrySeries: String, CaseIterable, Identifiable {
 
     var color: Color {
         switch self {
-        case .read: return .teal
-        case .write: return .orange
+        case .read: return SketchInk.accent
+        case .write: return SketchInk.accentWarm
         }
     }
 }
