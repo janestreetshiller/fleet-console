@@ -35,11 +35,18 @@ USAGE
 
   ── housekeeping ──────────────────────────────────────────────────────────────
   fleetctl reconcile                              sweep for processes outside the registry
-  fleetctl claim   <pid|id> [--name <s>] [--owner <a>] [--purpose <why>] [--lease 1h]
+  fleetctl license --secret <s> [--date YYYY-MM-DD]
+                                                  mint an FLT1 licence key (offline, no daemon).
+                                                  The secret must match the app's vendor secret —
+                                                  this is the checkout seam for the freemium model
                                                   adopt a running process into the registry:
                                                   it gets an owner, a lease and a timeline,
                                                   and the controller still will not signal it
   fleetctl ignore  <command>                      "this listener is expected" → allow-list
+  fleetctl claim   <pid|id> [--name <s>] [--owner <a>] [--purpose <why>] [--lease 1h]
+                                                  adopt a running process into the registry:
+                                                  it gets an owner, a lease and a timeline,
+                                                  and the controller still will not signal it
   fleetctl prune   [--older-than 1h]              drop old stopped/crashed records
   fleetctl config  [--path | --reload]            show or reload config.json
 
@@ -603,6 +610,24 @@ case "reconcile":
             print("      \(process.commandLine.prefix(140))")
         }
     }
+
+case "license":
+    // Offline key minting — the issuer side of License.swift's FLT1 format.
+    // This is the checkout seam for the freemium model: a store webhook (or the
+    // Ouros bar on the user's behalf) shells out here, prints a key, and the
+    // gate in the app opens. No daemon, no network: keys are deterministic
+    // HMAC over an issue date, so issuance works while the controller is down.
+    guard args.first("secret") != nil || ProcessInfo.processInfo.environment["FLEET_LICENSE_SECRET"] != nil else {
+        fail("licensing is scaffolding: pass --secret <s> (or FLEET_LICENSE_SECRET). "
+           + "The app validates with its vendor secret, so a mismatched mint still fails at the gate.")
+    }
+    let secret = args.first("secret") ?? ProcessInfo.processInfo.environment["FLEET_LICENSE_SECRET"]!
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    let issued = args.first("date").flatMap { formatter.date(from: $0) } ?? Date()
+    guard let payload = formatter.string(for: issued) else { fail("could not format issue date") }
+    print("FLT1-\(LicenseKey.sign(payload: payload, secret: secret))")
 
 default:
     fail("unknown command '\(subcommand)'. Run `fleetctl help`.")
