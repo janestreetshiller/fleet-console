@@ -268,7 +268,7 @@ struct UnmanagedInspectorView: View {
                     }
 
                     InspectorCard(title: "Actions") {
-                        HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 8) {
                             // Three answers to "what is this doing here", in the
                             // order you reach for them: watch it, expect it,
                             // go and look at it.

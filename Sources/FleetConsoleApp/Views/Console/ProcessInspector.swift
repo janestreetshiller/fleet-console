@@ -302,7 +302,7 @@ struct ProcessInspector: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if let service = owningService {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     InspectorActionButton(title: "Stop…", symbol: "stop.fill", tone: .warn) {
                         model.stop(service)
                     }
@@ -320,7 +320,7 @@ struct ProcessInspector: View {
                     .font(ConsoleFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
             } else {
-                HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 8) {
                     InspectorActionButton(title: sampling ? "Sampling…" : "Sample",
                                           symbol: "waveform.path.ecg", tone: .neutral) {
                         sampling = true
@@ -491,6 +491,7 @@ struct InspectorActionButton: View {
                     .font(ConsoleFont.badge)
                 Text(title)
                     .font(ConsoleFont.caption.weight(.medium))
+                    .lineLimit(1)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 5)
