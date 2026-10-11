@@ -378,7 +378,7 @@ struct TelemetryCard<Content: View>: View {
             }
             content
         }
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 142, maxHeight: .infinity, alignment: .topLeading)
         .elevatedCard()
         .accessibilityElement(children: .contain)
     }
@@ -408,5 +408,6 @@ struct LegendDot: View {
                 .fixedSize()
         }
         .fixedSize()
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }

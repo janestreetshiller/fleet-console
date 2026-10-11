@@ -143,7 +143,8 @@ struct StorageModule: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                FlowLayout(spacing: 8) {
+                QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                                  horizontalSpacing: 8, verticalSpacing: 8) {
                     ForEach(breakdown.breakdown.segments) { segment in
                         Button {
                             withAnimation(ConsoleAnimation.selection) {
@@ -278,9 +279,8 @@ struct StorageModule: View {
                     // hairline between rows becomes the grid's own gap, which is
                     // why it is dropped rather than drawn per cell: a separator
                     // that only runs down one column reads as a broken table.
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: ConsoleMetrics.reclaimRowMinWidth),
-                                                 spacing: 0, alignment: .top)],
-                              spacing: 0) {
+                    QuantizedCardGrid(minimumCellWidth: ConsoleMetrics.reclaimRowMinWidth,
+                                      horizontalSpacing: 0, verticalSpacing: 0) {
                         ForEach(reclaimable) { candidate in
                             ReclaimRow(candidate: candidate) {
                                 pendingReclaim = candidate
@@ -299,9 +299,8 @@ struct StorageModule: View {
                         .foregroundStyle(SurfaceInk.secondary)
                         .padding(.horizontal, ConsoleMetrics.cardPadding)
                         .padding(.top, 10)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: ConsoleMetrics.reclaimRowMinWidth),
-                                                 spacing: 0, alignment: .top)],
-                              spacing: 0) {
+                    QuantizedCardGrid(minimumCellWidth: ConsoleMetrics.reclaimRowMinWidth,
+                                      horizontalSpacing: 0, verticalSpacing: 0) {
                         ForEach(keepers) { candidate in
                             ReclaimRow(candidate: candidate, onReclaim: nil) {
                                 if let first = candidate.paths.first { scanner.revealInFinder(first) }
@@ -446,7 +445,7 @@ struct SegmentedStorageBar: View {
     }
 }
 
-private struct SegmentChip: View {
+struct SegmentChip: View {
     let segment: BreakdownSegment
     let selected: Bool
 
@@ -463,6 +462,7 @@ private struct SegmentChip: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             Capsule().fill(selected ? ConsoleColor.selectedWash : ConsoleColor.surfaceWash)
         )
@@ -589,6 +589,7 @@ private struct ReclaimRow: View {
         }
         .padding(.horizontal, ConsoleMetrics.cardPadding)
         .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .hoverHighlight(cornerRadius: 0)
     }
 }

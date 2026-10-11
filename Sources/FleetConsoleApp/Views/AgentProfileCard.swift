@@ -109,7 +109,8 @@ struct AgentProfileCard: View {
             }
             .padding(.horizontal, 8)
 
-            HStack(spacing: 8) {
+            QuantizedCardGrid(usesLargestIntrinsicWidth: true, maximumColumns: 5,
+                              horizontalSpacing: 8, verticalSpacing: 8) {
                 if profile.running > 0 { MiniStat(value: "\(profile.running)", label: "running", tone: .good) }
                 if profile.totalLaunched > 0 { MiniStat(value: "\(profile.totalLaunched)", label: "launched", tone: .neutral) }
                 if profile.totalCrashed > 0 { MiniStat(value: "\(profile.totalCrashed)", label: "crashed", tone: .bad) }
@@ -289,7 +290,7 @@ struct MiniStat: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.vertical, 3)
         .background(
             RoundedRectangle(cornerRadius: 5, style: .continuous)

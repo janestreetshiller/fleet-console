@@ -536,32 +536,32 @@ often and the one case not animated. Keying each tile on its frame covers both
 causes, because a squarified relayout *is* a set of frame changes whatever
 provoked it.
 
-### Module layout — cards flow, they do not stack
+### Module layout — quantized peer footprints
 
-Every telemetry card used to be full width and full stop, so a module was as tall
-as the sum of its instruments however much width the window had: with the sidebar
-and inspector both open the content column is around 420pt and one card is a
-screenful, and with both closed it is over 900pt and a card is a 900pt-wide chart
-of sixty samples beside 500pt of nothing.
+`QuantizedCardGrid` measures every visible peer at its final equal column width,
+then rounds the tallest height **up** to `ConsoleMetrics.gridQuantum` (8 points).
+Every peer in that section uses that complete footprint, including the last row.
+Cards expand before their fill and border are painted. A common minimum height
+alone does not align cards with wrapped subtitles or additional facts.
 
-Modules lay their cards out in a `LazyVGrid` whose column count comes from a
-minimum width — `ConsoleMetrics.cardMinWidth` for telemetry cards,
-`ConsoleMetrics.reclaimRowMinWidth` for catalogue rows — so width is spent when
-there is width and the grid falls to one column when there is not. The minimum is
-the width below which the content stops being honest rather than merely tight: a
-trace where sixty samples are still distinguishable, a catalogue row where the
-size does not collide with the name.
+Telemetry and reclaim grids retain their respective content width floors. The
+column helper avoids a lone last item in grids of three or more columns. The
+layout responds directly to width proposals without publishing measured width
+through view state. GPU and battery visibility determine the actual peer count.
 
-Catalogue rows take that minimum straight to `.adaptive`. The telemetry cards do
-not, because `.adaptive` takes every column the width allows and at the usual
-content width that is three — which put CPU, Memory and Disk on one row and left
-GPU alone beside two empty slots, the largest thing on the surface and the one
-that reads as a missing card. Overview derives the count itself and steps down
-when the last row would hold exactly one of three or more, so four instruments lay
-out 2x2 rather than 3+1.
+Compact storage chips, tool badges, interpreter presets, agent statistics and
+memory facts derive their cell width from the widest intrinsic peer, rounded up
+to the same quantum. Device capability cells and popover metrics share equal
+cells within their width budget. Reclaimable caches and reported user data remain
+separate sections with separate actions. Each section recomputes its footprint
+when text, readings, membership or window width changes.
 
-Treemaps are the exception and stay full width. Halving a squarified map's width
-does not halve its information — it makes the fortieth tile unclickable.
+Interpreter presets live in a bounded vertical scroll area so a one-column
+chooser remains accessible at the shortest supported tool-panel height and
+leaves room for Run/Cancel and the answer. Treemap areas, storage-bar proportions
+and graph values continue to encode actual measurements. Narrative lists and
+expanded inspectors retain content-driven heights; their fields are distinct
+from a section of interchangeable peers.
 
 `TelemetrySeries` (`Design/Tokens.swift`) owns the colour *and* the label of the
 two throughput series. Both were previously written twice — `Color.teal` /
