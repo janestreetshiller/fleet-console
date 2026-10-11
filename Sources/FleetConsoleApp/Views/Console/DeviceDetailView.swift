@@ -85,7 +85,7 @@ struct DeviceDetailView: View {
 
     // MARK: Capabilities
 
-    private func capabilityCard(_ host: HostCapabilities) -> some View {
+    func capabilityCard(_ host: HostCapabilities) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Capabilities")
@@ -97,24 +97,22 @@ struct DeviceDetailView: View {
             }
 
             if host.reachable {
-                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 8) {
-                    GridRow {
-                        FactCell(label: "Architecture", value: host.arch ?? "—")
-                        FactCell(label: "Cores", value: host.cores.map(String.init) ?? "—")
-                        FactCell(label: "Memory", value: host.memoryBytes.map(ConsoleFmt.bytes) ?? "—")
-                    }
-                    GridRow {
-                        FactCell(label: "Disk free", value: host.diskFreeBytes.map(ConsoleFmt.bytes) ?? "—")
-                        FactCell(label: "Load", value: host.loadOne.map { String(format: "%.2f", $0) } ?? "—")
-                        FactCell(label: "Link", value: host.link.label)
-                    }
+                QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                                  maximumColumns: 3, horizontalSpacing: 24, verticalSpacing: 8) {
+                    FactCell(label: "Architecture", value: host.arch ?? "—")
+                    FactCell(label: "Cores", value: host.cores.map(String.init) ?? "—")
+                    FactCell(label: "Memory", value: host.memoryBytes.map(ConsoleFmt.bytes) ?? "—")
+                    FactCell(label: "Disk free", value: host.diskFreeBytes.map(ConsoleFmt.bytes) ?? "—")
+                    FactCell(label: "Load", value: host.loadOne.map { String(format: "%.2f", $0) } ?? "—")
+                    FactCell(label: "Link", value: host.link.label)
                 }
                 .monospacedDigit()
 
                 if !host.tools.isEmpty {
-                    FlowLayout(spacing: 6) {
+                    QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                                      horizontalSpacing: 6, verticalSpacing: 6) {
                         ForEach(host.tools.sorted(), id: \.self) { tool in
-                            ConsoleBadge(text: tool, tone: .neutral, symbol: "wrench.and.screwdriver")
+                            ConsoleBadge(text: tool, tone: .neutral, symbol: "wrench.and.screwdriver", fillsCell: true)
                         }
                     }
                 }
@@ -232,5 +230,6 @@ private struct FactCell: View {
                 .lineLimit(1)
                 .help(value)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

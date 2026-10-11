@@ -443,15 +443,18 @@ struct CoreGrid: View {
 
     private func cluster(label: String, indices: [Int]) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            HStack(alignment: .bottom, spacing: 3) {
+            QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                              horizontalSpacing: 3, verticalSpacing: 3, quantum: 1) {
                 ForEach(indices, id: \.self) { index in
                     bar(value: values[index], core: index)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                 }
             }
             Text(label)
                 .font(FleetFont.micro)
                 .foregroundStyle(SurfaceInk.secondary)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func bar(value: Double, core: Int) -> some View {

@@ -228,13 +228,19 @@ private struct InterpreterPanelView: View {
     @Bindable var model: InterpreterModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            presetBar
-            Hairline()
-            if model.showingPrompt, let prompt = model.promptInspector {
-                promptInspectorPane(prompt)
-            } else {
-                answerPane
+        GeometryReader { geometry in
+            VStack(spacing: 0) {
+                ScrollView {
+                    presetBar
+                }
+                .frame(height: min(ConsoleMetrics.interpreterPresetMaxHeight,
+                                   Scale.minor(geometry.size.height)))
+                Hairline()
+                if model.showingPrompt, let prompt = model.promptInspector {
+                    promptInspectorPane(prompt)
+                } else {
+                    answerPane
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -242,17 +248,11 @@ private struct InterpreterPanelView: View {
 
     // MARK: Preset bar
 
-    /// Every preset, wrapped onto as many rows as the panel needs.
-    ///
-    /// This was a horizontal `ScrollView` with `showsIndicators: false`, which at
-    /// the panel's usual width put three and a half of the five presets on
-    /// screen: the fourth was sliced down its middle with no scrollbar, no fade
-    /// and no other hint that it was scrollable, so it read as a clipped panel
-    /// rather than as a scrollable one. A chooser has to show what there is to
-    /// choose from — and with five short chips there is no reason to hide any of
-    /// them behind a gesture.
+    /// Equal preset footprints wrap into rows; the bounded vertical scroll area
+    /// keeps every choice reachable without pushing Run/Cancel below the panel.
     private var presetBar: some View {
-        FlowLayout(spacing: 6) {
+        QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                          horizontalSpacing: 6, verticalSpacing: 6) {
             ForEach(InterpreterPreset.all) { preset in
                 PresetChip(
                     preset: preset,
@@ -307,7 +307,7 @@ private struct InterpreterPanelView: View {
             // Output / placeholder
             Group {
                 if model.streamingOutput.isEmpty {
-                    emptyAnswerState
+                    ScrollView { emptyAnswerState }
                 } else {
                     answerText
                 }
@@ -486,6 +486,7 @@ private struct PresetChip: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(chipBackground)
     }
 

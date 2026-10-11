@@ -104,7 +104,8 @@ struct FleetPopover: View {
             .padding(.vertical, 8)
             Divider()
 
-            HStack(alignment: .top, spacing: 16) {
+            QuantizedCardGrid(minimumCellWidth: ConsoleMetrics.popoverMetricMinWidth,
+                              maximumColumns: 3, horizontalSpacing: 16, verticalSpacing: 0) {
                 metric("CPU", value: model.system.cpu.sampled
                        ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")
                 metric("Memory", value: model.system.memory.totalBytes > 0
@@ -116,7 +117,7 @@ struct FleetPopover: View {
                 }
                 .font(FleetFont.body)
                 .monospacedDigit()
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .accessibilityElement(children: .combine)
             }
             .padding(.horizontal, FleetMetrics.gutter)
@@ -181,7 +182,7 @@ struct FleetPopover: View {
             Text(title).font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
             Text(value).font(FleetFont.stat).monospacedDigit()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .combine)
     }
 

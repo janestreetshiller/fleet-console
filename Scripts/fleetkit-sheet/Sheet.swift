@@ -102,8 +102,8 @@ struct Sheet: View {
                         FleetMark(size: FleetMetrics.iconRow, construction: false)
                     }
                 }
-                Row(name: "plate label") {
-                    PlateLabel(text: "01 · CPU")
+                Row(name: "card title") {
+                    Text("CPU").font(ConsoleFont.cardTitle)
                 }
                 Row(name: "plate") {
                     HStack(spacing: 21) {

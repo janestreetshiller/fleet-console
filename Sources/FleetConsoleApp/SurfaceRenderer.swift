@@ -162,6 +162,82 @@ enum SurfaceRenderer {
             renderPopover(model: model, fixture: fixture, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
             renderTaskComposer(appearance: appearance, into: out)
+            renderGeometryBoundaries(model: model, fixture: fixture, appearance: appearance, into: out)
+        }
+    }
+
+    /// Real tool view and core bars at constrained widths/heights; no child tool
+    /// is activated, and these offscreen windows never replace the installed app.
+    private static func renderGeometryBoundaries(model: AppModel, fixture: Snapshot,
+                                                 appearance: Appearance, into out: URL) {
+        renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {})),
+                             named: "popover-metrics", model: model, fixture: fixture,
+                             appearance: appearance, into: out)
+        let host = HostCapabilities(id: Fixtures.peerDeviceID, name: "Review node", target: "review.invalid",
+                                    reachable: true, arch: "arm64", cores: 24,
+                                    memoryBytes: 64 * 1_073_741_824, diskFreeBytes: 128 * 1_073_741_824,
+                                    loadOne: 1.25, tools: ["node", "python3", "uv", "docker", "git", "tmux"],
+                                    link: LinkQuality(direct: false, rttMs: 27, via: "review-relay"))
+        let categories: [StorageCategory] = [.apps, .developer, .caches, .documents, .downloads,
+                                              .media, .other, .purgeable, .free]
+        let segments = categories.enumerated().map { index, category in
+            BreakdownSegment(id: category.rawValue, category: category,
+                             bytes: Int64(index + 1) * 1_073_741_824, basis: "geometry fixture")
+        }
+        for width: CGFloat in [338, 754] {
+            let cards = VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
+                DeviceDetailView(model: model, deviceID: host.id).capabilityCard(host)
+                QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                                  horizontalSpacing: 8, verticalSpacing: 8) {
+                    ForEach(segments) { segment in
+                        SegmentChip(segment: segment, selected: segment.category == .developer)
+                    }
+                }
+                .elevatedCard()
+            }
+            let hosting = NSHostingView(rootView: cards.frame(width: width).background(SketchInk.ground))
+            let window = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: width, height: 900),
+                                  styleMask: .borderless, backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: appearance.name)
+            window.contentView = hosting
+            window.orderBack(nil)
+            settle()
+            capture(window, to: out.appendingPathComponent("peer-artifacts-\(Int(width))-\(appearance.rawValue).png"))
+            window.orderOut(nil)
+        }
+        for (name, size) in [("minimum", NSSize(width: 338, height: 184)),
+                             ("default", NSSize(width: 377, height: 600))] {
+            let hosting = NSHostingView(rootView: InterpreterPanel().makeView()
+                .frame(width: size.width, height: size.height)
+                .background(SketchInk.ground))
+            let window = NSWindow(contentRect: NSRect(origin: NSPoint(x: -20_000, y: -20_000), size: size),
+                                  styleMask: .borderless, backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: appearance.name)
+            window.contentView = hosting
+            window.orderBack(nil)
+            settle()
+            capture(window, to: out.appendingPathComponent("interpreter-\(name)-\(appearance.rawValue).png"))
+            window.orderOut(nil)
+        }
+        for clustered in [false, true] {
+            let topology = clustered
+                ? CPUTopology(logicalCores: 128, efficiencyCores: 4, performanceCores: 124,
+                              efficiencyRange: 0..<4, performanceRange: 4..<128)
+                : CPUTopology(logicalCores: 128)
+            let hosting = NSHostingView(rootView:
+                CoreGrid(values: Array(repeating: 0.45, count: 128), topology: topology)
+                    .frame(width: 320)
+                    .padding(ConsoleMetrics.cardPadding)
+                    .background(SketchInk.ground))
+            let window = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: 346, height: 300),
+                                  styleMask: .borderless, backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: appearance.name)
+            window.contentView = hosting
+            window.orderBack(nil)
+            settle()
+            let name = clustered ? "cores-128-clustered" : "cores-128"
+            capture(window, to: out.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
+            window.orderOut(nil)
         }
     }
 

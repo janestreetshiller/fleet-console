@@ -30,6 +30,7 @@ ln -s "$ROOT/Sources/FleetCore" "$WORK/Sources/FleetCore"
 
 for f in Design/Theme.swift \
          Design/Tokens.swift \
+         Design/QuantizedCardGrid.swift \
          Design/Sketchfield.swift \
          Design/StatusTone.swift \
          Design/ConsoleModule.swift \
@@ -59,9 +60,10 @@ let package = Package(
 MANIFEST
 
 echo "▸ building sheet…"
-( cd "$WORK" && swift build -c release 2>&1 | grep -vE '^\[|warning: missing creator' || true )
+( cd "$WORK" && swift build -c release --disable-index-store )
+BIN="$(cd "$WORK" && swift build -c release --disable-index-store --show-bin-path)"
 echo "▸ rendering…"
-( cd "$WORK" && swift run -c release Sheet "$OUT" 2>&1 | grep -E '^wrote' )
+"$BIN/Sheet" "$OUT"
 
 echo
 echo "→ $OUT"

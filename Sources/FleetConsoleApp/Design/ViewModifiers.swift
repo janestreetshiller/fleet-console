@@ -163,6 +163,7 @@ struct ConsoleBadge: View {
     let text: String
     var tone: StatusTone = .neutral
     var symbol: String?
+    var fillsCell = false
 
     var body: some View {
         HStack(spacing: 3) {
@@ -176,6 +177,8 @@ struct ConsoleBadge: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 2)
+        .frame(maxWidth: fillsCell ? .infinity : nil,
+               maxHeight: fillsCell ? .infinity : nil, alignment: .leading)
         .background(
             Capsule().fill(tone == .neutral
                            ? AnyShapeStyle(.quaternary)

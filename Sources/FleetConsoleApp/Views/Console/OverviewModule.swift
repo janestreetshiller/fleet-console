@@ -33,29 +33,6 @@ struct OverviewModule: View {
 
     private var system: SystemMonitor { model.system }
 
-    /// Width of the content column, measured rather than assumed — the sidebar
-    /// and the inspector both change it while the window stays the same size.
-    @State private var contentWidth: CGFloat = 0
-
-    private var instrumentCount: Int {
-        5 + (system.gpu.available ? 1 : 0) + (system.power.hasBattery ? 1 : 0)
-    }
-
-    /// How many instruments sit on a row.
-    ///
-    /// A plain `.adaptive` grid takes every column the width allows, and at the
-    /// width this module usually has that is three — which puts CPU, Memory and
-    /// Disk on one row and leaves GPU alone beside two empty slots. The hole is
-    /// the widest thing on the surface and it reads as a missing card. So the
-    /// count steps down when the last row would hold exactly one of three or
-    /// more: four cards become 2x2 rather than 3+1.
-    private var instrumentColumns: Int {
-        ConsoleLayout.telemetryColumns(contentWidth: contentWidth,
-                                       instrumentCount: instrumentCount,
-                                       minimumCardWidth: ConsoleMetrics.cardMinWidth,
-                                       gap: ConsoleMetrics.cardGap)
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
@@ -64,12 +41,7 @@ struct OverviewModule: View {
                     subtitle: subtitle,
                     symbol: ConsoleModule.overview.symbol)
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
-                                                            spacing: ConsoleMetrics.cardGap,
-                                                            alignment: .top),
-                                         count: instrumentColumns),
-                          alignment: .leading,
-                          spacing: ConsoleMetrics.cardGap) {
+                QuantizedCardGrid {
                     cpuCard
                     memoryCard
                     diskCard
@@ -78,10 +50,6 @@ struct OverviewModule: View {
                     sensorCard
                     if system.power.hasBattery { powerCard }
                 }
-                .background(GeometryReader { proxy in
-                    Color.clear.onAppear { contentWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, new in contentWidth = new }
-                })
 
                 processMapCard
                 footer
@@ -126,7 +94,8 @@ struct OverviewModule: View {
 
             if !system.sensors.fans.isEmpty || system.sensors.cpuTempC != nil
                 || system.sensors.gpuTempC != nil {
-                HStack(spacing: 16) {
+                QuantizedCardGrid(usesLargestIntrinsicWidth: true, maximumColumns: 3,
+                                  horizontalSpacing: 16, verticalSpacing: 8) {
                     sensorMetric(title: "Fan",
                                  value: SystemFmt.rpm(system.sensors.maxRPM),
                                  caption: system.sensors.fans.count > 1
@@ -148,7 +117,7 @@ struct OverviewModule: View {
                 .font(ConsoleFont.caption)
                 .foregroundStyle(.secondary)
         }
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 142, maxHeight: .infinity, alignment: .topLeading)
         .elevatedCard("SMC · SENSORS")
     }
 
@@ -163,7 +132,7 @@ struct OverviewModule: View {
                 .font(ConsoleFont.micro)
                 .foregroundStyle(SurfaceInk.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     // MARK: CPU
@@ -328,14 +297,14 @@ struct OverviewModule: View {
             ThroughputChart(read: system.diskReadHistory,
                             write: system.diskWriteHistory,
                             height: ConsoleMetrics.chartHeight)
-            HStack(spacing: 10) {
+            QuantizedCardGrid(usesLargestIntrinsicWidth: true, maximumColumns: 2,
+                              horizontalSpacing: 10, verticalSpacing: 8) {
                 LegendDot(label: TelemetrySeries.read.label,
                           value: ConsoleFmt.byteRate(system.storage.readBytesPerSec),
                           color: TelemetrySeries.read.color)
                 LegendDot(label: TelemetrySeries.write.label,
                           value: ConsoleFmt.byteRate(system.storage.writeBytesPerSec),
                           color: TelemetrySeries.write.color)
-                Spacer(minLength: 4)
             }
             Text("\(ConsoleFmt.bytes(system.storage.availableBytes)) available of \(ConsoleFmt.bytes(system.storage.totalBytes))")
                 .font(ConsoleFont.mono(.caption))
@@ -387,9 +356,9 @@ struct OverviewModule: View {
             ThroughputChart(read: system.networkDownloadHistory,
                             write: system.networkUploadHistory,
                             readLabel: "Download", writeLabel: "Upload", metric: "Network")
-            HStack(spacing: 13) {
+            QuantizedCardGrid(usesLargestIntrinsicWidth: true, maximumColumns: 2,
+                              horizontalSpacing: 13, verticalSpacing: 8) {
                 rateMetric("Download", rate: system.network.downloadBytesPerSec)
-                Spacer(minLength: 0)
                 rateMetric("Upload", rate: system.network.uploadBytesPerSec)
             }
             Text("Physical interfaces · VPN traffic not counted twice")
@@ -397,7 +366,7 @@ struct OverviewModule: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
         }
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+        .frame(maxWidth: .infinity, minHeight: 142, maxHeight: .infinity, alignment: .topLeading)
         .elevatedCard("NET · TRAFFIC")
     }
 
@@ -409,6 +378,7 @@ struct OverviewModule: View {
                 .monospacedDigit()
                 .lineLimit(1)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .accessibilityElement(children: .combine)
     }
 
@@ -462,48 +432,21 @@ struct OverviewModule: View {
 
 // MARK: - Shared bits
 
-/// App / Wired / Compressed / Swap, plus the total, laid out as a flow.
-///
-/// The row this replaces was an `HStack` of four `MemoryFact`s and a trailing
-/// total, which needs about 380pt. In a grid cell it does not get 380pt, and an
-/// HStack's answer to that is to compress every child at once: the badge labels
-/// hyphenated and the total was pushed past the card's edge. `MemoryFact` already
-/// pins its own width for exactly this reason, so what is left is to let the row
-/// wrap — as many as fit, the rest on the next line, at any column count.
+/// Memory facts use the widest label/value footprint; the total stays below.
 private struct MemoryFacts: View {
     let memory: MemorySample
 
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            row(spacing: 14)
-            row(spacing: 10)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) {
-                    MemoryFact(label: "App", value: memory.appBytes)
-                    MemoryFact(label: "Wired", value: memory.wiredBytes)
-                    Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: 4) {
+            QuantizedCardGrid(usesLargestIntrinsicWidth: true, maximumColumns: 4,
+                              horizontalSpacing: 10, verticalSpacing: 8) {
+                MemoryFact(label: "App", value: memory.appBytes)
+                MemoryFact(label: "Wired", value: memory.wiredBytes)
+                MemoryFact(label: "Compressed", value: memory.compressedBytes)
+                if memory.swapTotalBytes > 0 {
+                    MemoryFact(label: "Swap", value: memory.swapUsedBytes)
                 }
-                HStack(spacing: 10) {
-                    MemoryFact(label: "Compressed", value: memory.compressedBytes)
-                    if memory.swapTotalBytes > 0 {
-                        MemoryFact(label: "Swap", value: memory.swapUsedBytes)
-                    }
-                    Spacer(minLength: 0)
-                }
-                total
             }
-        }
-    }
-
-    private func row(spacing: CGFloat) -> some View {
-        HStack(spacing: spacing) {
-            MemoryFact(label: "App", value: memory.appBytes)
-            MemoryFact(label: "Wired", value: memory.wiredBytes)
-            MemoryFact(label: "Compressed", value: memory.compressedBytes)
-            if memory.swapTotalBytes > 0 {
-                MemoryFact(label: "Swap", value: memory.swapUsedBytes)
-            }
-            Spacer(minLength: 4)
             total
         }
     }
@@ -546,6 +489,7 @@ private struct MemoryFact: View {
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

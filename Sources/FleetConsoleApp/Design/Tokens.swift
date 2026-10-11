@@ -79,6 +79,10 @@ enum ConsoleMetrics {
     /// Content-column gutter. Windows want more air than menus.
     static let gutter: CGFloat = 21
     static let cardPadding: CGFloat = 13
+    /// Common peer footprints round up from their largest content measurement.
+    static let gridQuantum: CGFloat = 8
+    static let popoverMetricMinWidth: CGFloat = 89
+    static let interpreterPresetMaxHeight: CGFloat = 233
     /// Inset a panel's content from its own edges — the welcome's header and
     /// footer bars. Smaller than a card's interior, because a panel edge is
     /// already a boundary and needs less air than content inside it.
