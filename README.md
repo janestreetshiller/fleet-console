@@ -3,6 +3,27 @@
 A local-first operations console for one person: a macOS menu-bar app plus a
 launchd-managed controller that owns every background process your agents start.
 
+**MIT licensed, with every feature permanently available.** No activation key,
+trial expiry, account or payment is required. SwiftTerm keeps its own MIT notices.
+
+The Overview opens first and shows native CPU/GPU/memory/disk instruments,
+physical-interface download/upload history, and battery state on portable Macs.
+Unavailable hardware readings stay unavailable. Two-second resource samples and
+bounded histories drive the charts; decorative backgrounds and status indicators
+are static instead of continuously animating behind the measurements.
+
+For a repeatable live release check, run `Scripts/benchmark.sh 60`. It records
+process CPU usage, exercises navigation, and captures light/dark layouts at three
+window sizes without registering a helper or activating the app. Each invocation
+creates a fresh `run.*` directory beneath the supplied output directory and prints
+its location, so an earlier receipt cannot satisfy a later check. Review the
+output before sharing: it contains real machine and process data.
+
+Report sanitized bugs through [GitHub issues](https://github.com/janestreetshiller/fleet-console/issues)
+and security issues through [the private reporting policy](SECURITY.md). See
+[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/RELEASE.md](docs/RELEASE.md) for build,
+test and staged-release instructions. Donation setup is optional and not enabled.
+
 ```
   menu bar  ●3            ← at-a-glance rollup
      ↓ click                            ↓ right-click
@@ -53,8 +74,13 @@ listener, no telemetry.
 
 ## Build and install
 
+Each build needs a fresh `FleetConsole.app` destination. The script refuses any
+existing bundle, file or symlink and all Applications aliases; it never replaces
+an app or stops a controller. For repeat builds, choose a new
+`FLEETCONSOLE_OUTPUT_DIR` as shown in [docs/RELEASE.md](docs/RELEASE.md).
+
 ```bash
-Scripts/build-app.sh release  # builds and signs build/FleetConsole.app
+Scripts/build-app.sh release  # builds/signs build/FleetConsole.app only if absent
 Scripts/notarize.sh           # submits to Apple and staples the ticket
 Scripts/install-agent.sh      # registers fleetd with launchd (no sudo)
 open build/FleetConsole.app   # starts the menu-bar app
@@ -192,6 +218,9 @@ docs/CLI.md                    the operations toolbox: every fleetctl verb
 docs/PRODUCT-SPEC.md           screen-by-screen spec
 docs/THREAT-MODEL.md           process leaks, unsafe stops, stale records, bypass
 docs/AGENTS.md                 the contract for agents
+docs/FREEMIUM.md               trial · key format · offline mint · Ouros path
+docs/RUST-PORT.md              rustification candidates · GPUI candidacy · resize
+AGENTS.md                      source of truth: composition, status, decisions
 ```
 
 ## Two toolboxes

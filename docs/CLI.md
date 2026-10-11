@@ -7,6 +7,7 @@ asking for a process      launch · renew · stop · restart · pause · resume 
 looking at what is running list · show · agents · events · logs · ping · doctor
 talking to the operator   notify · inbox · reply
 housekeeping              reconcile · claim · ignore · prune · config
+legacy compatibility     license (offline key mint; not required by MIT builds)
 ```
 
 ### `fleetctl pause <id|name>` / `resume`
@@ -151,6 +152,12 @@ and is never touched.
 
 ### `fleetctl config [--path | --reload]`
 Prints the config, its path, or asks the controller to reload it.
+
+### `fleetctl license --secret <s> [--date YYYY-MM-DD]`
+Mints a licence key offline — the issuer half of `FLT1-…`. A store webhook or
+the Ouros bar on the user's behalf shells out here, prints the key, and the
+user pastes it into the app. `FLEET_LICENSE_SECRET` works instead of `--secret`.
+See [FREEMIUM.md](FREEMIUM.md).
 
 ---
 

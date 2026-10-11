@@ -134,7 +134,7 @@ private struct WelcomeView: View {
             Text("Welcome to FleetConsole")
                 .font(ConsoleFont.cardTitle)
             Spacer()
-            ConsoleBadge(text: licenseBadge, tone: licenseTone)
+            ConsoleBadge(text: "MIT · OPEN SOURCE", tone: .neutral)
         }
         .padding(.horizontal, ConsoleMetrics.gutter)
         .padding(.vertical, ConsoleMetrics.panelInset)
@@ -220,21 +220,6 @@ private struct WelcomeView: View {
         .padding(.vertical, ConsoleMetrics.panelInset)
     }
 
-    private var licenseBadge: String {
-        switch model.license.status {
-        case .licensed: return "LICENSED"
-        case .trial(let days): return "TRIAL · \(days)d"
-        case .expired: return "TRIAL OVER"
-        }
-    }
-
-    private var licenseTone: StatusTone {
-        switch model.license.status {
-        case .licensed: return .good
-        case .trial: return .neutral
-        case .expired: return .warn
-        }
-    }
 
     private func startSweep() {
         withAnimation(ConsoleMotion.welcomeSweep) { phase = 1 }

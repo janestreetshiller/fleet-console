@@ -103,6 +103,20 @@ struct FleetPopover: View {
             .padding(.vertical, 8)
             Divider()
 
+            HStack(spacing: 13) {
+                Text("CPU \(model.system.cpu.sampled ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")")
+                Spacer(minLength: 0)
+                Text("RAM \(ConsoleFmt.utilPercent(model.system.memory.usedShare))")
+                Spacer(minLength: 0)
+                Text("↓ \(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec))")
+            }
+            .font(FleetFont.caption)
+            .monospacedDigit()
+            .padding(.horizontal, FleetMetrics.gutter)
+            .padding(.vertical, 8)
+            .accessibilityElement(children: .combine)
+            Divider()
+
             switch tab {
             case .services:
                 ServicesContent(model: model, openDashboard: openDashboard)

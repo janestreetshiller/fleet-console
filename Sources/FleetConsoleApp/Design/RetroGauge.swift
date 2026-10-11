@@ -50,7 +50,6 @@ struct RetroGauge: View {
     let readout: String
     var diameter: CGFloat = ConsoleMetrics.gaugeDiameter
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     // MARK: Geometry
@@ -91,12 +90,9 @@ struct RetroGauge: View {
             labels
         }
         .frame(width: diameter, height: diameter)
-        // Reduce Motion means the needle snaps between samples. The 2 s cadence
-        // makes that a step every two seconds rather than a jitter, which is the
-        // point: the animation is here to make the sweep readable, and someone
-        // who has asked for less motion has asked for exactly the sweep to stop.
-        .animation(reduceMotion ? nil : ConsoleAnimation.telemetry, value: fraction)
-        .animation(reduceMotion ? nil : ConsoleAnimation.telemetry, value: value == nil)
+        // Show the measured position directly. Animating every telemetry sample
+        // keeps the dashboard laying out and redrawing between probe ticks.
+        .transaction { $0.animation = nil }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(caption)
         .accessibilityValue(value == nil ? "not sampled yet" : readout)

@@ -4,6 +4,33 @@
 
 # Built app bundle and generated design surfaces
 /build/
+/dist/
+/.release/
+/*.zip
+/*.dmg
+
+# Local SwiftPM/Xcode state
+/.swiftpm/
+xcuserdata/
+*.xcuserstate
+
+# Credentials and signing material (track only reviewed example templates)
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.pfx
+*.key
+*.pem
+
+# Runtime state and diagnostic captures may contain private fleet data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.log
+*.har
 
 # Rust
 /rust/target/

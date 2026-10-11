@@ -109,27 +109,22 @@ extension View {
 
 // MARK: - Status pip
 
-/// The live connection/health dot. Shape carries meaning alongside colour
-/// (HIG: never encode state in colour alone), and a gentle pulse marks the
-/// *live* states — reachable nodes breathe once per two seconds, matching the
-/// probe cadence that keeps them true. Reduced Motion turns the pulse off.
+/// The live connection/health dot. A static ring marks live states without
+/// forcing an otherwise idle monitor to redraw continuously. Shape carries
+/// meaning alongside colour (HIG: never encode state in colour alone).
 struct StatusPip: View {
     let tone: StatusTone
     var size: CGFloat = 8
     var pulsing = false
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
-    @State private var breathing = false
 
     var body: some View {
         ZStack {
-            if pulsing && !reduceMotion {
+            if pulsing {
                 Circle()
-                    .fill(tone.edge)
-                    .frame(width: size * 2.1, height: size * 2.1)
-                    .scaleEffect(breathing ? 1 : 0.55)
-                    .opacity(breathing ? 0 : 1)
+                    .strokeBorder(tone.edge, lineWidth: 1)
+                    .frame(width: size * 1.6, height: size * 1.6)
             }
             if differentiateWithoutColor {
                 // A lone pip has no text beside it, so with Differentiate Without
@@ -155,12 +150,7 @@ struct StatusPip: View {
             }
         }
         .frame(width: size * 2.1, height: size * 2.1)
-        .onAppear {
-            guard pulsing, !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 1.6).repeatForever(autoreverses: false)) {
-                breathing = true
-            }
-        }
+
         .accessibilityHidden(true)
     }
 }

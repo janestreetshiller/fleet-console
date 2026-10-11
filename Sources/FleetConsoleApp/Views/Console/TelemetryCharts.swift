@@ -177,6 +177,9 @@ struct ThroughputChart: View {
     let read: [Double]
     let write: [Double]
     var height: CGFloat = ConsoleMetrics.chartHeight
+    var readLabel: String = TelemetrySeries.read.label
+    var writeLabel: String = TelemetrySeries.write.label
+    var metric = "Disk"
 
     /// Axis floor. Below a kilobyte per second there is nothing to tell apart,
     /// and `ConsoleFmt.byteRate` already floors its text at the same place.
@@ -225,8 +228,8 @@ struct ThroughputChart: View {
                                                   : ConsoleMetrics.chartPlotInset)
             }
             .frame(height: height)
-            .accessibilityLabel("Disk throughput, read \(ConsoleFmt.byteRate(read.last)), "
-                                + "write \(ConsoleFmt.byteRate(write.last))"
+            .accessibilityLabel("\(metric) throughput, \(readLabel) \(ConsoleFmt.byteRate(read.last)), "
+                                + "\(writeLabel) \(ConsoleFmt.byteRate(write.last))"
                                 + (labelsFit ? ", logarithmic axis" : ""))
     }
 
@@ -245,7 +248,7 @@ struct ThroughputChart: View {
             ForEach(traces(of: read)) { trace in
                 LineMark(x: .value("Sample", trace.id),
                          y: .value("Bytes", plotted(trace.value)),
-                         series: .value("Direction", TelemetrySeries.read.label))
+                         series: .value("Direction", readLabel))
                     .foregroundStyle(TelemetrySeries.read.color)
                     .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
                     .interpolationMethod(.catmullRom)
@@ -253,7 +256,7 @@ struct ThroughputChart: View {
             ForEach(traces(of: write)) { trace in
                 LineMark(x: .value("Sample", trace.id),
                          y: .value("Bytes", plotted(trace.value)),
-                         series: .value("Direction", TelemetrySeries.write.label))
+                         series: .value("Direction", writeLabel))
                     .foregroundStyle(TelemetrySeries.write.color)
                     .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
                     .interpolationMethod(.catmullRom)
@@ -337,7 +340,9 @@ struct TelemetryCard<Content: View>: View {
                 }
                 content
             }
+            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
         .elevatedCard(plate)
         .accessibilityElement(children: .contain)
     }

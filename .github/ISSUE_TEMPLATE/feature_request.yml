@@ -1,0 +1,22 @@
+name: Feature request
+description: Describe an operations problem and the outcome you need.
+title: "feature: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: Explain what is difficult today without including private fleet data.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe the behavior you need, rather than a mandatory implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Current workaround or alternatives

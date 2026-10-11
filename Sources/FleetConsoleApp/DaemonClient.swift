@@ -4,17 +4,41 @@ import FleetCore
 /// Talks to fleetd over the local socket. The app is a client and a dashboard —
 /// it never supervises the controller and never touches processes directly.
 ///
-/// `@unchecked Sendable`: every stored property is behind `lock`; the request
-/// queue is immutable. The subscription runs on its own `Thread`, so this really
+/// `@unchecked Sendable`: mutable state is behind `lock`; the request queue
+/// and policy are immutable. The subscription runs on its own `Thread`, so this really
 /// is shared across threads.
 final class DaemonClient: @unchecked Sendable {
     static let shared = DaemonClient()
+
+    let requestPolicy: RPCRequestPolicy
+    let socketPath: String
+
+    private init() {
+        let arguments = ProcessInfo.processInfo.arguments
+        requestPolicy = RPCRequestPolicy.forArguments(arguments)
+        #if FLEET_SURFACE_RENDERER
+        socketPath = RPCRequestPolicy.daemonSocketPath(forArguments: arguments,
+                                                     surfaceRenderer: true)
+        #else
+        socketPath = FleetPaths.socket.path
+        #endif
+    }
 
     private let requestQueue = DispatchQueue(label: "com.fleetconsole.app.requests", attributes: .concurrent)
 
     private let lock = NSLock()
     private var subscribeThread: Thread?
     private var running = true
+    private var observationalOperations: Set<String> = []
+
+    var submittedObservationalOperations: [String] {
+        lock.withLock { observationalOperations.sorted() }
+    }
+
+    private func record(_ operation: RPCOp) {
+        guard requestPolicy == .observational else { return }
+        lock.withLock { _ = observationalOperations.insert(operation.rawValue) }
+    }
 
     /// Read every pass of the subscribe loop, written by `stop()` from the main
     /// thread. It is the only thing that ends that loop, so a missed write is a
@@ -38,12 +62,13 @@ final class DaemonClient: @unchecked Sendable {
             while self.shouldRun {
                 do {
                     // timeout 0 = block indefinitely: this connection stays open.
-                    let conn = try UnixSocketClient.connect(timeout: 0)
+                    let conn = try UnixSocketClient.connect(path: self.socketPath, timeout: 0)
                     // Both the write and the reads below throw when fleetd restarts,
                     // and this loop reconnects forever — the fd has to go back on
                     // every exit path, not just the clean one.
                     defer { conn.close() }
                     try conn.writeJSON(RPCRequest(op: .subscribe))
+                    self.record(.subscribe)
                     Self.onMain { onConnection(true, nil) }
                     backoff = 500_000
                     while self.shouldRun, let line = try conn.readLine() {
@@ -71,9 +96,19 @@ final class DaemonClient: @unchecked Sendable {
 
     func send(_ request: RPCRequest, timeout: TimeInterval = 30,
               completion: @escaping @MainActor (Result<RPCResponse, Error>) -> Void) {
-        requestQueue.async {
+        guard requestPolicy.allows(request.op) else {
+            Self.onMain {
+                completion(.failure(FleetError.rejected(
+                    "\(request.op.rawValue) is not permitted in observational mode"
+                )))
+            }
+            return
+        }
+        record(request.op)
+        requestQueue.async { [self] in
             do {
-                let response = try UnixSocketClient.send(request, timeout: timeout)
+                let response = try UnixSocketClient.send(request, path: socketPath,
+                                                         timeout: timeout, policy: requestPolicy)
                 Self.onMain {
                     if response.ok {
                         completion(.success(response))

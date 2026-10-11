@@ -275,15 +275,9 @@ public final class LicenseManager {
         refresh()
     }
 
-    /// The one question every surface asks.
-    ///
-    /// Trial means *full*: a trial that hides the premium features is a demo
-    /// of the free tier, not a trial of the product. The gate opens when the
-    /// clock runs out.
+    /// MIT distribution: every feature is available permanently. Legacy key
+    /// and trial records remain readable for compatibility, never for access.
     public func isUnlocked(_ feature: PremiumFeature) -> Bool {
-        switch status {
-        case .licensed, .trial: return true
-        case .expired: return false
-        }
+        true
     }
 }

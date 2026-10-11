@@ -41,6 +41,9 @@ final class AppModel {
     var connectionError: String?
     var agentRegistered = false
     var lastSnapshotAt: Date?
+    /// Local monotonic receipt time, independent of the daemon's wall clock.
+    /// Cleared on connection transitions so a reconnect cannot reuse old evidence.
+    private(set) var lastSnapshotReceivedUptime: TimeInterval?
     var actionError: String?
     var busyServiceIDs: Set<String> = []
 
@@ -91,6 +94,7 @@ final class AppModel {
             guard let self else { return }
             self.connected = connected
             self.connectionError = connected ? nil : error
+            self.lastSnapshotReceivedUptime = nil
             if !connected {
                 self.agentRegistered = DaemonClient.shared.agentIsRegistered()
             }
@@ -112,6 +116,7 @@ final class AppModel {
     func apply(_ snapshot: Snapshot) {
         daemon = snapshot.daemon
         lastSnapshotAt = snapshot.generatedAt
+        lastSnapshotReceivedUptime = ProcessInfo.processInfo.systemUptime
 
         // Services: update in place; only reassign the array when membership changes.
         let incoming = snapshot.services
@@ -338,6 +343,7 @@ final class AppModel {
                     self.actionError = error.localizedDescription
                 } else {
                     self.connected = false
+                    self.lastSnapshotReceivedUptime = nil
                     self.connectionError = error.localizedDescription
                 }
             }
@@ -416,6 +422,7 @@ final class AppModel {
     }
 
     func markMessagesSeen() {
+        guard DaemonClient.shared.requestPolicy.allows(.markSeen) else { return }
         guard recentMessages.contains(where: { $0.seenAt == nil }) else { return }
         perform(RPCRequest(op: .markSeen), serviceID: nil, surfacesErrors: false)
     }
@@ -455,6 +462,7 @@ final class AppModel {
     }
 
     func refreshDevices() {
+        guard DaemonClient.shared.requestPolicy.allows(.refreshDevices) else { return }
         perform(RPCRequest(op: .refreshDevices), serviceID: nil, surfacesErrors: false)
     }
 

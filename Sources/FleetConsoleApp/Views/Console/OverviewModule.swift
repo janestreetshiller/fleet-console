@@ -37,7 +37,9 @@ struct OverviewModule: View {
     /// and the inspector both change it while the window stays the same size.
     @State private var contentWidth: CGFloat = 0
 
-    private var instrumentCount: Int { system.gpu.available ? 4 : 3 }
+    private var instrumentCount: Int {
+        5 + (system.gpu.available ? 1 : 0) + (system.power.hasBattery ? 1 : 0)
+    }
 
     /// How many instruments sit on a row.
     ///
@@ -48,11 +50,10 @@ struct OverviewModule: View {
     /// count steps down when the last row would hold exactly one of three or
     /// more: four cards become 2x2 rather than 3+1.
     private var instrumentColumns: Int {
-        let gap = ConsoleMetrics.cardGap
-        let fits = max(1, Int((contentWidth + gap) / (ConsoleMetrics.cardMinWidth + gap)))
-        var count = min(fits, instrumentCount)
-        if count >= 3 && instrumentCount % count == 1 { count -= 1 }
-        return max(1, count)
+        ConsoleLayout.telemetryColumns(contentWidth: contentWidth,
+                                       instrumentCount: instrumentCount,
+                                       minimumCardWidth: ConsoleMetrics.cardMinWidth,
+                                       gap: ConsoleMetrics.cardGap)
     }
 
     var body: some View {
@@ -73,17 +74,20 @@ struct OverviewModule: View {
                     memoryCard
                     diskCard
                     if system.gpu.available { gpuCard }
+                    networkCard
                     sensorCard
+                    if system.power.hasBattery { powerCard }
                 }
+                .background(GeometryReader { proxy in
+                    Color.clear.onAppear { contentWidth = proxy.size.width }
+                        .onChange(of: proxy.size.width) { _, new in contentWidth = new }
+                })
 
                 processMapCard
                 footer
             }
             .padding(ConsoleMetrics.gutter)
-            .background(GeometryReader { proxy in
-                Color.clear.onAppear { contentWidth = proxy.size.width }
-                    .onChange(of: proxy.size.width) { _, new in contentWidth = new }
-            })
+
         }
         .scrollContentBackground(.hidden)
     }
@@ -112,22 +116,15 @@ struct OverviewModule: View {
             HStack(spacing: 6) {
                 Text("Sensors")
                     .font(ConsoleFont.cardTitle)
-                if !model.license.isUnlocked(.smcSensors) {
-                    ConsoleBadge(text: "PRO", tone: .warn)
-                }
                 Spacer()
-                if model.license.isUnlocked(.smcSensors), system.sensors.available {
+                if system.sensors.available {
                     Text("\(system.sensors.fans.count) fan\(system.sensors.fans.count == 1 ? "" : "s")")
                         .font(ConsoleFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if !model.license.isUnlocked(.smcSensors) {
-                Text("Fan speed and die temperature, read straight from the SMC.")
-                    .font(ConsoleFont.body)
-                    .foregroundStyle(.secondary)
-            } else if system.sensors.available {
+            if system.sensors.available {
                 HStack(spacing: 16) {
                     sensorMetric(title: "Fan",
                                  value: SystemFmt.rpm(system.sensors.maxRPM),
@@ -146,8 +143,12 @@ struct OverviewModule: View {
                     .font(ConsoleFont.body)
                     .foregroundStyle(.secondary)
             }
+            Text("Thermal state · \(system.thermal.label)")
+                .font(ConsoleFont.caption)
+                .foregroundStyle(.secondary)
         }
-        .elevatedCard("05 · SMC")
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+        .elevatedCard("SMC · SENSORS")
     }
 
     private func sensorMetric(title: String, value: String, caption: String) -> some View {
@@ -194,7 +195,8 @@ struct OverviewModule: View {
                         .monospacedDigit()
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
-                        .fixedSize()
+                        .truncationMode(.tail)
+                        .layoutPriority(-1)
                 }
             }
         }
@@ -282,11 +284,11 @@ struct OverviewModule: View {
                 HeatmapView(items: items,
                             summary: "Helpers are folded into their parent app. The “Other” tile is "
                                    + "everything below 8 MB or past the fortieth group — rolled up, "
-                                   + "never dropped.")
+                                   + "never dropped.", animatesLayout: false)
                     .frame(height: ConsoleMetrics.mapHeight)
             }
         }
-        .elevatedCard("06 · MAP")
+        .elevatedCard("MAP · PROCESSES")
     }
 
     // MARK: Disk
@@ -326,13 +328,12 @@ struct OverviewModule: View {
                           value: ConsoleFmt.byteRate(system.storage.writeBytesPerSec),
                           color: TelemetrySeries.write.color)
                 Spacer(minLength: 4)
-                Text("of \(ConsoleFmt.bytes(system.storage.totalBytes))")
-                    .font(ConsoleFont.mono(.caption))
-                    .monospacedDigit()
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .fixedSize()
             }
+            Text("\(ConsoleFmt.bytes(system.storage.availableBytes)) available of \(ConsoleFmt.bytes(system.storage.totalBytes))")
+                .font(ConsoleFont.mono(.caption))
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
     }
 
@@ -358,6 +359,66 @@ struct OverviewModule: View {
                     MemoryFact(label: "In use", value: used)
                     Spacer()
                 }
+            }
+        }
+    }
+
+    // MARK: Network and power
+
+    private var networkCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Network").font(ConsoleFont.cardTitle)
+                Spacer(minLength: 4)
+                Text(system.network.interfaceNames.isEmpty
+                     ? "No active physical link" : system.network.interfaceNames.joined(separator: " · "))
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            ThroughputChart(read: system.networkDownloadHistory,
+                            write: system.networkUploadHistory,
+                            readLabel: "Download", writeLabel: "Upload", metric: "Network")
+            HStack(spacing: 13) {
+                rateMetric("Download", rate: system.network.downloadBytesPerSec)
+                Spacer(minLength: 0)
+                rateMetric("Upload", rate: system.network.uploadBytesPerSec)
+            }
+            Text("Physical interfaces · VPN traffic not counted twice")
+                .font(ConsoleFont.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+        .elevatedCard("NET · TRAFFIC")
+    }
+
+    private func rateMetric(_ label: String, rate: Double?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(ConsoleFont.caption).foregroundStyle(.secondary)
+            Text(ConsoleFmt.byteRate(rate))
+                .font(ConsoleFont.mono(.body))
+                .monospacedDigit()
+                .lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var powerCard: some View {
+        TelemetryCard(title: "Battery", plate: "PWR · BATTERY",
+                      value: ConsoleFmt.utilPercent(system.power.chargeFraction),
+                      gaugeValue: system.power.chargeFraction,
+                      subtitle: system.power.isCharging ? "Charging"
+                          : system.power.isPluggedIn ? "Connected to power" : "On battery") {
+            if let charge = system.power.chargeFraction {
+                ProgressView(value: charge).tint(SketchInk.accent)
+            }
+            if let minutes = system.power.minutesRemaining {
+                Text("\(minutes) min \(system.power.isCharging ? "until full" : "remaining")")
+                    .font(ConsoleFont.body).monospacedDigit()
+            } else {
+                Text("Time estimate not reported")
+                    .font(ConsoleFont.caption).foregroundStyle(.secondary)
             }
         }
     }
@@ -420,8 +481,8 @@ private struct MemoryFacts: View {
                         MemoryFact(label: "Swap", value: memory.swapUsedBytes)
                     }
                     Spacer(minLength: 0)
-                    total
                 }
+                total
             }
         }
     }

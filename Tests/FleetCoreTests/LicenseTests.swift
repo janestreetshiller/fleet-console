@@ -113,12 +113,12 @@ final class LicenseTests: XCTestCase {
     }
 
     @MainActor
-    func testExpiredTrialLocksPremiumFeatures() {
+    func testMITBuildKeepsEveryFeatureAfterTrialExpires() {
         let start = Date(timeIntervalSince1970: 1_750_000_000)
         _ = makeManager(now: start).status
         let expired = makeManager(now: start + 15 * 86_400)
         for feature in PremiumFeature.allCases {
-            XCTAssertFalse(expired.isUnlocked(feature), "\(feature) is gated after the trial")
+            XCTAssertTrue(expired.isUnlocked(feature), "MIT builds must never lock \(feature)")
         }
     }
 

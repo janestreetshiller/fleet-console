@@ -183,6 +183,16 @@ public enum ConsoleLayout {
     public static let minimumContentHeight: CGFloat =
         titlebarReserve + moduleHeaderHeight + cardHeight + moduleBottomPadding
 
+    /// The complete instrument count, not just the four original metrics.
+    /// Avoid a single orphan card when reducing a row still uses available width.
+    public static func telemetryColumns(contentWidth: CGFloat, instrumentCount: Int,
+                                        minimumCardWidth: CGFloat, gap: CGFloat) -> Int {
+        let fits = max(1, Int((max(0, contentWidth) + gap) / (minimumCardWidth + gap)))
+        var columns = max(1, min(fits, instrumentCount))
+        if columns >= 3 && instrumentCount % columns == 1 { columns -= 1 }
+        return columns
+    }
+
     // MARK: The golden division
 
     /// The width one side column takes, given the width the split view has to

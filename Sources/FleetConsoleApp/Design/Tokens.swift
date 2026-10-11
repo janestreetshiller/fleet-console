@@ -190,7 +190,7 @@ enum ConsoleMetrics {
     /// 944) and each lands near 306pt — a 89pt dial and a 200pt trace, which is
     /// over three points per sample at sixty samples. Four would need 971 and
     /// does not fit, so this cannot silently become a chart nobody can read.
-    static let cardMinWidth: CGFloat = 377
+    static let cardMinWidth: CGFloat = 320
     /// Gap between cards in the module grid, in both axes.
     static let cardGap: CGFloat = 13
     /// Vertical rhythm between stacked cards in a scrolling module and between

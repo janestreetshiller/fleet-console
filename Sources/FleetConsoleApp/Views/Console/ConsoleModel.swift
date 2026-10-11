@@ -54,7 +54,7 @@ final class ConsoleModel {
     /// were, and every inspector that switches exhaustively over
     /// `ConsoleModule` keeps compiling. `module` still remembers where you were,
     /// so leaving home and coming back does not reset it.
-    var atHome = true
+    var atHome = false
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
@@ -69,7 +69,7 @@ final class ConsoleModel {
     /// your selection* could only be taken away by the window getting narrow.
     /// That is a layout accident standing in for a control. This is the intent;
     /// width can still overrule it, never the other way round.
-    var inspectorRevealed = true
+    var inspectorRevealed = false
 
     /// True for the duration of a window-edge drag.
     ///

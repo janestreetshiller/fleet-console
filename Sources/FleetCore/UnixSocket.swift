@@ -241,7 +241,11 @@ public enum UnixSocketClient {
     /// One request, one response. Used for every non-streaming operation.
     public static func send(_ request: RPCRequest,
                             path: String = FleetPaths.socket.path,
-                            timeout: TimeInterval = 15) throws -> RPCResponse {
+                            timeout: TimeInterval = 15,
+                            policy: RPCRequestPolicy = .interactive) throws -> RPCResponse {
+        guard policy.allows(request.op) else {
+            throw FleetError.rejected("\(request.op.rawValue) is not permitted in observational mode")
+        }
         let conn = try connect(path: path, timeout: timeout)
         defer { conn.close() }
         try conn.writeJSON(request)

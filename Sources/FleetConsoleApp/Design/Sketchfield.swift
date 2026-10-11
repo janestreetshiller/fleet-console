@@ -9,20 +9,9 @@ import AppKit
 // System-Settings window, and the two were arguing — a stamped header over a
 // `controlBackgroundColor` card is a texture on a form, not a page.
 //
-// Sketchfield says *this is a sketchbook page with a shader running under it*.
-// Three things carry it, and nothing else in the app is allowed to:
-//
-//   * **The field** — three blurred spectral lobes drifting under everything,
-//     the one place in the app with saturated colour that is not a status. It
-//     is the window's background and it is the only background: no surface
-//     under it, no material over it.
-//   * **The ruling** — graph paper at 13pt with a heavy line every fifth, which
-//     are the rungs the console's layout already stands on. The grid is not
-//     decoration; it is the ladder made visible.
-//   * **The plate** — every card, panel and popover. One hairline, a second
-//     pass 3pt down and right, and a plotted label struck into the top border.
-//     The second pass is what replaced the drop shadow: depth here is two lines
-//     a pen made, not a blur.
+// The release treatment is quiet and static: a faint spectral wash, native
+// typography and concentric rectangular plates. No perpetual animation,
+// full-window blur or per-pixel grain competes with the live measurements.
 //
 // What is deliberately *not* here: no new font. Stampwork vendored a display
 // face and used it for four words; SF stays the reading face at every size the
@@ -49,8 +38,7 @@ import AppKit
 /// stands on. The strokes are not: a 1pt line and a 1.6pt line are two weights
 /// of one mark, not two steps of a size hierarchy.
 enum SketchMetrics {
-    /// How far down and right the second pass sits. One rung, and the smallest
-    /// at which the two lines read as two lines rather than as one thick one.
+    /// Inset of the concentric inner border.
     static let plateOffset: CGFloat = 3
     /// Graph-paper pitch. The same rung as `ConsoleMetrics.cardGap` and
     /// `sectionGap` — the ruling and the layout are on one grid or the grid is
@@ -93,14 +81,6 @@ enum SketchMetrics {
     static let markStroke: CGFloat = 1.6
 }
 
-/// The field's cadence. Slow enough that nothing on screen appears to move
-/// while you are reading a number, long enough that the three lobes never
-/// return to the same arrangement inside a working session.
-enum SketchMotion {
-    static let lobeA = Animation.easeInOut(duration: 34).repeatForever(autoreverses: true)
-    static let lobeB = Animation.easeInOut(duration: 47).repeatForever(autoreverses: true)
-    static let lobeC = Animation.easeInOut(duration: 41).repeatForever(autoreverses: true)
-}
 
 // MARK: - Ink
 
@@ -132,7 +112,7 @@ enum SketchInk {
     /// A plate's own fill, over whatever the field is doing underneath. Carries
     /// its alpha deliberately: a plate is glass held over the page, and a plate
     /// you cannot see the field through is a card again.
-    static var plate: Color { pair(dark: rgba(15, 20, 26, 0.62), light: rgba(255, 253, 248, 0.72)) }
+    static var plate: Color { pair(dark: rgba(19, 24, 30, 0.96), light: rgba(255, 254, 251, 0.96)) }
 
     /// The second pass — the line the pen made coming back over its own edge.
     static var secondPass: Color { Color.primary.opacity(0.13) }
@@ -165,42 +145,32 @@ enum SketchInk {
 
 // MARK: - The field
 
-/// Three spectral lobes drifting under everything. The app's only background.
+/// Static spectral wash. Radial gradients already have soft edges; expensive
+/// blur, offscreen rasterization and continuous animation are unnecessary.
 struct SketchField: View {
     /// Which arrangement this surface starts from. Two surfaces open at once —
     /// the popover over the window — and an identical field on both reads as a
     /// screenshot rather than as two pages.
     var seed: Double = 0
 
-    @State private var drift = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { geometry in
             let size = geometry.size
             let span = max(size.width, size.height) * SketchMetrics.lobeSpan
-            let travel = span * SketchMetrics.lobeDrift
             ZStack {
                 lobe(SketchInk.fieldAqua, span: span, in: size,
-                     at: UnitPoint(x: 0.10, y: 0.08),
-                     travel: CGSize(width: travel, height: -travel * 0.7))
-                    .animation(reduceMotion ? nil : SketchMotion.lobeA, value: drift)
+                     at: UnitPoint(x: 0.10, y: 0.08))
                 lobe(SketchInk.fieldViolet, span: span * 0.92, in: size,
-                     at: UnitPoint(x: 0.88, y: 0.18),
-                     travel: CGSize(width: -travel * 1.2, height: travel * 0.8))
-                    .animation(reduceMotion ? nil : SketchMotion.lobeB, value: drift)
+                     at: UnitPoint(x: 0.88, y: 0.18))
                 lobe(SketchInk.fieldRose, span: span * 1.08, in: size,
-                     at: UnitPoint(x: 0.14, y: 0.92),
-                     travel: CGSize(width: travel * 0.6, height: travel))
-                    .animation(reduceMotion ? nil : SketchMotion.lobeC, value: drift)
+                     at: UnitPoint(x: 0.14, y: 0.92))
             }
             .frame(width: size.width, height: size.height)
             .clipped()
         }
-        .drawingGroup()
         .allowsHitTesting(false)
         .accessibilityHidden(true)
-        .onAppear { drift = true }
     }
 
     /// One lobe, anchored in the surface's own coordinates.
@@ -210,7 +180,7 @@ struct SketchField: View {
     /// depended on how big it was and every field piled up in the top-left
     /// corner of whatever it was drawn on.
     private func lobe(_ hue: Color, span: CGFloat, in size: CGSize,
-                      at anchor: UnitPoint, travel: CGSize) -> some View {
+                      at anchor: UnitPoint) -> some View {
         // The seed slides the whole arrangement along x, so two surfaces open at
         // once — the popover over the window — are not the same picture.
         let slide = CGFloat(seed.truncatingRemainder(dividingBy: 1) - 0.5) * 0.24
@@ -218,9 +188,7 @@ struct SketchField: View {
             .fill(RadialGradient(colors: [hue, hue.opacity(0)],
                                  center: .center, startRadius: 0, endRadius: span / 2))
             .frame(width: span, height: span)
-            .blur(radius: SketchMetrics.lobeBlur)
             .position(x: (anchor.x + slide) * size.width, y: anchor.y * size.height)
-            .offset(drift ? travel : .zero)
     }
 }
 
@@ -316,9 +284,7 @@ extension View {
                 // system's popover material at full strength it is a stain on
                 // someone else's surface.
                 SketchField(seed: seed)
-                    .opacity(ground ? 1 : SketchMetrics.fieldOverMaterial)
-                GraphRuling()
-                Grain(seed: grainSeed, opacity: 0.03)
+                    .opacity(ground ? 0.16 : 0.08)
             }
             .ignoresSafeArea()
         }
@@ -411,10 +377,13 @@ struct PlateSurface: ViewModifier {
         return content
             .padding(padding)
             .background { shape.fill(SketchInk.plate) }
-            .background {
-                PlateSecondPass(corner: corner)
-                    .stroke(SketchInk.secondPass, lineWidth: SketchMetrics.hairline)
-                    .offset(x: SketchMetrics.plateOffset, y: SketchMetrics.plateOffset)
+            .overlay {
+                RoundedRectangle(cornerRadius: max(0, corner - SketchMetrics.plateOffset),
+                                 style: .continuous)
+                    .strokeBorder(SketchInk.secondPass.opacity(0.55), lineWidth: SketchMetrics.hairline)
+                    .padding(SketchMetrics.plateOffset)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
             .overlay {
                 PlateBorder(corner: corner, gap: label == nil ? 0 : labelWidth)

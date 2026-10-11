@@ -1,5 +1,5 @@
 #!/bin/bash
-# Notarizes build/FleetConsole.app and staples the ticket to it.
+# Notarizes the staged FleetConsole.app and staples the ticket to that artifact.
 #
 # Signing proves who built the app. Notarization is Apple confirming they have
 # scanned that exact build — without it Gatekeeper reports "Unnotarized Developer
@@ -12,9 +12,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP="$ROOT/build/FleetConsole.app"
+OUTPUT_DIR="${FLEETCONSOLE_OUTPUT_DIR:-$ROOT/build}"
+case "$OUTPUT_DIR" in
+    /*) ;;
+    *) OUTPUT_DIR="$ROOT/$OUTPUT_DIR" ;;
+esac
+APP="$OUTPUT_DIR/FleetConsole.app"
 PROFILE="${FLEETCONSOLE_NOTARY_PROFILE:-FleetConsole}"
-ARCHIVE="$ROOT/build/FleetConsole-notarize.zip"
+ARCHIVE="$OUTPUT_DIR/FleetConsole-notarize.zip"
 
 [ -d "$APP" ] || { echo "✗ $APP does not exist — run Scripts/build-app.sh release first"; exit 1; }
 
@@ -62,7 +67,7 @@ else
 
   Keychain profile (one interactive setup):
       xcrun notarytool store-credentials "$PROFILE" \\
-          --apple-id "<your Apple ID>" --team-id 47R2YVAFA2 \\
+          --apple-id "<your Apple ID>" --team-id "<your Team ID>" \\
           --password "<app-specific password from appleid.apple.com>"
 EOF
     exit 1
@@ -75,7 +80,7 @@ rm -f "$ARCHIVE"
 /usr/bin/ditto -c -k --keepParent "$APP" "$ARCHIVE"
 
 echo "▸ submitting to Apple (this usually takes a few minutes)…"
-xcrun notarytool submit "$ARCHIVE" --keychain-profile "$PROFILE" --wait
+xcrun notarytool submit "$ARCHIVE" "${AUTH[@]}" --wait
 
 echo "▸ stapling the ticket…"
 xcrun stapler staple "$APP"

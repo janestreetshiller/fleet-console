@@ -139,6 +139,8 @@ struct HeatmapView: View {
     let items: [HeatmapItem]
     /// The honesty line shown when nothing is hovered.
     var summary: String?
+    /// Live process samples should not animate dozens of tile frames each tick.
+    var animatesLayout = true
 
     @State private var hovered: HeatmapItem?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -171,7 +173,7 @@ struct HeatmapView: View {
         // jelly under the pointer, which is the most visible thing in the
         // window and the reason resizing felt chewy. The container is already
         // tracking the drag directly; the tiles inside it have to as well.
-        (reduceMotion || isLiveResizing) ? nil : ConsoleAnimation.mapLayout
+        (!animatesLayout || reduceMotion || isLiveResizing) ? nil : ConsoleAnimation.mapLayout
     }
 
     var body: some View {

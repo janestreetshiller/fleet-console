@@ -1,9 +1,10 @@
 import Foundation
 import FleetCore
 import IOKit
+import IOKit.ps
 import Darwin
 
-/// Host resource sampling — CPU, GPU, memory and the internal SSD.
+/// Host resource sampling — CPU, GPU, memory, SSD, network and battery.
 ///
 /// Like `NetworkMonitor`, this runs in the app rather than the daemon, and for the
 /// same reason: it is read-only, needs no privilege, and nothing here is worth
@@ -179,6 +180,8 @@ private final class HostSampler: @unchecked Sendable {
     private var previousCPUTicks: [[UInt32]] = []
     private var previousDisk: (read: Int64, write: Int64, readOps: Int64,
                                writeOps: Int64, at: Date)?
+    private var previousNetwork: (counters: [String: NetworkInterfaceCounters],
+                                  at: ContinuousClock.Instant)?
 
     let topology: CPUTopology
 
@@ -468,6 +471,43 @@ private final class HostSampler: @unchecked Sendable {
         return best
     }
 
+    // MARK: Network
+
+    func network() -> NetworkTrafficSample {
+        guard let counters = NativeNetworkCounters.read() else {
+            // A failed read breaks the interval; the next success is a baseline.
+            previousNetwork = nil
+            return NetworkTrafficSample()
+        }
+        let now = ContinuousClock.now
+        let duration = previousNetwork.map { $0.at.duration(to: now).components }
+        let elapsed = duration.map {
+            Double($0.seconds) + Double($0.attoseconds) / 1e18
+        } ?? 0
+        let sample = NetworkTrafficRates.sample(current: counters,
+                                                previous: previousNetwork?.counters,
+                                                elapsed: elapsed)
+        // Replace even after reset, hot-plug or a gap so the next tick can recover.
+        previousNetwork = (counters, now)
+        return sample
+    }
+
+    // MARK: Power
+
+    func power() -> PowerSample {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef]
+        else { return PowerSample() }
+
+        var descriptions: [[String: Any]] = []
+        for source in sources {
+            guard let description = IOPSGetPowerSourceDescription(info, source)?
+                    .takeUnretainedValue() as? [String: Any] else { return PowerSample() }
+            descriptions.append(description)
+        }
+        return PowerSourceDecoder.sample(descriptions: descriptions)
+    }
+
     // MARK: Topology
 
     private static func readTopology() -> CPUTopology {
@@ -523,6 +563,8 @@ final class SystemMonitor {
     private(set) var gpu = GPUSample()
     private(set) var memory = MemorySample()
     private(set) var storage = StorageSample()
+    private(set) var network = NetworkTrafficSample()
+    private(set) var power = PowerSample()
     private(set) var thermal = ThermalSample()
     private(set) var topology = CPUTopology()
     /// Fan and die temperatures from the SMC. `available == false` is a
@@ -538,6 +580,8 @@ final class SystemMonitor {
     private(set) var memoryHistory: [Double] = []
     private(set) var diskReadHistory: [Double] = []
     private(set) var diskWriteHistory: [Double] = []
+    private(set) var networkDownloadHistory: [Double] = []
+    private(set) var networkUploadHistory: [Double] = []
 
     static let historyLength = 60
     static let interval: TimeInterval = 2
@@ -588,10 +632,12 @@ final class SystemMonitor {
             let gpu = sampler.gpu()
             let memory = sampler.memory()
             let storage = sampler.storage()
+            let network = sampler.network()
+            let power = sampler.power()
             let sensors = readSensors ? smc.sample() : SensorSample()
             Task { @MainActor in
                 self?.publish(cpu: cpu, gpu: gpu, memory: memory, storage: storage,
-                              sensors: sensors)
+                              network: network, power: power, sensors: sensors)
             }
         }
     }
@@ -599,11 +645,14 @@ final class SystemMonitor {
     /// Assigns only what changed, so one moving number does not invalidate every
     /// row that reads this object.
     private func publish(cpu: CPUSample, gpu: GPUSample, memory: MemorySample,
-                         storage: StorageSample, sensors: SensorSample) {
+                         storage: StorageSample, network: NetworkTrafficSample,
+                         power: PowerSample, sensors: SensorSample) {
         if self.cpu != cpu { self.cpu = cpu }
         if self.gpu != gpu { self.gpu = gpu }
         if self.memory != memory { self.memory = memory }
         if self.storage != storage { self.storage = storage }
+        if self.network != network { self.network = network }
+        if self.power != power { self.power = power }
         if self.sensors != sensors { self.sensors = sensors }
         let thermal = ThermalSample(state: ProcessInfo.processInfo.thermalState)
         if self.thermal != thermal { self.thermal = thermal }
@@ -614,6 +663,10 @@ final class SystemMonitor {
         if let read = storage.readBytesPerSec, let write = storage.writeBytesPerSec {
             append(read, to: &diskReadHistory)
             append(write, to: &diskWriteHistory)
+        }
+        if let download = network.downloadBytesPerSec, let upload = network.uploadBytesPerSec {
+            append(download, to: &networkDownloadHistory)
+            append(upload, to: &networkUploadHistory)
         }
         sampling = false
     }

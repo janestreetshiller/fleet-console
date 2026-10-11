@@ -33,6 +33,7 @@ private struct ConsoleChrome<Bar: ToolbarContent>: ViewModifier {
         content
             .navigationSplitViewStyle(.balanced)
             .toolbar { toolbar }
+            .searchable(text: $console.search, placement: .toolbar, prompt: prompt)
     }
 }
 
@@ -122,6 +123,9 @@ struct ConsoleRootView: View {
         }
         .onChange(of: model.processes.capturedAt) {
             Task { @MainActor in console.reconcileSelection(model: model) }
+        }
+        .onChange(of: console.inspectorTarget()) { _, target in
+            if target != .none { console.inspectorRevealed = true }
         }
         .onChange(of: console.selectedDeviceID) {
             // Remote nodes have one module — their own detail. Switching back
@@ -404,7 +408,8 @@ struct ConsoleRootView: View {
             guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }) else {
                 return
             }
-            if let field = findSearchField(in: window.contentView) {
+            // Native toolbar controls live beside the content view in its frame.
+            if let field = findSearchField(in: window.contentView?.superview) {
                 window.makeFirstResponder(field)
             }
         }

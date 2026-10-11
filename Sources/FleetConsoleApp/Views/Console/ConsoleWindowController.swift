@@ -85,10 +85,14 @@ final class ConsoleWindowController {
             })
     }
 
-    func show() {
+    func show(activate: Bool = true) {
         if let window {
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+            if activate {
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                window.orderFront(nil)
+            }
             return
         }
 
@@ -104,7 +108,9 @@ final class ConsoleWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unifiedCompact
-        window.isMovableByWindowBackground = true
+        // The titlebar remains draggable. Treating the entire live dashboard as
+        // a drag region makes AppKit walk every chart/gauge path on each update.
+        window.isMovableByWindowBackground = false
         // Resizes on both axes, with a floor on each and no ceiling.
         //
         // It used to be aspect-locked (`contentAspectRatio`) and capped at the
@@ -162,13 +168,18 @@ final class ConsoleWindowController {
         self.liveResizeObserver = observer
 
         self.window = window
-        NSApp.activate(ignoringOtherApps: true)
-        window.makeKeyAndOrderFront(nil)
+        if activate {
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+            window.orderFront(nil)
+        }
         // SwiftUI's split view can fit the window to its content's minimum on
         // first show; assert the intended default size afterwards so the
         // console never opens cramped.
         window.setContentSize(defaultContentSize)
-        window.center()
+        if activate { window.center() }
     }
 
     /// The controller status pill, pinned at the trailing edge of the titlebar.

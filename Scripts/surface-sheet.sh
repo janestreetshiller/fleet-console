@@ -26,15 +26,15 @@ cd "$ROOT"
 # successful run that happened to render nothing. The renderer only compiles under
 # -DFLEET_SURFACE_RENDERER, so it is exactly the code a normal build never checks,
 # and "✓ 0 surfaces" is not a thing this script should ever be able to print.
-if ! swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER 2>&1 \
-    | grep -vE '^\[|warning: missing creator'; then
-    :   # grep exits 1 when it filters every line, which is the quiet-success case
-fi
-if ! swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER >/dev/null 2>&1; then
+if ! swift build -c debug --disable-index-store -Xswiftc -DFLEET_SURFACE_RENDERER; then
     echo "✗ the surface renderer does not compile — see the errors above"
     exit 1
 fi
-BIN="$(swift build -c debug -Xswiftc -DFLEET_SURFACE_RENDERER --show-bin-path)"
+BIN="$(swift build -c debug --disable-index-store -Xswiftc -DFLEET_SURFACE_RENDERER --show-bin-path)"
+if [ ! -x "$BIN/FleetConsoleApp" ]; then
+    echo "✗ renderer executable missing → $BIN/FleetConsoleApp" >&2
+    exit 1
+fi
 
 echo "▸ rendering…"
 # The renderer sets its activation policy to .prohibited, so this never steals
