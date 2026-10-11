@@ -228,7 +228,7 @@ struct SectionHeader<Trailing: View>: View {
             if let subtitle {
                 Text(subtitle)
                     .font(FleetFont.subtitle)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             Spacer(minLength: 4)
             trailing
@@ -263,6 +263,7 @@ struct IconButton: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .help(help)
+        .accessibilityLabel(help)
     }
 }
 
@@ -350,7 +351,7 @@ struct Sparkline: View {
         HStack(spacing: 5) {
             Text(label)
                 .font(FleetFont.micro)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
             GeometryReader { geometry in
                 let maximum = max(values.max() ?? 1, 0.001)
                 let step = values.count > 1 ? geometry.size.width / CGFloat(values.count - 1) : 0
@@ -449,7 +450,7 @@ struct CoreGrid: View {
             }
             Text(label)
                 .font(FleetFont.micro)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
     }
 

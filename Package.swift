@@ -36,5 +36,9 @@ let package = Package(
             name: "FleetCoreTests",
             dependencies: ["FleetCore"]
         ),
+        .testTarget(
+            name: "FleetConsoleAppTests",
+            dependencies: ["FleetConsoleApp"]
+        ),
     ]
 )

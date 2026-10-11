@@ -9,7 +9,11 @@ import FleetCore
 // implementation; a row supplies content, not chrome.
 
 /// Icon + title + subtitle + optional trailing text and accessory.
-struct FleetRowLabel<Accessory: View>: View {
+protocol FleetAccessibleLabel: View {
+    var accessibilityText: String { get }
+}
+
+struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
     let icon: String
     var tone: StatusTone = .neutral
     var badge: StatusTone?
@@ -36,18 +40,18 @@ struct FleetRowLabel<Accessory: View>: View {
                     Text(subtitle)
                         .font(FleetFont.subtitle)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                         .truncationMode(.tail)
                 }
             } else {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(titleFont)
-                        .lineLimit(1)
+                        .lineLimit(2)
                     if let subtitle {
                         Text(subtitle)
                             .font(FleetFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                             .lineLimit(1)
                             // Tail, not middle. A row subtitle is composed prose
                             // read left to right — "pid 54610 · first seen 13h
@@ -68,8 +72,8 @@ struct FleetRowLabel<Accessory: View>: View {
             accessory
             if let trailingText, !trailingText.isEmpty {
                 Text(trailingText)
-                    .font(trailingMono ? FleetFont.mono(9.5) : FleetFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .font(trailingMono ? FleetFont.mono(12) : FleetFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     // `fixedSize` for the same reason `Tag` has it, and it was
                     // missing here while `Tag` was guarded by its own audit
@@ -92,7 +96,7 @@ struct FleetRowLabel<Accessory: View>: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    private var accessibilityText: String {
+    var accessibilityText: String {
         [title, subtitle, trailingText].compactMap { $0 }.joined(separator: ", ")
     }
 }
@@ -110,7 +114,7 @@ extension FleetRowLabel where Accessory == EmptyView {
 
 /// A row that expands in place. Owns every piece of interaction chrome so that
 /// individual rows cannot drift apart from one another again.
-struct DisclosureRow<Label: View, Detail: View>: View {
+struct DisclosureRow<Label: FleetAccessibleLabel, Detail: View>: View {
     let id: String
     @Binding var expanded: String?
     var detailInset: CGFloat = FleetMetrics.detailInset
@@ -124,16 +128,12 @@ struct DisclosureRow<Label: View, Detail: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Button {
-                withAnimation(FleetAnimation.disclosure) {
-                    expanded = isExpanded ? nil : id
-                }
-            } label: {
+            Button(action: toggle) {
                 HStack(spacing: FleetMetrics.rowGap) {
                     label
                     Image(systemName: "chevron.right")
                         .font(FleetFont.chevron)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
                 .padding(.horizontal, FleetMetrics.rowInset)
@@ -145,7 +145,11 @@ struct DisclosureRow<Label: View, Detail: View>: View {
             .rowBackground(hovering: hovering, selected: isExpanded)
             .padding(.horizontal, FleetMetrics.rowHighlightMargin)
             .modifier(OptionalHelp(text: help))
+            .accessibilityElement(children: .ignore)
             .accessibilityAddTraits(.isButton)
+            .accessibilityLabel([label.accessibilityText, help].compactMap { $0 }.joined(separator: ". "))
+            .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+            .accessibilityAction { toggle() }
             .accessibilityHint(isExpanded ? "Collapse for less detail" : "Expand for detail")
 
             if isExpanded {
@@ -154,6 +158,12 @@ struct DisclosureRow<Label: View, Detail: View>: View {
                     .padding(.trailing, FleetMetrics.gutter)
                     .padding(.vertical, 6)
             }
+        }
+    }
+
+    private func toggle() {
+        withAnimation(FleetAnimation.disclosure) {
+            expanded = isExpanded ? nil : id
         }
     }
 }

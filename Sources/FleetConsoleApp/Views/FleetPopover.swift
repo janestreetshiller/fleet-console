@@ -65,7 +65,8 @@ struct FleetPopover: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .controlSize(.small)
+                .controlSize(.regular)
+                .accessibilityLabel("Popover section")
                 .frame(maxWidth: .infinity)
 
                 // A constant-width slot, always two buttons wide.
@@ -103,18 +104,23 @@ struct FleetPopover: View {
             .padding(.vertical, 8)
             Divider()
 
-            HStack(spacing: 13) {
-                Text("CPU \(model.system.cpu.sampled ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")")
-                Spacer(minLength: 0)
-                Text("RAM \(ConsoleFmt.utilPercent(model.system.memory.usedShare))")
-                Spacer(minLength: 0)
-                Text("↓ \(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec))")
+            HStack(alignment: .top, spacing: 16) {
+                metric("CPU", value: model.system.cpu.sampled
+                       ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")
+                metric("Memory", value: model.system.memory.totalBytes > 0
+                       ? ConsoleFmt.bytes(model.system.memory.usedBytes) : "—")
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Network").font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
+                    Text("↓ \(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec))")
+                    Text("↑ \(ConsoleFmt.byteRate(model.system.network.uploadBytesPerSec))")
+                }
+                .font(FleetFont.body)
+                .monospacedDigit()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
             }
-            .font(FleetFont.caption)
-            .monospacedDigit()
             .padding(.horizontal, FleetMetrics.gutter)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
+            .padding(.vertical, 14)
             Divider()
 
             switch tab {
@@ -168,6 +174,15 @@ struct FleetPopover: View {
     private var enabledTabs: [Tab] {
         let enabled = Tab.allCases.filter { $0.isEnabled(model.settings) }
         return enabled.isEmpty ? [.services] : enabled
+    }
+
+    private func metric(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(title).font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
+            Text(value).font(FleetFont.stat).monospacedDigit()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     /// Moves to a section the dropdown asked for and clears the request, so a

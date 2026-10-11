@@ -77,7 +77,7 @@ struct DeviceDetailView: View {
             if let checked = record.evidence.checkedAt {
                 Text("checked \(Fmt.relative(checked))")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
         .elevatedCard()
@@ -124,7 +124,7 @@ struct DeviceDetailView: View {
                     .foregroundStyle(StatusTone.bad.ink)
                 Text("Probes use BatchMode SSH with your existing ssh_config — no passwords are attempted or stored.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
         .elevatedCard()
@@ -141,7 +141,7 @@ struct DeviceDetailView: View {
                 if let checked = record.remoteCheckedAt {
                     Text("read-only · \(Fmt.relative(checked))")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
 
@@ -205,7 +205,7 @@ private struct EvidenceLine: View {
                 Text(detail)
                     .font(ConsoleFont.mono(.caption))
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             Text(state == nil ? "not measured" : (state! ? "ok" : "failed"))
                 .font(ConsoleFont.caption)
@@ -224,7 +224,7 @@ private struct FactCell: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label.uppercased())
                 .font(ConsoleFont.badge.weight(.semibold))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .kerning(0.5)
             Text(value)
                 .font(ConsoleFont.mono(.caption))

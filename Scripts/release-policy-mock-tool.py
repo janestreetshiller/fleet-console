@@ -73,6 +73,11 @@ elif name == "codesign":
               else "TEST DATA ONLY: Developer ID Application", file=sys.stderr)
         print("flags=0x10000(runtime)" if signature == "developer-runtime"
               else "flags=0x0(none)", file=sys.stderr)
+        if os.environ.get("FLEET_TEST_VERBOSE_SIGNATURE"):
+            for _ in range(256):
+                print("TEST DATA: extra signature diagnostic " * 100, file=sys.stderr, flush=True)
+        if os.environ.get("FLEET_TEST_SIGNATURE_EXIT"):
+            raise SystemExit(42)
         raise SystemExit(0)
     operation = "deep" if "--deep" in args else "verify" if "--verify" in args else "sign"
     failure = os.environ.get("FLEET_TEST_CODESIGN_FAILURE")

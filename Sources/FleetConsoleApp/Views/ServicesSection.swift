@@ -9,16 +9,16 @@ struct ServicesSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "Services",
-                          subtitle: "\(model.activeServices.count) active · \(model.unmanaged.count) unmanaged") {
+            SectionHeader(title: "Managed Services",
+                          subtitle: "\(model.activeServices.count) active") {
                 IconButton(symbol: "arrow.triangle.2.circlepath", help: "Run a reconciliation sweep now") {
                     model.reconcileNow()
                 }
             }
 
-            if model.activeServices.isEmpty && model.unmanaged.isEmpty {
+            if model.activeServices.isEmpty {
                 Text(model.connected
-                     ? "Nothing running. Agents request processes with `fleetctl launch`."
+                     ? "No managed services. Launch work through fleetctl to track its owner, logs and lease."
                      : "Controller unavailable — service state is unknown.")
                     .font(FleetFont.subtitle)
                     .foregroundStyle(.secondary)
@@ -30,8 +30,12 @@ struct ServicesSection: View {
                 ServiceRowView(row: row, model: model, expanded: $expanded, pendingAction: $pendingAction)
             }
 
-            ForEach(model.unmanaged) { process in
-                UnmanagedRowView(process: process, model: model, expanded: $expanded)
+            if !model.unmanaged.isEmpty {
+                SectionHeader(title: "Other Background Processes",
+                              subtitle: "\(model.unmanaged.count) · not managed by FleetConsole")
+                ForEach(model.unmanaged) { process in
+                    UnmanagedRowView(process: process, model: model, expanded: $expanded)
+                }
             }
         }
     }
@@ -135,7 +139,7 @@ struct ServiceDetail: View {
                 Divider().padding(.vertical, 2)
                 Text("Recent activity")
                     .font(FleetFont.micro)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                 ForEach(events.prefix(5)) { event in
                     HStack(alignment: .top, spacing: 5) {
                         Circle()
@@ -146,7 +150,7 @@ struct ServiceDetail: View {
                             .padding(.top, 4)
                         Text(Fmt.relative(event.ts))
                             .font(FleetFont.micro)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                             .frame(width: 54, alignment: .leading)
                         Text(event.kind.label)
                             .font(FleetFont.micro)
@@ -194,7 +198,7 @@ struct ServiceDetail: View {
             if let refusal = service.signalRefusal {
                 Text(refusal)
                     .font(FleetFont.micro)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -235,11 +239,11 @@ struct UnmanagedRowView: View {
     var body: some View {
         DisclosureRow(id: process.id, expanded: $expanded, help: process.reason.label) {
             FleetRowLabel(icon: Iconography.unmanaged(process),
-                          tone: .warn,
+                          tone: process.formerServiceID != nil ? .warn : .neutral,
                           badge: process.formerServiceID != nil ? .bad : nil,
                           title: process.command,
                           subtitle: "pid \(process.pid) · first seen \(Fmt.relative(process.firstSeen))") {
-                Tag(text: process.formerServiceID != nil ? "Leaked" : "Unmanaged", tone: .warn)
+                if process.formerServiceID != nil { Tag(text: "Leaked", tone: .warn) }
                 // A port number is not wrappable text. Unconstrained it broke as
                 // ":876" / "5" beside the tag it shares an accessory slot with.
                 Text(Fmt.ports(process.ports))

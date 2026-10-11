@@ -132,7 +132,7 @@ struct ServiceInspectorView: View {
                  : "The lease is what makes cleanup independent of the agent: unrenewed, "
                    + "the controller reaps the process group whether or not anyone is watching.")
                 .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
     }
 
@@ -153,7 +153,7 @@ struct ServiceInspectorView: View {
                         Spacer()
                         Text(verdict.summary)
                             .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
@@ -162,7 +162,7 @@ struct ServiceInspectorView: View {
                 Text("Hard constraints only — architecture, tools, memory headroom, link quality. "
                      + "A placement score you cannot audit is not a score worth showing.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
     }
@@ -181,7 +181,7 @@ struct ServiceInspectorView: View {
             } else {
                 Text(logNote ?? "Reading…")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             HStack(spacing: 12) {
                 Button("Reveal Logs") { model.revealInFinder(record.stderrPath) }
@@ -199,14 +199,14 @@ struct ServiceInspectorView: View {
             if events.isEmpty {
                 Text("No events recorded for this service yet.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             } else {
                 ForEach(events.prefix(10)) { event in
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(ConsoleFmt.timestamp(event.ts))
                             .font(ConsoleFont.mono(.caption2))
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                             .frame(width: 62, alignment: .leading)
                         VStack(alignment: .leading, spacing: 1) {
                             Text(event.kind.label)
@@ -254,7 +254,7 @@ struct UnmanagedInspectorView: View {
                              + "outside the controller gets visibility here — with no owner, no "
                              + "purpose, no logs and no automatic cleanup.")
                             .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
 
                     InspectorCard(title: "Facts") {
@@ -292,7 +292,7 @@ struct UnmanagedInspectorView: View {
                              + "command to config.json and records an event — an explicit, "
                              + "reviewable act, not a hidden dismissal.")
                             .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                 }
                 .padding(14)

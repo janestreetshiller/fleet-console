@@ -28,7 +28,7 @@ sediment.
 ### Type ramp (`FleetFont`)
 
 Sizes follow AppKit's own menu-bar extras — Wi-Fi, Control Center, Now Playing —
-at 13pt primary and 11pt secondary. The first draft ran 9–12.5pt, which is
+at 13pt primary and 12pt secondary. The first draft ran 9–12.5pt, which is
 Xcode-inspector density rather than menu density: technically legible, and
 immediately readable as *not a Mac app*.
 
@@ -38,37 +38,21 @@ immediately readable as *not a Mac app*.
 |---|---|---|
 | `marker` | 8 | a glyph that annotates a row without being part of its text |
 | `plateLabel` | 8 mono | the plotted legend struck into a plate's top border |
-| `nano` | 10 | stat-tile captions |
-| `micro` | 10 medium | tags, badges, evidence chips |
+| `nano` | 11 | stat-tile captions |
+| `micro` | 11 medium | tags, badges, evidence chips |
 | `chevron` | 10 semibold | the disclosure chevron, used only by `DisclosureRow` |
-| `subtitle` | 11 | secondary line under a row title |
-| `caption` | 11 | timestamps, counts, hints |
-| `sectionLabel` | 11 semibold | section headers — sentence case, secondary |
-| `rowTitleCompact` | 12 | primary text of a fixed-height row |
-| `body` | 12 | body copy, table cells |
+| `subtitle` | 12 | secondary line under a row title |
+| `caption` | 12 | timestamps, counts, hints |
+| `sectionLabel` | 12 semibold | section headers — sentence case, secondary |
+| `rowTitleCompact` | 13 | primary text of a fixed-height row |
+| `body` | 13 | body copy, table cells |
 | `rowTitle` | 13 | primary text of a standard row — AppKit's menu item size |
-| `title` | 13 semibold | popover title |
-| `stat` | 22 medium rounded | stat-tile numerals |
+| `title` | 14 semibold | popover title |
+| `stat` | 22 semibold | stat-tile numerals |
 | `mono(_:)` | — | ports, PIDs, paths, addresses |
 
 Anything numeric that changes in place uses `monospacedDigit()` so it does not
 jitter — including the menu-bar count.
-
-**This table was wrong in every row for as long as it existed.** It described
-the 9–12.5pt draft the ramp was rewritten away from, including the 9/9.5 and
-12/12.5 pairs the paragraph above it cites as the reason the toolbox exists — so
-the document's own worked example of sediment was the document. Rule 9 says a
-surface that ships is a surface that is written down, and the audit had grown
-checks for every *enumerated* surface: modules, tools, popover sections,
-menu-bar items. Nothing read the tokens, which is precisely why they were the
-part that rotted. The audit reads both tables now, in both directions.
-
-Two sizes carry more than one name, and the collisions are deliberate rather
-than drift: `subtitle`/`caption` are both 11 and `micro`/`nano` are both 10,
-differing by weight and by the job the name states. That is a weaker
-guarantee than the rest of the ramp gives, and it is the pair the next audit
-should look at — but merging them is a decision about what the names *mean*, not
-a correction, so they are written down as they are rather than quietly collapsed.
 
 ### Metrics (`FleetMetrics`)
 
@@ -86,7 +70,7 @@ a correction, so they are written down as they are rather than quietly collapsed
 | `iconCompact` | 26 | icon in a fixed-height row |
 | `iconRow` | 28 | icon in a standard row |
 | `iconRowLarge` | 30 | icon in a standard row that leads a section |
-| `iconButtonSize` | 18 | one `IconButton`'s hit target |
+| `iconButtonSize` | 28 | one `IconButton`'s hit target |
 | `actionSlot` | — | `iconButtonSize` × 2 + 2 — a trailing cluster of two icon buttons, reserved at a constant width |
 | `meterWidth` | 54 | utilisation meter — 5% and 15% distinguishable, still fits a row |
 | `meterHeight` | 5 | the meter's bar |
@@ -97,7 +81,7 @@ a correction, so they are written down as they are rather than quietly collapsed
 | `tileCorner` | 8 | tiles, which sit above highlights |
 | `tagCorner` | 3 | tags and micro capsules |
 | `barCorner` | 2 | one core column, and any bar that narrow |
-| `popoverWidth` | 380 | the popover, at every section |
+| `popoverWidth` | 480 | the popover, at every section |
 | `sectionMaxHeight` | 540 | the scroll clamp on a section's body |
 
 `EntityIcon`'s internals are ratios of its own `size`, not fixed points, so a
@@ -140,70 +124,22 @@ shrank 20pt when you moved away.
 
 ---
 
-## The substrate — `Design/Sketchfield.swift`
+## Native surfaces — `Design/Sketchfield.swift`
 
-The window is a sketchbook page with a shader running under it. Three things
-carry that, and nothing else in the app is allowed to.
+Window and card backgrounds use AppKit’s adaptive `windowBackgroundColor` and
+`controlBackgroundColor`. Popovers retain their system material and arrow.
+Cards have one separator border. Decorative layers neither intercept input nor
+appear in the accessibility tree. There is no animated field, grain, graph
+ruling, double border or tiny numbered legend.
 
-**The field.** Three blurred spectral lobes — aqua, violet, rose — drifting
-under everything on 34, 47 and 41-second cycles. It is the one place in the app
-with saturated colour that is not a status, and it is allowed to be there
-precisely because it means nothing: no lobe encodes a value, so no lobe can be
-misread as one. Reduce Motion parks it. A `seed` slides the arrangement, so the
-popover open over the window is not the same picture as the window.
+Use system text styles for the window and the named popover ramp below.
+Secondary text uses `secondaryLabelColor`; status text uses `StatusTone.ink`.
+Color carries a reading or a status alongside a label, never the only meaning.
+The user’s accent color marks selection and chart traces.
 
-**The ruling.** Graph paper at 13pt with a heavy line every fifth — the rungs
-`ConsoleMetrics` already lays out on. The grid is not decoration; it is the
-ladder made visible.
-
-**The plate.** Every card, panel and popover: a translucent fill, one hairline
-border, and a second pass 3pt down and right. The second pass replaced the drop
-shadow — a blur behind a translucent plate over a blurred field is three soft
-things stacked, and the plate stops having an edge at all. A plate that is one
-of several instruments on a surface also carries a **plate label**, a plotted
-mono legend struck into a break in its own top border ("01 · CPU"). The break is
-measured from the label, not assumed, so the border never runs under a letter.
-
-| Token | Value | What it is |
-|---|---|---|
-| `SketchMetrics.plateOffset` | 3 | how far down and right the second pass sits |
-| `SketchMetrics.ruleFine` | 13 | graph-paper pitch |
-| `SketchMetrics.ruleHeavy` | `ruleFine × 5` | every fifth line, drawn heavier |
-| `SketchMetrics.plateLabelInset` | 13 | where the label breaks the top border |
-| `SketchMetrics.plateLabelPadding` | 5 | air either side of it inside the break |
-| `SketchMetrics.plateLabelRise` | 6 | how far it rides above the border |
-| `SketchMetrics.lobeBlur` | 89 | a field lobe's blur — large enough that no lobe has an edge |
-| `SketchMetrics.lobeSpan` | 0.55 | a lobe's diameter, as a share of the surface's long side |
-| `SketchMetrics.lobeDrift` | 0.13 | how far it travels, as a share of its own diameter |
-| `SketchMetrics.fieldOverMaterial` | 0.55 | the field's strength on a surface it does not own |
-
-`SketchInk` carries the four decisions the pass actually makes — `ground`,
-`plate`, the three `field*` hues, and `accent` / `accentAlt` / `accentWarm`.
-Each is a resolved light/dark pair rather than an opacity on a system colour,
-because "the window background is `windowBackgroundColor`" is the thing this
-treatment exists to stop being. The accents are **not** statuses and must never
-stand in for one: they mark the things the eye should find first that carry no
-verdict — the mark, a live trace, a selected segment, a performance core.
-
-**What it replaced.** Stampwork: paper grain, a vendored typewriter face, and a
-mark struck like a rubber stamp, applied on top of a System-Settings window. The
-two were arguing — a stamped header over a `controlBackgroundColor` card is a
-texture on a form, not a page. The grain survives as `Grain`, which was the one
-part of it making a surface feel like a surface. The bundled face does not: SF
-stays the reading face at every size the ramps already name, and the character
-comes from the drawing. One type token was added for the whole pass —
-`plateLabel`, in both ramps.
-
-**A surface applies the substrate; a plate never does.** `.sketchSubstrate()` is
-for a window or a popover. A card is a plate floating on one and has no page of
-its own. The popover passes `ground: false`, because `NSPopover` draws its own
-frame and arrow in the system's material and content that paints an opaque page
-inside it gives you a dark rectangle joined to a light arrow.
-
-**Any surface that paints its own background has to stop.** Lists, tables and
-scroll views all do by default, and one column that keeps AppKit's own material
-is one column that is not on the same sheet of paper as the other two. Every
-such surface in the app carries `.scrollContentBackground(.hidden)`.
+Navigation lives in a native sidebar with named destinations. The toolbar has
+one search field, refresh, inspector visibility and a Tools menu. Search clears
+when changing destinations; returning to the same destination preserves it.
 
 ---
 
@@ -431,7 +367,7 @@ digits it exists to show.
 | Primitive | What it is |
 |---|---|
 | `Hairline` / `.hairline()` | `Color.primary.opacity(0.08)` surface edges. Replaces `Divider()` wherever a *boundary*, not a separator, is drawn |
-| `.elevatedCard(_:)` | The one elevated surface: a plate — translucent fill + hairline border + second pass, with an optional plotted plate label. See **The substrate** |
+| `.elevatedCard(_:)` | An adaptive native card fill with one separator border. See **Native surfaces** |
 | `.hoverHighlight()` | 6% fill on hover; rows never scale or change weight |
 | `StatusPip(tone:pulsing:)` | The live health dot; reachable nodes breathe on the probe cadence, Reduced Motion stills it |
 | `ConsoleBadge` | Mono-digit capsule for counts and latencies |
@@ -1058,7 +994,7 @@ pair that turned out to be one subject:
 
 | Item | Glyph | Count shown | Tint |
 |---|---|---|---|
-| **Fleet** | `FleetWordmark` — the geometric F, a template image | awaiting reply → attention → running services | red critical / orange warning or waiting |
+| **Fleet** | `FleetWordmark` — the geometric F, a template image | CPU and RAM, plus an attention count or Offline | red critical / orange warning or waiting |
 
 Servers and Agents went first: an agent *owns* services, so they were one subject
 split across two icons. Connections followed. They are now the three sections of

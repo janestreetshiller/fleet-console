@@ -296,13 +296,13 @@ struct HeatmapView: View {
                     .foregroundStyle(.secondary)
                 Text(hovered.detail)
                     .font(ConsoleFont.mono(.caption2))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             } else if let summary {
                 Text(summary)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(2)
             }
             Spacer()

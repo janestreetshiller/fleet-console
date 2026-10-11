@@ -230,10 +230,8 @@ private struct ProcessPopoverRow: View {
             // The popover header two levels up already reserves this exact slot
             // for this exact reason; a row is the same argument at row scale.
             HStack(spacing: 2) {
-                if hovering {
-                    IconButton(symbol: "info.circle", help: "Inspect in the dashboard", action: inspect)
-                    endButton
-                }
+                IconButton(symbol: "info.circle", help: "Inspect in the dashboard", action: inspect)
+                if hovering && block == nil { endButton }
             }
             .frame(width: FleetMetrics.actionSlot, alignment: .trailing)
         }

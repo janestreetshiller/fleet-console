@@ -167,7 +167,7 @@ struct ProcessInspector: View {
             if children.count > 12 {
                 Text("… and \(children.count - 12) more children")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
     }
@@ -192,7 +192,7 @@ struct ProcessInspector: View {
             Spacer()
             Text("\(row.pid)")
                 .font(ConsoleFont.mono(.caption2))
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
         .padding(.leading, CGFloat(depth) * 14)
         .contentShape(Rectangle())
@@ -232,7 +232,7 @@ struct ProcessInspector: View {
                 if connections.count > 8 {
                     Text("… \(connections.count - 8) more")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
         }
@@ -281,7 +281,7 @@ struct ProcessInspector: View {
                 Text("Keys only, never values (threat model T6): an environment that cannot leak "
                      + "a token cannot be screenshotted into one either.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             } else {
                 InspectorLine(key: "Extra keys", value: "not collected — FleetConsole reads no "
                               + "environment from processes it does not manage", mono: false)
@@ -318,7 +318,7 @@ struct ProcessInspector: View {
                 Text("Signalled through the controller — the PID-reuse guard and the audit event "
                      + "come with it.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             } else {
                 HStack(spacing: 8) {
                     InspectorActionButton(title: sampling ? "Sampling…" : "Sample",
@@ -338,7 +338,7 @@ struct ProcessInspector: View {
                 Text("FleetConsole never signals a process it did not start — a recycled PID must "
                      + "never be hit. The verbs above are read-only.")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
     }
@@ -459,7 +459,7 @@ struct InspectorLine: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(key)
                 .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .frame(width: 86, alignment: .leading)
             Text(value)
                 .font(mono ? ConsoleFont.mono(.caption) : ConsoleFont.caption)

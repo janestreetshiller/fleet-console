@@ -139,7 +139,7 @@ struct LoadWaveChart: View {
                     Text(ConsoleFmt.utilPercent(mark.as(Double.self)))
                         .font(ConsoleFont.caption)
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
         }
@@ -217,7 +217,7 @@ struct ThroughputChart: View {
                         Text(ConsoleFmt.byteRate(mark.as(Double.self)))
                             .font(ConsoleFont.caption)
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                 }
             }
@@ -303,47 +303,28 @@ struct TelemetryCard<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        HStack(alignment: .top, spacing: ConsoleMetrics.cardGap) {
-            RetroGauge(value: gaugeValue, tone: tone, caption: title, readout: value)
-            VStack(alignment: .leading, spacing: 8) {
-                // No icon beside the title.
-                //
-                // Every card had one, immediately left of a word naming the
-                // same thing: a chip glyph next to "Memory", a disk next to
-                // "Disk". The popover already states this rule for rows — *a
-                // tag on every row is a tag on no row* — and a symbol that
-                // appears on all four cards distinguishes none of them. It was
-                // also a second carrier of the same tone the dial two points to
-                // the left already spends its needle and its arc on, on a card
-                // whose whole argument is that the dial is where the reading
-                // lives. `RetroGauge` makes exactly this cut one level down:
-                // "The face carries no label: the card two points to the right
-                // already says Memory." This is that cut, applied upward.
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(ConsoleFont.subtitle.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .fixedSize()
-                    Spacer(minLength: 4)
-                    if let subtitle {
-                        // Gives up its width first and elides: the card is now a
-                        // grid cell whose width is set by the column, not by the
-                        // window, so this row has to survive being narrowed.
-                        Text(subtitle)
-                            .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .layoutPriority(-1)
-                    }
-                }
-                content
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(title)
+                    .font(ConsoleFont.cardTitle)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text(value)
+                    .font(ConsoleFont.metricValue)
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                    .accessibilityLabel("\(title): \(value)")
             }
-            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            if let subtitle {
+                Text(subtitle)
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            content
         }
         .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
-        .elevatedCard(plate)
+        .elevatedCard()
         .accessibilityElement(children: .contain)
     }
 }

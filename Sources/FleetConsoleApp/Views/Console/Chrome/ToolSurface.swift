@@ -282,13 +282,13 @@ struct EmptyPanelView: View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(ConsoleFont.emptyGlyph)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
             Text(title)
                 .font(ConsoleFont.subtitle.weight(.medium))
                 .foregroundStyle(.secondary)
             Text(detail)
                 .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }

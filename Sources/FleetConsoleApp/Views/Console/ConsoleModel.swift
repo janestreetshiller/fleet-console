@@ -140,7 +140,7 @@ final class ConsoleModel {
         guard isLocalDeviceSelected else { return "Local only" }
         guard !atHome else { return "Search attention" }
         switch module {
-        case .overview: return "Search the map"
+        case .overview: return "Search processes"
         case .processes: return "Search processes"
         case .storage: return "Search volumes"
         case .services: return "Search services"
@@ -161,7 +161,7 @@ final class ConsoleModel {
             return "Select something that needs attention to inspect it here."
         }
         switch module {
-        case .overview: return "Pick a process in the map to inspect it."
+        case .overview: return "Select View All to inspect processes."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."
@@ -177,10 +177,13 @@ final class ConsoleModel {
     // already selected, and the module keeps that selection when you come back.
 
     func goHome() {
+        if !atHome || !isLocalDeviceSelected { search = "" }
+        selectedDeviceID = "self"
         atHome = true
     }
 
     func open(_ module: ConsoleModule) {
+        if self.module != module || atHome || !isLocalDeviceSelected { search = "" }
         if !isLocalDeviceSelected { selectedDeviceID = "self" }
         self.module = module
         atHome = false

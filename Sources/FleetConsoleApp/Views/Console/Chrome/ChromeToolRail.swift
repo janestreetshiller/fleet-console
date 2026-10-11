@@ -221,7 +221,6 @@ struct ChromeToolField: View {
                 ChromeToolPanel(tool: tool, tools: tools,
                                 width: tools.panelWidth(outerWidth: outerWidth))
             }
-            ChromeRail(model: model, console: console, tools: tools)
         }
         // No transition and no spring.
         //
@@ -383,7 +382,7 @@ private struct ChromeToolPanel: View {
                 .font(ConsoleFont.caption.weight(.semibold))
             Text(tools.context.subject)
                 .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
                 // Yields before the tool's own name does when the panel is

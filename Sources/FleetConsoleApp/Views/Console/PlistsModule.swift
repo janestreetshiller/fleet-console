@@ -300,7 +300,7 @@ struct PlistsModule: View {
                     if rows.isEmpty {
                         Text(query.isEmpty ? "No plists in \(scope.directory)" : "No match in \(scope.rawValue)")
                             .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     } else {
                         ForEach(rows) { entry in
                             LaunchEntryRow(entry: entry)
@@ -406,7 +406,7 @@ private struct LaunchEntryRow: View {
                 }
                 Text(entry.commandLabel)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
@@ -420,12 +420,12 @@ private struct LaunchEntryRow: View {
                     if entry.runAtLoad {
                         Text("run-at-load")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                     if entry.keepAlive {
                         Text("keepalive")
                             .font(.caption2)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                 }
             }

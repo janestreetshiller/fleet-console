@@ -358,7 +358,7 @@ private struct InterpreterPanelView: View {
             VStack(spacing: 10) {
                 Image(systemName: model.selectedPreset.symbol)
                     .font(ConsoleFont.emptyGlyph)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                 Text(model.selectedPreset.title)
                     .font(ConsoleFont.subtitle.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -366,7 +366,7 @@ private struct InterpreterPanelView: View {
                      ? "Install `orcs` at \(Orcs.expectedPath)."
                      : model.selectedPreset.blurb)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(avail.caption)

@@ -222,7 +222,7 @@ struct ConsoleRootView: View {
                 // than a default the user is expected to drag away from. What
                 // changed with the aspect lock is which dimensions the window
                 // offers, not how the split view divides the one it has.
-                .navigationSplitViewColumnWidth(sideColumnWidth)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
         } detail: {
             contentColumn
         }
@@ -321,22 +321,9 @@ struct ConsoleRootView: View {
         // in the middle of it competing with the title.
         ToolbarItem(placement: .navigation) {
             if console.isLocalDeviceSelected {
-                Picker("Module", selection: moduleSelection) {
-                    ForEach(ConsoleModule.allCases) { module in
-                        Label(module.rawValue, systemImage: module.symbol)
-                            .tag(Optional(module))
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                // Sized to the segments, not to the slot. The principal slot is
-                // whatever the toolbar has left after the search field, and at
-                // the 1240pt default that is ~184pt — narrower than six
-                // icon-only segments want. A `maxWidth` above that is not a cap
-                // at all: the picker takes its ideal width and the toolbar
-                // clips it, which sliced the sixth segment in half. Sizing the
-                // picker to fit makes the segments compress instead.
-                .frame(width: ConsoleMetrics.modulePickerWidth)
+                Label("This Mac", systemImage: "desktopcomputer")
+                    .font(ConsoleFont.subtitle.weight(.medium))
+                    .accessibilityLabel("Viewing this Mac")
             } else {
                 // A remote node has one module: itself. The picker yields to a
                 // plain title rather than offering modules that cannot apply.
@@ -346,6 +333,23 @@ struct ConsoleRootView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
+        }
+
+        ToolbarItem(placement: .primaryAction) {
+            Menu {
+                ForEach(ConsoleTool.allCases) { tool in
+                    Button {
+                        tools.toggle(tool, context: toolContext)
+                    } label: {
+                        Label(tool.title, systemImage: tool.symbol)
+                    }
+                }
+            } label: {
+                Label("Tools", systemImage: "terminal")
+                    .labelStyle(.titleAndIcon)
+            }
+            .help("Terminal, files and local interpretation")
+            .accessibilityLabel("Tools")
         }
 
         ToolbarItem(placement: .primaryAction) {

@@ -25,12 +25,12 @@ ARCHIVE="$OUTPUT_DIR/FleetConsole-notarize.zip"
 
 # Refuse to submit an ad-hoc build: notarization requires a Developer ID signature
 # with the hardened runtime, and failing here is clearer than failing at Apple.
-if ! codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Developer ID Application"; then
+if ! codesign -dv --verbose=2 "$APP" 2>&1 | grep "Developer ID Application" >/dev/null; then
     echo "✗ $APP is not signed with a Developer ID identity."
     echo "  Run Scripts/build-app.sh release on a machine with the certificate installed."
     exit 1
 fi
-if ! codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "flags=.*runtime"; then
+if ! codesign -dv --verbose=2 "$APP" 2>&1 | grep "flags=.*runtime" >/dev/null; then
     echo "✗ $APP is not signed with the hardened runtime; Apple will reject it."
     exit 1
 fi

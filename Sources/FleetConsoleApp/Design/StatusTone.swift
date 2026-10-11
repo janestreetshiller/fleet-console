@@ -25,12 +25,13 @@ import FleetCore
 /// Before these there were seven strengths of `Color.primary.opacity(…)` across
 /// the view layer — 0.04, 0.06, 0.7, 0.75, 0.8, 0.85, 0.9 — for four ideas.
 enum SurfaceInk {
+    static var secondary: Color { Color(nsColor: .secondaryLabelColor) }
     /// A measured value: monospaced digits in a row, a stat tile's numeral, a
     /// byte count. Data rather than a label, so it sits one step below
     /// `.primary` without dropping to `.secondary`, which means *supporting
     /// text* and would put a resident-memory figure at the same weight as the
     /// word beside it.
-    static var numeral: Color { Color.primary.opacity(0.85) }
+    static var numeral: Color { Color(nsColor: .labelColor) }
 
     /// An untinted surface at rest — a chip, a card, a capsule that is not
     /// carrying a status.

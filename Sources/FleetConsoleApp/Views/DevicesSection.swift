@@ -106,7 +106,7 @@ struct ProbeLine: View {
                 .font(FleetFont.subtitle)
                 .foregroundStyle(.secondary)
             if let detail {
-                Text("· \(detail)").font(FleetFont.subtitle).foregroundStyle(.tertiary)
+                Text("· \(detail)").font(FleetFont.subtitle).foregroundStyle(SurfaceInk.secondary)
             }
         }
         .accessibilityElement(children: .combine)

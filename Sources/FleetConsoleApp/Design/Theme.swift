@@ -13,21 +13,21 @@ import SwiftUI
 // immediately readable as "not a Mac app".
 enum FleetFont {
     /// Popover title.
-    static let title = Font.system(size: 13, weight: .semibold)
+    static let title = Font.system(size: 14, weight: .semibold)
     /// Primary text of a standard row — AppKit's menu item size.
     static let rowTitle = Font.system(size: 13)
     /// Primary text of a compact (fixed-height) row.
-    static let rowTitleCompact = Font.system(size: 12)
+    static let rowTitleCompact = Font.system(size: 13)
     /// Body copy and table cells.
-    static let body = Font.system(size: 12)
+    static let body = Font.system(size: 13)
     /// Secondary line under a row title.
-    static let subtitle = Font.system(size: 11)
+    static let subtitle = Font.system(size: 12)
     /// Timestamps, counts, hints.
-    static let caption = Font.system(size: 11)
+    static let caption = Font.system(size: 12)
     /// Tags, badges, evidence chips.
-    static let micro = Font.system(size: 10, weight: .medium)
+    static let micro = Font.system(size: 11, weight: .medium)
     /// The smallest label in the system: stat-tile captions.
-    static let nano = Font.system(size: 10)
+    static let nano = Font.system(size: 11)
     /// Disclosure chevron, used only by `DisclosureRow`.
     static let chevron = Font.system(size: 10, weight: .semibold)
     /// A glyph that annotates a row without becoming part of its text — the
@@ -40,9 +40,9 @@ enum FleetFont {
     static let plateLabel = Font.system(size: 8, weight: .regular, design: .monospaced)
     /// Section labels — sentence case, secondary. Apple stopped shipping
     /// kerned all-caps headers in menus years ago.
-    static let sectionLabel = Font.system(size: 11, weight: .semibold)
+    static let sectionLabel = Font.system(size: 12, weight: .semibold)
     /// Big numerals in stat tiles.
-    static let stat = Font.system(size: 22, weight: .medium, design: .rounded)
+    static let stat = Font.system(size: 22, weight: .semibold)
 
     static func mono(_ size: CGFloat = 10, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
@@ -101,12 +101,12 @@ enum FleetMetrics {
     /// different widths — a checkmark is wider than a minus — so stacked probe
     /// lines need a reserved column or their labels step in and out by a point.
     static let verdictColumn: CGFloat = 8
-    static let popoverWidth: CGFloat = 380
+    static let popoverWidth: CGFloat = 480
     /// One `IconButton`'s hit target. Named because three places need to agree
     /// on it: the button draws it, the action slot below is two of them wide,
     /// and the `ProgressView` that stands in for a refresh button has to occupy
     /// exactly the same room or the header twitches while a sweep runs.
-    static let iconButtonSize: CGFloat = 18
+    static let iconButtonSize: CGFloat = 28
     /// A trailing cluster of two icon buttons, reserved at a constant width
     /// whether or not both are on screen.
     ///

@@ -117,14 +117,15 @@ struct OverviewModule: View {
                 Text("Sensors")
                     .font(ConsoleFont.cardTitle)
                 Spacer()
-                if system.sensors.available {
+                if !system.sensors.fans.isEmpty {
                     Text("\(system.sensors.fans.count) fan\(system.sensors.fans.count == 1 ? "" : "s")")
                         .font(ConsoleFont.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if system.sensors.available {
+            if !system.sensors.fans.isEmpty || system.sensors.cpuTempC != nil
+                || system.sensors.gpuTempC != nil {
                 HStack(spacing: 16) {
                     sensorMetric(title: "Fan",
                                  value: SystemFmt.rpm(system.sensors.maxRPM),
@@ -132,14 +133,14 @@ struct OverviewModule: View {
                                     ? "fastest of \(system.sensors.fans.count)" : "actual speed")
                     sensorMetric(title: "CPU die",
                                  value: SystemFmt.temperature(system.sensors.cpuTempC),
-                                 caption: "SMC, not thermal state")
+                                 caption: "temperature")
                     sensorMetric(title: "GPU",
                                  value: SystemFmt.temperature(system.sensors.gpuTempC),
                                  caption: system.sensors.gpuTempC == nil
-                                    ? "no GPU key on this Mac" : "die proximity")
+                                    ? "not reported" : "temperature")
                 }
             } else {
-                Text("No SMC on this machine — VMs and very old Macs have none.")
+                Text("Temperature and fan speed aren’t available on this Mac.")
                     .font(ConsoleFont.body)
                     .foregroundStyle(.secondary)
             }
@@ -160,7 +161,7 @@ struct OverviewModule: View {
                 .font(ConsoleFont.cardValue)
             Text(caption)
                 .font(ConsoleFont.micro)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -193,7 +194,7 @@ struct OverviewModule: View {
                     Text("load \(ConsoleFmt.load(system.cpu.loadAverage))")
                         .font(ConsoleFont.mono(.caption))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(-1)
@@ -203,8 +204,7 @@ struct OverviewModule: View {
     }
 
     private var cpuTint: Color {
-        guard system.cpu.sampled else { return .accentColor }
-        return SystemThresholds.utilization(system.cpu.usage).color
+        .accentColor
     }
 
     // MARK: Memory
@@ -221,7 +221,7 @@ struct OverviewModule: View {
             subtitle: "pressure \(system.memory.pressure.label)"
         ) {
             LoadWaveChart(values: system.memoryHistory,
-                          tint: SystemThresholds.memory(system.memory).color,
+                          tint: .accentColor,
                           height: ConsoleMetrics.chartHeight)
             // Wrapped rather than laid out in one row of five. At a grid cell's
             // width the old row hyphenated "COMPRESSED" and then pushed the total
@@ -246,49 +246,57 @@ struct OverviewModule: View {
     }
 
     private var processMapCard: some View {
-        let query = console.search.trimmingCharacters(in: .whitespaces)
-        let rows = mapRows
-        let items = ProcessHeatmap.items(from: rows)
-        return VStack(alignment: .leading, spacing: 10) {
+        let rows = mapRows.sorted { $0.residentBytes > $1.residentBytes }
+        return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Process Map")
-                    .font(ConsoleFont.cardTitle)
+                Text("Top Processes").font(ConsoleFont.cardTitle)
                 Spacer()
-                Text(query.isEmpty
-                     ? "area = resident memory · colour = CPU · tap to inspect"
-                     : "\(rows.count) matching \(query.lowercased()) · area = resident memory")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                Button("View All") { console.open(.processes) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel("View all processes")
             }
-
-            // A filter that matches nothing has to say so. Falling through to the
-            // "Reading the process table…" spinner below would claim the sample
-            // had not arrived, which is a different fact and not true.
-            if !query.isEmpty && rows.isEmpty {
-                Text("No process matches \(query).")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: ConsoleMetrics.mapHeight, alignment: .top)
-            } else if items.isEmpty {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text("Reading the process table…")
-                        .font(ConsoleFont.caption)
-                        .foregroundStyle(.secondary)
+            HStack {
+                Text("Process")
+                Spacer()
+                Text("CPU").frame(width: 70, alignment: .trailing)
+                Text("Memory").frame(width: 95, alignment: .trailing)
+            }
+            .font(ConsoleFont.caption)
+            .foregroundStyle(SurfaceInk.secondary)
+            ForEach(rows.prefix(5)) { row in
+                Button {
+                    console.open(.processes)
+                    console.selectedPID = row.pid
+                } label: {
+                    HStack {
+                        ProcessNameCell(row: row, managed: false)
+                        Spacer(minLength: 8)
+                        Text(ConsoleFmt.cpuPercent(row.cpuPercent))
+                            .frame(width: 70, alignment: .trailing)
+                        Text(ConsoleFmt.bytes(row.residentBytes))
+                            .frame(width: 95, alignment: .trailing)
+                    }
+                    .font(ConsoleFont.body)
+                    .monospacedDigit()
+                    .padding(.vertical, 6)
+                    .contentShape(Rectangle())
                 }
-                // Same height as the map it stands in for, so the first sample
-                // does not shove the cards below it down the window.
-                .frame(height: ConsoleMetrics.mapHeight)
-            } else {
-                HeatmapView(items: items,
-                            summary: "Helpers are folded into their parent app. The “Other” tile is "
-                                   + "everything below 8 MB or past the fortieth group — rolled up, "
-                                   + "never dropped.", animatesLayout: false)
-                    .frame(height: ConsoleMetrics.mapHeight)
+                .buttonStyle(.plain)
+                .hoverHighlight()
+                .accessibilityLabel("Inspect \(row.displayName), CPU \(ConsoleFmt.cpuPercent(row.cpuPercent)), memory \(ConsoleFmt.bytes(row.residentBytes))")
+                Divider()
             }
+            if rows.isEmpty {
+                Text(console.search.isEmpty ? "Reading processes…" : "No matching processes.")
+                    .font(ConsoleFont.body)
+                    .foregroundStyle(SurfaceInk.secondary)
+            }
+            Text("Largest by resident memory. Process CPU is measured per core.")
+                .font(ConsoleFont.caption)
+                .foregroundStyle(SurfaceInk.secondary)
         }
-        .elevatedCard("MAP · PROCESSES")
+        .elevatedCard()
     }
 
     // MARK: Disk
@@ -439,13 +447,13 @@ struct OverviewModule: View {
             if model.license.isUnlocked(.smcSensors), system.sensors.available {
                 Text("· \(SystemFmt.temperature(system.sensors.cpuTempC)) · \(SystemFmt.rpm(system.sensors.maxRPM))")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             Spacer()
             if let captured = model.processes.capturedAt {
                 Text("process table \(Fmt.relative(captured))")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
         .padding(.horizontal, 4)
@@ -506,7 +514,7 @@ private struct MemoryFacts: View {
         Text("\(ConsoleFmt.bytes(memory.usedBytes)) of \(ConsoleFmt.bytes(memory.totalBytes))")
             .font(ConsoleFont.mono(.caption))
             .monospacedDigit()
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(SurfaceInk.secondary)
             .lineLimit(1)
             .fixedSize()
     }
@@ -527,7 +535,7 @@ private struct MemoryFact: View {
             // four columns nominally equal.
             Text(label.uppercased())
                 .font(ConsoleFont.badge)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .kerning(0.5)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -575,16 +583,10 @@ struct ModuleHeader<Trailing: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            if let eyebrow {
-                Text(eyebrow)
-                    .font(ConsoleFont.plateLabel)
-                    .tracking(SketchMetrics.plateLabelTracking)
-                    .foregroundStyle(SketchInk.accent)
-            }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Image(systemName: symbol)
                     .font(ConsoleFont.cardTitle)
-                    .foregroundStyle(SketchInk.accent)
+                    .foregroundStyle(.secondary)
                     .symbolRenderingMode(.hierarchical)
                 // Sentence case at the module ramp's own size. The stamped
                 // all-caps line this replaces was set in a bundled typewriter
@@ -593,13 +595,13 @@ struct ModuleHeader<Trailing: View>: View {
                 // announces what you are looking at.
                 Text(title)
                     .font(ConsoleFont.moduleTitle)
-                    .foregroundStyle(ConsoleColor.numeral)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
                 if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
                     Text(subtitle)
                         .font(ConsoleFont.mono(.caption))
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .layoutPriority(-1)
@@ -607,16 +609,8 @@ struct ModuleHeader<Trailing: View>: View {
                 Spacer(minLength: 4)
                 trailing
             }
-            // Two rules, the second offset — the plate's second pass, applied to
-            // a line rather than to a border.
-            Rectangle()
-                .fill(ConsoleColor.hairlineStrong)
-                .frame(height: SketchMetrics.hairline)
-            Rectangle()
-                .fill(SketchInk.secondPass)
-                .frame(height: SketchMetrics.hairline)
-                .padding(.leading, SketchMetrics.plateOffset)
+            Divider().padding(.top, 8)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .contain)
     }
 }

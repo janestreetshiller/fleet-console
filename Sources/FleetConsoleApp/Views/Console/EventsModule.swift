@@ -33,7 +33,7 @@ struct EventsModule: View {
                 if shown.isEmpty {
                     Text(query.isEmpty ? "No events recorded yet." : "No events match “\(query)”.")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 } else {
                     ForEach(shown) { event in
                         EventRow(event: event)
@@ -43,7 +43,7 @@ struct EventsModule: View {
                 HStack {
                     Text("Append-only · newest first")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .textCase(nil)
                     Spacer()
                     if !loadedMore {
@@ -115,7 +115,7 @@ private struct EventRow: View {
             Text(ConsoleFmt.timestamp(event.ts))
                 .font(ConsoleFont.mono(.caption))
                 .monospacedDigit()
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
         .padding(.vertical, 2)
         .contentShape(Rectangle())

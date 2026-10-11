@@ -64,7 +64,7 @@ struct NetworkSection: View {
         if !status.poweredOn {
             summary = "Wi-Fi off"
         } else if status.connected {
-            let name = status.ssid ?? (status.ssidRequiresLocation ? "name needs Location access" : "connected")
+            let name = status.ssid ?? (status.ssidRequiresLocation ? "network name unavailable" : "connected")
             summary = [name, status.ipv4].compactMap { $0 }.joined(separator: " · ")
         } else {
             summary = "not connected"
@@ -83,7 +83,7 @@ struct NetworkSection: View {
         } detail: {
             VStack(alignment: .leading, spacing: 3) {
                 KeyValue(key: "Interface", value: status.interface ?? "—", monospaced: true)
-                KeyValue(key: "Network", value: status.ssid ?? (status.ssidRequiresLocation ? "needs Location access" : "—"))
+                KeyValue(key: "Network", value: status.ssid ?? (status.ssidRequiresLocation ? "Location permission required" : "—"))
                 KeyValue(key: "Signal", value: status.signalDescription)
                 if let noise = status.noise {
                     KeyValue(key: "Noise", value: "\(noise) dBm")

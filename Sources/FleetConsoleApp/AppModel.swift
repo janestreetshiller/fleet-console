@@ -225,11 +225,14 @@ final class AppModel {
     /// The one number worth acting on: someone waiting on you, then anything
     /// wrong, then how many services are actually running.
     var fleetText: String {
-        if awaitingReplyCount > 0 { return "\(awaitingReplyCount)" }
-        if criticalCount > 0 { return "\(criticalCount)" }
-        if warningCount > 0 { return "\(warningCount)" }
-        if !sessions.isEmpty { return "\(sessions.count)" }
-        return activeServices.isEmpty ? "" : "\(activeServices.count)"
+        let cpu = system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"
+        let memory = system.memory.totalBytes > 0
+            ? ConsoleFmt.utilPercent(system.memory.usedShare) : "—"
+        var text = "CPU \(cpu)  RAM \(memory)"
+        if !connected { text += "  Offline" }
+        else if awaitingReplyCount > 0 { text += "  !\(awaitingReplyCount)" }
+        else if criticalCount + warningCount > 0 { text += "  !\(criticalCount + warningCount)" }
+        return text
     }
 
     var fleetTint: StatusTone? {

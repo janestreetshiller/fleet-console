@@ -38,7 +38,7 @@ struct CompactRow: View {
             if !trailing.isEmpty {
                 Text(trailing)
                     .font(FleetFont.mono(9.5))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
             }
         }
@@ -87,7 +87,7 @@ struct CompactHeader: View {
                 .font(FleetFont.sectionLabel)
                 .foregroundStyle(.secondary)
             if let trailing {
-                Text(trailing).font(FleetFont.caption).foregroundStyle(.tertiary)
+                Text(trailing).font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
             }
             Spacer(minLength: 0)
         }
@@ -108,7 +108,7 @@ struct OverflowLine: View {
             Button(action: action) {
                 Text("+ \(count) more…")
                     .font(FleetFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .padding(.horizontal, FleetMetrics.gutter)
                     .frame(height: 20, alignment: .leading)
                     .contentShape(Rectangle())
@@ -124,7 +124,7 @@ struct EmptyLine: View {
     var body: some View {
         Text(text)
             .font(FleetFont.subtitle)
-            .foregroundStyle(.tertiary)
+            .foregroundStyle(SurfaceInk.secondary)
             .padding(.horizontal, FleetMetrics.gutter)
             .frame(height: 32, alignment: .leading)
     }
@@ -160,18 +160,16 @@ struct PopoverFooter: View {
     var body: some View {
         HStack(spacing: 6) {
             if model.connected, let daemon = model.daemon {
-                ConnectionPip(connected: true, label: "controller up \(Fmt.duration(daemon.uptime))")
+                ConnectionPip(connected: true, label: "Connected")
+                    .help("Controller uptime: \(Fmt.duration(daemon.uptime))")
             } else {
                 ConnectionPip(connected: false, label: "controller not running")
             }
             Spacer()
-            Text("MIT")
-                .font(FleetFont.micro)
-                .foregroundStyle(.secondary)
-                .help("Free and open source. Every feature is permanently available.")
             Button(trailingLabel) { openDashboard() }
-                .buttonStyle(.link)
-                .font(FleetFont.subtitle)
+                .buttonStyle(.bordered)
+                .controlSize(.regular)
+                .font(FleetFont.body)
         }
         .padding(.horizontal, FleetMetrics.gutter)
         .padding(.vertical, 7)

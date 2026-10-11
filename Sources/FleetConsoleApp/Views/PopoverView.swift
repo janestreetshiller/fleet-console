@@ -153,7 +153,7 @@ struct ControllerDownBanner: View {
             if let error = model.connectionError {
                 Text(error)
                     .font(FleetFont.mono(9.5))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(2)
             }
         }
@@ -183,7 +183,7 @@ struct AttentionSection: View {
             if model.attention.count > 6 {
                 Text("+ \(model.attention.count - 6) more in the dashboard")
                     .font(FleetFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .padding(.horizontal, FleetMetrics.gutter)
                     .padding(.top, 2)
             }

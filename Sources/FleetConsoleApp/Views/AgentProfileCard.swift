@@ -78,7 +78,7 @@ struct AgentProfileCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 6) {
                         Text(profile.id)
-                            .font(FleetFont.mono(12, weight: .medium))
+                            .font(FleetFont.rowTitle.weight(.semibold))
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Tag(text: statusWord, tone: tone)
@@ -99,29 +99,25 @@ struct AgentProfileCard: View {
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(Fmt.relative(profile.lastActivityAt))
-                        .font(FleetFont.mono(9.5))
-                        .foregroundStyle(.tertiary)
+                        .font(FleetFont.mono(12))
+                        .foregroundStyle(SurfaceInk.secondary)
                     Image(systemName: "chevron.right")
                         .font(FleetFont.chevron)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 }
             }
             .padding(.horizontal, 8)
 
-            // The four numbers that actually characterise an agent, always shown.
-            HStack(spacing: 4) {
-                MiniStat(value: "\(profile.running)", label: "running",
-                         tone: profile.running > 0 ? .good : .neutral)
-                MiniStat(value: "\(profile.totalLaunched)", label: "launched", tone: .neutral)
-                MiniStat(value: "\(profile.totalCrashed)", label: "crashed",
-                         tone: profile.totalCrashed > 0 ? .bad : .neutral)
-                MiniStat(value: "\(profile.totalLeaked)", label: "left running",
-                         tone: profile.totalLeaked > 0 ? .warn : .neutral)
-                MiniStat(value: "\(profile.awaitingReply)", label: "to answer",
-                         tone: profile.awaitingReply > 0 ? .warn : .neutral)
+            HStack(spacing: 8) {
+                if profile.running > 0 { MiniStat(value: "\(profile.running)", label: "running", tone: .good) }
+                if profile.totalLaunched > 0 { MiniStat(value: "\(profile.totalLaunched)", label: "launched", tone: .neutral) }
+                if profile.totalCrashed > 0 { MiniStat(value: "\(profile.totalCrashed)", label: "crashed", tone: .bad) }
+                if profile.totalLeaked > 0 { MiniStat(value: "\(profile.totalLeaked)", label: "left running", tone: .warn) }
+                if profile.awaitingReply > 0 { MiniStat(value: "\(profile.awaitingReply)", label: "to answer", tone: .warn) }
             }
             .padding(.horizontal, 8)
+
         }
         .contentShape(Rectangle())
     }
@@ -131,7 +127,7 @@ struct AgentProfileCard: View {
         case .waiting: return "Waiting on you"
         case .attention: return "Needs attention"
         case .active: return "Active"
-        case .idle: return "Idle"
+        case .idle: return "No managed services"
         }
     }
 
@@ -193,11 +189,11 @@ struct AgentProfileCard: View {
                         } label: {
                             HStack(spacing: 5) {
                                 Image(systemName: "folder")
-                                    .font(FleetFont.micro).foregroundStyle(.tertiary)
+                                    .font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                                 Text((path as NSString).lastPathComponent)
                                     .font(FleetFont.subtitle)
                                 Text(path).font(FleetFont.mono(9))
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(SurfaceInk.secondary)
                                     .lineLimit(1).truncationMode(.head)
                             }
                             .contentShape(Rectangle())
@@ -206,7 +202,7 @@ struct AgentProfileCard: View {
                     }
                     if profile.projects.count > 4 {
                         Text("+ \(profile.projects.count - 4) more")
-                            .font(FleetFont.micro).foregroundStyle(.tertiary)
+                            .font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                     }
                 }
             }
@@ -221,11 +217,11 @@ struct AgentProfileCard: View {
                                 .lineLimit(1)
                             Text(record.state.label)
                                 .font(FleetFont.micro)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(SurfaceInk.secondary)
                             Spacer(minLength: 4)
                             Text(Fmt.relative(record.startedAt))
                                 .font(FleetFont.mono(9))
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(SurfaceInk.secondary)
                         }
                     }
                 }
@@ -234,7 +230,7 @@ struct AgentProfileCard: View {
             group("Messages") {
                 if profile.messageCount == 0 {
                     Text("nothing said yet")
-                        .font(FleetFont.subtitle).foregroundStyle(.tertiary)
+                        .font(FleetFont.subtitle).foregroundStyle(SurfaceInk.secondary)
                 } else {
                     KeyValue(key: "Total", value: "\(profile.messageCount)"
                              + (profile.awaitingReply > 0 ? " · \(profile.awaitingReply) awaiting your answer" : ""))
@@ -268,7 +264,7 @@ struct AgentProfileCard: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(title)
                 .font(FleetFont.micro)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .kerning(0.4)
             content()
         }
@@ -289,7 +285,7 @@ struct MiniStat: View {
                 .monospacedDigit()
             Text(label)
                 .font(FleetFont.nano)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }

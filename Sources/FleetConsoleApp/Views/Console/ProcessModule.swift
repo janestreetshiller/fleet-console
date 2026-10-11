@@ -83,6 +83,16 @@ struct ProcessModule: View {
                 .padding(.top, ConsoleMetrics.gutter)
                 .padding(.bottom, 10)
 
+            if filtered.isEmpty && !console.search.trimmingCharacters(in: .whitespaces).isEmpty {
+                ContentUnavailableView {
+                    Label("No matching processes", systemImage: "magnifyingglass")
+                } description: {
+                    Text("Try a process name, PID, user or port number.")
+                } actions: {
+                    Button("Clear Search") { console.search = "" }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
             Table(of: ProcessRow.self, selection: $console.selectedPID, sortOrder: $sortOrder) {
                 TableColumn("Process", value: \.name) { row in
                     ProcessNameCell(row: row, managed: managedByPID[row.pid] != nil)
@@ -137,7 +147,7 @@ struct ProcessModule: View {
                     Text(row.ports.isEmpty ? "—" : ConsoleFmt.ports(row.ports))
                         .font(ConsoleFont.mono(.caption))
                         .monospacedDigit()
-                        .foregroundStyle(row.ports.isEmpty ? .tertiary : .secondary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .lineLimit(1)
                         .accessibilityLabel(row.ports.isEmpty
                                             ? "No listening ports"
@@ -156,6 +166,7 @@ struct ProcessModule: View {
             // the module reads as a panel dropped on top of the window rather
             // than as part of it.
             .scrollContentBackground(.hidden)
+            }
         }
         // Deferred to the next runloop tick: `.onAppear` fires while the table
         // is still inside its first NSTableView delegate pass, and any observed
@@ -186,11 +197,11 @@ struct ProcessModule: View {
                         .tag(scope)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             // Four scopes need enough intrinsic room to preserve their labels;
             // when the tool rail is open, 340pt truncates “Heavyweight”.
-            .frame(maxWidth: 410)
-            .labelsHidden()
+            .frame(maxWidth: 180)
+            .accessibilityLabel("Process filter")
         }
     }
 
@@ -283,7 +294,7 @@ struct ProcessModule: View {
 
 // MARK: - Name cell
 
-private struct ProcessNameCell: View {
+struct ProcessNameCell: View {
     let row: ProcessRow
     let managed: Bool
 

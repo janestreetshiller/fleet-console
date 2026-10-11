@@ -21,14 +21,33 @@ struct FleetSidebarView: View {
         // and all of them are the fleet. The local machine leads because it is
         // the one every local module describes, and it is marked as *this* one
         // by its row, not by being fenced off above a header.
-        List(selection: $console.selectedDeviceID) {
-            Section("Fleet") {
-                ThisMacRow(model: model)
-                    .tag("self")
-
+        List(selection: navigationSelection) {
+            Section("This Mac") {
+                ForEach([ConsoleModule.overview, .processes, .storage]) { module in
+                    Label(module.rawValue, systemImage: module.symbol)
+                        .font(ConsoleFont.rowTitle)
+                        .padding(.vertical, 3)
+                        .tag("module:" + module.rawValue)
+                }
+            }
+            Section("Background Work") {
+                Label("Needs Attention", systemImage: "exclamationmark.circle")
+                    .font(ConsoleFont.rowTitle)
+                    .padding(.vertical, 3)
+                    .tag("attention")
+                ForEach([ConsoleModule.services, .events, .plists]) { module in
+                    Label(module.rawValue, systemImage: module.symbol)
+                        .font(ConsoleFont.rowTitle)
+                        .padding(.vertical, 3)
+                        .tag("module:" + module.rawValue)
+                }
+            }
+            if model.deviceRows.contains(where: { !$0.record.evidence.isSelf }) {
+                Section("Other Computers") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
-                        .tag(row.id)
+                        .tag("device:" + row.id)
+                }
                 }
             }
         }
@@ -45,10 +64,9 @@ struct FleetSidebarView: View {
             // in the app wears, at the one place it is the app's own name.
             HStack(spacing: 8) {
                 FleetMark(size: 20)
-                Text("FLEETCONSOLE")
-                    .font(ConsoleFont.plateLabel)
-                    .tracking(SketchMetrics.plateLabelTracking)
-                    .foregroundStyle(ConsoleColor.numeral)
+                Text("FleetConsole")
+                    .font(ConsoleFont.cardTitle)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 0)
             }
@@ -68,6 +86,23 @@ struct FleetSidebarView: View {
         .onAppear { model.refreshDevices() }
     }
 
+    private var navigationSelection: Binding<String> {
+        Binding {
+            if !console.isLocalDeviceSelected { return "device:" + console.selectedDeviceID }
+            return console.atHome ? "attention" : "module:" + console.module.rawValue
+        } set: { destination in
+            if destination == "attention" {
+                console.goHome()
+            } else if destination.hasPrefix("module:"),
+                      let module = ConsoleModule(rawValue: String(destination.dropFirst(7))) {
+                console.open(module)
+            } else if destination.hasPrefix("device:") {
+                console.selectedDeviceID = String(destination.dropFirst(7))
+                console.atHome = false
+            }
+        }
+    }
+
     /// Controller state and the local network summary, pinned under the list.
     /// The sidebar is the one column that is always visible, so the two facts
     /// that colour everything else live at its foot.
@@ -76,7 +111,7 @@ struct FleetSidebarView: View {
             Hairline()
             HStack(spacing: 6) {
                 StatusPip(tone: model.connected ? .good : .bad, size: 7)
-                Text(model.connected ? "Controller connected" : "Controller offline")
+                Text(model.connected ? "Connected" : "Controller offline")
                     .font(ConsoleFont.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -84,7 +119,7 @@ struct FleetSidebarView: View {
                     Text(Fmt.relative(snapshot))
                         .font(ConsoleFont.mono(.caption2))
                         .monospacedDigit()
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
             HStack(spacing: 6) {
@@ -104,52 +139,6 @@ struct FleetSidebarView: View {
         .padding(.horizontal, 14)
         .padding(.top, 0)
         .background(.ultraThinMaterial)
-    }
-}
-
-// MARK: - This Mac
-
-private struct ThisMacRow: View {
-    let model: AppModel
-
-    private var cpuTone: StatusTone {
-        model.system.cpu.sampled ? SystemThresholds.utilization(model.system.cpu.usage) : .unknown
-    }
-
-    var body: some View {
-        HStack(spacing: 10) {
-            EntityIcon(symbol: "laptopcomputer", tone: cpuTone, size: FleetMetrics.iconRowLarge)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("This Mac")
-                    .font(ConsoleFont.rowTitle.weight(.medium))
-                    .lineLimit(1)
-                Text(subtitle)
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    // The "NN% CPU · NN% RAM" line sat right at the sidebar's
-                    // width and clipped mid-glyph under the selection fill.
-                    // One scale step keeps the whole fact visible instead.
-                    .minimumScaleFactor(0.8)
-                    .monospacedDigit()
-            }
-            Spacer(minLength: 4)
-            let attention = model.criticalCount + model.warningCount
-            if attention > 0 {
-                ConsoleBadge(text: "\(attention)",
-                             tone: model.criticalCount > 0 ? .bad : .warn,
-                             symbol: "exclamationmark.triangle.fill")
-            }
-        }
-        .padding(.vertical, 2)
-        .accessibilityElement(children: .combine)
-    }
-
-    private var subtitle: String {
-        guard model.system.cpu.sampled else { return model.system.topology.brand }
-        return ConsoleFmt.utilPercent(model.system.cpu.usage) + " CPU · "
-            + ConsoleFmt.utilPercent(model.system.memory.usedShare) + " RAM"
     }
 }
 
@@ -186,7 +175,7 @@ private struct DeviceNodeRow: View {
                     .lineLimit(1)
                 Text(detailLine)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }

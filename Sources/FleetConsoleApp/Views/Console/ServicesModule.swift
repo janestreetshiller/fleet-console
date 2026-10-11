@@ -50,7 +50,7 @@ struct ServicesModule: View {
                          ? "No services under management. `fleetctl launch` starts one."
                          : "No managed services match “\(query)”.")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 } else {
                     ForEach(managed) { row in
                         ManagedServiceRow(row: row, model: model) { action in
@@ -68,7 +68,7 @@ struct ServicesModule: View {
                 if unmanaged.isEmpty {
                     Text("No unmanaged listeners or dev-server-shaped processes.")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 } else {
                     ForEach(unmanaged) { process in
                         UnmanagedRow(process: process)
@@ -172,7 +172,7 @@ private struct ManagedServiceRow: View {
                 }
                 Text("\(record.ownerAgent) · \(record.purpose)")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -195,7 +195,7 @@ private struct ManagedServiceRow: View {
                      : ConsoleFmt.ports(record.effectivePorts))
                     .font(ConsoleFont.mono(.caption2))
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
         .padding(.vertical, 3)
@@ -233,7 +233,7 @@ private struct UnmanagedRow: View {
                     .lineLimit(1)
                 Text(process.reason.label)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
@@ -245,7 +245,7 @@ private struct UnmanagedRow: View {
                                            : ConsoleFmt.ports(process.ports))
                     .font(ConsoleFont.mono(.caption2))
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
         }
         .padding(.vertical, 3)
@@ -285,7 +285,7 @@ private struct AgentRow: View {
                     .lineLimit(1)
                 Text(agent.purposes.first ?? (agent.running > 0 ? "running" : "idle"))
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
             }
             Spacer(minLength: 8)

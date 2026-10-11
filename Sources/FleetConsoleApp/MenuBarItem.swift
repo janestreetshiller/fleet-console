@@ -101,11 +101,12 @@ final class MenuBarItemController: NSObject {
             string: summary.text.isEmpty ? "" : " \(summary.text)",
             attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)])
         button.toolTip = summary.tooltip
-        button.setAccessibilityLabel(summary.accessibilityLabel)
+        button.setAccessibilityLabel("\(summary.accessibilityLabel). \(summary.text)")
     }
 
     @objc private func clicked(_ sender: NSStatusBarButton) {
-        if NSApp.currentEvent?.type == .rightMouseUp {
+        if NSApp.currentEvent?.type == .rightMouseUp
+            || NSApp.currentEvent?.modifierFlags.contains(.control) == true {
             let menu = menuProvider()
             statusItem.menu = menu
             sender.performClick(nil)

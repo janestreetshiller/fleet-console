@@ -105,7 +105,7 @@ struct StorageModule: View {
                 if let scanned = breakdown.breakdown.scannedAt {
                     Text("scanned \(Fmt.relative(scanned))")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
 
@@ -185,7 +185,7 @@ struct StorageModule: View {
                 Spacer()
                 Text("area = allocated bytes · colour = category · tap to reveal")
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             HeatmapView(items: breakdown.breakdown.diskMap.map(diskMapItem),
                         summary: "Measured directories cover \(ConsoleFmt.bytes(breakdown.breakdown.measuredBytes)) of "
@@ -242,7 +242,7 @@ struct StorageModule: View {
                 if let scanned = scanner.scan.scannedAt {
                     Text("scanned \(Fmt.relative(scanned))")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
                 Spacer()
                 Text("\(ConsoleFmt.bytes(scanner.scan.reclaimableBytes)) reclaimable")
@@ -296,7 +296,7 @@ struct StorageModule: View {
                     Hairline()
                     Text("Large, but it is your data — reported, never offered for deletion.")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .padding(.horizontal, ConsoleMetrics.cardPadding)
                         .padding(.top, 10)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: ConsoleMetrics.reclaimRowMinWidth),
@@ -493,7 +493,7 @@ private struct VolumeRow: View {
                         }
                         Text(volume.fileSystemType)
                             .font(ConsoleFont.mono(.caption2))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                     CapacityMeter(share: volume.usedShare,
                                   tone: SystemThresholds.freeSpace(share: volume.usedShare))
@@ -508,7 +508,7 @@ private struct VolumeRow: View {
                         Text("\(ConsoleFmt.bytes(volume.purgeableBytes)) purgeable")
                             .font(ConsoleFont.mono(.caption2))
                             .monospacedDigit()
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                 }
                 Image(systemName: "chevron.right")
@@ -560,7 +560,7 @@ private struct ReclaimRow: View {
                     .lineLimit(1)
                 Text(candidate.risk.label)
                     .font(ConsoleFont.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             Spacer()
             Text(ConsoleFmt.bytes(candidate.sizeBytes))

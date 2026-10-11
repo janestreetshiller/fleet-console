@@ -467,6 +467,22 @@ class NotarizationTests(ScriptFixture):
                         self.assertEqual(Path(call["args"][2]), app)
                 self.assertFalse((self.root / "build").exists())
 
+    def test_signature_diagnostics_are_consumed_before_acceptance(self):
+        output = self.root / "verbose stage"
+        self.build_fixture(output)
+        result = self.run_script("notarize.sh", FLEETCONSOLE_OUTPUT_DIR=str(output),
+                                 FLEET_TEST_VERBOSE_SIGNATURE="1")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_signature_command_failure_is_refused_even_with_matching_text(self):
+        output = self.root / "failed inspection"
+        self.build_fixture(output)
+        before = len(self.calls())
+        result = self.run_script("notarize.sh", FLEETCONSOLE_OUTPUT_DIR=str(output),
+                                 FLEET_TEST_SIGNATURE_EXIT="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call["tool"] == "xcrun" for call in self.calls()[before:]))
+
     def test_submission_and_stapling_failures_cannot_report_success(self):
         output = self.root / "build"
         self.build_fixture(output)

@@ -163,19 +163,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         dashboard.target = self
         menu.addItem(dashboard)
 
-        menu.addItem(.sectionHeader(title: "Dashboard"))
-        for item in MainMenu.moduleItems() { menu.addItem(item) }
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "Monitor This Mac"))
+        let modules = MainMenu.moduleItems()
+        for (module, item) in zip(ConsoleModule.allCases, modules)
+            where [.overview, .processes, .storage].contains(module) {
+            item.image = NSImage(systemSymbolName: module.symbol, accessibilityDescription: nil)
+            menu.addItem(item)
+        }
+        let network = NSMenuItem(title: FleetSection.connections.menuTitle,
+                                action: #selector(showNetwork), keyEquivalent: "")
+        network.image = NSImage(systemSymbolName: "network", accessibilityDescription: nil)
+        network.target = self
+        menu.addItem(network)
 
-        menu.addItem(.sectionHeader(title: "Fleet"))
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "Background Work"))
+        for (module, item) in zip(ConsoleModule.allCases, modules)
+            where [.services, .events, .plists].contains(module) {
+            item.image = NSImage(systemSymbolName: module.symbol, accessibilityDescription: nil)
+            menu.addItem(item)
+        }
         let newTask = NSMenuItem(title: "New Task…", action: #selector(showNewTask), keyEquivalent: "n")
         newTask.keyEquivalentModifierMask = [.command]
         newTask.target = self
         menu.addItem(newTask)
-        let network = NSMenuItem(title: FleetSection.connections.menuTitle,
-                                 action: #selector(showNetwork), keyEquivalent: "")
-        network.target = self
-        menu.addItem(network)
-        let reconcile = NSMenuItem(title: "Run Reconciliation Sweep",
+        let reconcile = NSMenuItem(title: "Find Background Processes",
                                    action: #selector(self.reconcile), keyEquivalent: "")
         reconcile.target = self
         menu.addItem(reconcile)

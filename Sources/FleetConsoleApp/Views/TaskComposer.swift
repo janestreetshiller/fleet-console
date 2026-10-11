@@ -206,7 +206,7 @@ struct TaskComposerView: View {
             if let status = model.status {
                 Text(status)
                     .font(FleetFont.caption)
-                    .foregroundStyle(model.statusIsError ? Color.red : Color.primary)
+                    .foregroundStyle(model.statusIsError ? StatusTone.bad.ink : Color.primary)
                     .lineLimit(2)
             }
             Spacer()

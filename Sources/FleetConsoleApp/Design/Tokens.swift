@@ -25,6 +25,7 @@ enum ConsoleFont {
     /// Card numerals beside a gauge — the same emphasis as the dial's own
     /// readout plate, in text form.
     static let cardValue = Font.system(.title3, weight: .semibold)
+    static let metricValue = Font.system(.title, weight: .semibold)
     /// Body copy in a card or a welcome paragraph.
     static let body = Font.system(.body)
     /// Secondary row text, evidence, hints.
@@ -190,7 +191,7 @@ enum ConsoleMetrics {
     /// 944) and each lands near 306pt — a 89pt dial and a 200pt trace, which is
     /// over three points per sample at sixty samples. Four would need 971 and
     /// does not fit, so this cannot silently become a chart nobody can read.
-    static let cardMinWidth: CGFloat = 320
+    static let cardMinWidth: CGFloat = 377
     /// Gap between cards in the module grid, in both axes.
     static let cardGap: CGFloat = 13
     /// Vertical rhythm between stacked cards in a scrolling module and between

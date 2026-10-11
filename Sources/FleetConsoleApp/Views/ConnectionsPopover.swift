@@ -54,8 +54,6 @@ struct ConnectionsPopover: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                if model.settings.sections.listening { listeningSection }
-
                 CompactHeader(title: "Internet & LAN")
                 internetRow
                 NetworkSection(model: model)
@@ -73,6 +71,14 @@ struct ConnectionsPopover: View {
                 exoRow
 
                 if model.settings.sections.devices { DevicesSection(model: model) }
+                if model.settings.sections.listening {
+                    DisclosureGroup("Listening processes (\(listeningUnmanaged.count))") {
+                        listeningSection
+                    }
+                    .font(FleetFont.body)
+                    .padding(.horizontal, FleetMetrics.gutter)
+                    .padding(.vertical, 10)
+                }
                 Spacer(minLength: 6)
             }
         }
@@ -274,7 +280,7 @@ struct OverlaySection: View {
                              value: "\(service.state)\(service.enabled ? "" : " · disabled")")
                 }
                 Divider().padding(.vertical, 2)
-                Text("Tunnel interfaces").font(FleetFont.micro).foregroundStyle(.tertiary)
+                Text("Tunnel interfaces").font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                 KeyValue(key: "Up", value: "\(status.tunnels.count)")
                 ForEach(status.tunnels) { tunnel in
                     KeyValue(key: tunnel.interface,

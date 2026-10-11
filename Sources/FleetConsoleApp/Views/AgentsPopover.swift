@@ -42,25 +42,6 @@ struct AgentsContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // Profiles first. This tab is a roster: one card per agent that
-                // has a config, each carrying its own state. It used to open on
-                // four `StatTile`s — Working, Agents, Running, To answer — of
-                // which two were the same numbers the Services tab was already
-                // showing, and all four summed the agents into totals that say
-                // nothing about *which* agent is in trouble. The roster answers
-                // that directly, and the per-card state is the same fact the
-                // tiles were aggregating away.
-                CompactHeader(title: "Profiles", trailing: profilesTrailing)
-                if model.agentProfiles.isEmpty {
-                    EmptyLine(text: model.connected
-                              ? "no agent has launched anything or said anything yet"
-                              : "controller unavailable")
-                } else {
-                    ForEach(model.agentProfiles) { profile in
-                        AgentProfileCard(profile: profile, model: model, expanded: $expandedAgent)
-                    }
-                }
-
                 if !model.awaitingReplies.isEmpty {
                     CompactHeader(title: "Waiting on you", trailing: "\(model.awaitingReplies.count)")
                     ForEach(model.awaitingReplies) { message in
@@ -71,7 +52,7 @@ struct AgentsContent: View {
                 }
 
                 if !model.sessions.isEmpty {
-                    CompactHeader(title: "Working now", trailing: "\(model.sessions.count)")
+                    CompactHeader(title: "Agent sessions", trailing: "\(model.sessions.count)")
                     ForEach(model.sessions) { session in
                         // `agentTool` and not `pid`: a CLI agent is not a GUI
                         // process, so `NSRunningApplication` has nothing for its
@@ -87,15 +68,44 @@ struct AgentsContent: View {
                     }
                 }
 
-                let recent = model.recentMessages.filter { !$0.isAwaitingReply }
+                let profiles = model.agentProfiles.filter {
+                    $0.owned > 0 || $0.totalLaunched > 0 || $0.awaitingReply > 0
+                        || $0.totalCrashed > 0 || $0.totalLeaked > 0
+                }
+                if !profiles.isEmpty {
+                    CompactHeader(title: "Managed work by agent", trailing: "\(profiles.count)")
+                    ForEach(profiles) { profile in
+                        AgentProfileCard(profile: profile, model: model, expanded: $expandedAgent)
+                    }
+                }
+
+                let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
+                let messages = model.recentMessages.filter { !$0.isAwaitingReply }
+                let recent = messages.filter { $0.createdAt >= cutoff }
+                let earlier = messages.filter { $0.createdAt < cutoff }
                 if !recent.isEmpty {
-                    CompactHeader(title: "Recent messages")
+                    CompactHeader(title: "Messages in the last 24 hours")
                     ForEach(recent.prefix(6)) { message in
                         MessageRow(message: message, model: model,
                                    replyingTo: $replyingTo, replyText: $replyText,
                                    replyFocused: $replyFocused)
                     }
                     OverflowLine(count: max(0, recent.count - 6), action: openDashboard)
+                }
+                if model.sessions.isEmpty && model.awaitingReplies.isEmpty && profiles.isEmpty {
+                    EmptyLine(text: "No active agent sessions or managed work.")
+                }
+                if !earlier.isEmpty {
+                    DisclosureGroup("Earlier messages (\(earlier.count))") {
+                        ForEach(earlier.prefix(6)) { message in
+                            MessageRow(message: message, model: model,
+                                       replyingTo: $replyingTo, replyText: $replyText,
+                                       replyFocused: $replyFocused)
+                        }
+                    }
+                    .font(FleetFont.body)
+                    .padding(.horizontal, FleetMetrics.gutter)
+                    .padding(.vertical, 12)
                 }
 
                 Spacer(minLength: 6)
@@ -131,13 +141,13 @@ struct MessageRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(message.agent).font(FleetFont.rowTitleCompact)
-                        Text(message.kind.label).font(FleetFont.micro).foregroundStyle(.tertiary)
+                        Text(message.kind.label).font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                         if let name = message.serviceName {
-                            Text("· \(name)").font(FleetFont.micro).foregroundStyle(.tertiary)
+                            Text("· \(name)").font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                         }
                         Spacer()
                         Text(Fmt.relative(message.createdAt))
-                            .font(FleetFont.micro).foregroundStyle(.tertiary)
+                            .font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
                     }
                     Text(message.body)
                         .font(FleetFont.subtitle)
@@ -148,7 +158,7 @@ struct MessageRow: View {
                     if let reply = message.reply {
                         HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "arrowshape.turn.up.left.fill")
-                                .font(FleetFont.marker).foregroundStyle(.tertiary)
+                                .font(FleetFont.marker).foregroundStyle(SurfaceInk.secondary)
                             Text(reply)
                                 .font(FleetFont.subtitle)
                                 .foregroundStyle(.secondary)

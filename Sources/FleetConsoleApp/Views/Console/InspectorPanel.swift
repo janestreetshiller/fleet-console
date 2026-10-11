@@ -11,8 +11,6 @@ struct InspectorPanel: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            searchField
-            Hairline()
             inspectorBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -21,37 +19,6 @@ struct InspectorPanel: View {
         // past ~420pt the column stops being a margin note and starts competing
         // with the module it is annotating. The bounds themselves are applied by
         // `ConsoleRootView`.
-    }
-
-    /// The console's search, moved out of the toolbar and onto column three.
-    ///
-    /// It was a native toolbar search field, which put it in the ribbon's centre
-    /// where its width was whatever the toolbar had left — around 150pt, which
-    /// is why five of the eight prompts used to truncate mid-word. Over the
-    /// inspector it gets a real column's width, and it sits above the thing it
-    /// is filtering rather than across the room from it.
-    private var searchField: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
-            TextField(prompt, text: $console.search)
-                .textFieldStyle(.plain)
-                .font(ConsoleFont.subtitle)
-            if !console.search.isEmpty {
-                Button {
-                    console.search = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
-                }
-                .buttonStyle(.plain)
-                .help("Clear")
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
     }
 
     @ViewBuilder
@@ -74,10 +41,6 @@ struct InspectorPanel: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-
-    /// The search prompt, named for what column three is annotating right now.
-    /// Derived on `ConsoleModel` so this column and the toolbar cannot disagree.
-    private var prompt: String { console.searchPrompt }
 
     /// Composed from the app's own primitive rather than `ContentUnavailableView`.
     ///
@@ -157,7 +120,7 @@ struct DeviceInspectorView: View {
                             Text("Worst sample of three, not the mean: a path that is sometimes "
                                  + "8 ms and sometimes 125 ms is a 125 ms path for anything interactive.")
                                 .font(ConsoleFont.caption)
-                                .foregroundStyle(.tertiary)
+                                .foregroundStyle(SurfaceInk.secondary)
                         }
                     }
 

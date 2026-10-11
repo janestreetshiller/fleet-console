@@ -13,10 +13,8 @@ CLI. This file is the project index; source and manifests establish implementati
   `/Applications/FleetConsole.app` is the installation target. Verify current artifacts.
 - Rust seam: `rust/fleet-proto` (protocol types) + `rust/fleet-conformance`
   (round-trips them against the live daemon).
-- Freemium seam wired: trial clock + HMAC key gate in `FleetCore/License.swift`;
-  reconcile is a premium feature; keys are minted offline via `fleetctl license`.
-  No checkout and no network validation exist — deliberately. See
-  `docs/FREEMIUM.md`.
+- MIT source candidate: `FleetCore/License.swift` permanently unlocks features.
+  Legacy license APIs remain for compatibility; no activation or trial is required.
 
 The prior 2026-10-05 status recorded 141 passing Swift tests and a clean Rust check; these are historical results, not verification of subsequent edits.
 

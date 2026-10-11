@@ -163,7 +163,7 @@ struct HomeModule: View {
                 // the moment a sixth module was added.
                 Text("⌘1…⌘\(ConsoleModule.allCases.count)")
                     .font(ConsoleFont.mono(.caption))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
 
             ForEach(ConsoleModule.allCases) { module in
@@ -246,10 +246,10 @@ private struct PriorityRow: View {
                 Text(Fmt.relative(since))
                     .font(ConsoleFont.mono(.caption2))
                     .monospacedDigit()
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                 Image(systemName: "chevron.right")
                     .font(ConsoleFont.badge)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
@@ -312,7 +312,7 @@ private struct ModuleLink: View {
                         .lineLimit(1)
                     Text(detail)
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .monospacedDigit()
@@ -320,10 +320,10 @@ private struct ModuleLink: View {
                 Spacer(minLength: 6)
                 Text("⌘\(module.shortcutIndex)")
                     .font(ConsoleFont.mono(.caption))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
                 Image(systemName: "chevron.right")
                     .font(ConsoleFont.badge)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)

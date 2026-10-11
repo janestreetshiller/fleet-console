@@ -68,7 +68,7 @@ struct VolumeInspector: View {
             Text("Purgeable is the APFS gap between available and important-usage capacity — "
                  + "snapshots and caches the system reclaims under pressure, not a scan result.")
                 .font(ConsoleFont.caption)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(SurfaceInk.secondary)
         }
 
         InspectorCard(title: "Volume") {
@@ -91,12 +91,12 @@ struct VolumeInspector: View {
                     if model.breakdown.snapshots.count > 6 {
                         Text("… \(model.breakdown.snapshots.count - 6) older")
                             .font(ConsoleFont.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(SurfaceInk.secondary)
                     }
                 } else {
                     Text(model.breakdown.snapshotsNote ?? "Reading…")
                         .font(ConsoleFont.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
             }
         }
