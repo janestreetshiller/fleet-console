@@ -108,7 +108,9 @@ struct VolumeInspector: View {
                           mono: true)
             ThroughputChart(read: model.system.diskReadHistory,
                             write: model.system.diskWriteHistory,
-                            height: 56)
+                            times: model.system.diskReadSeries.samples.map(\.time),
+                            range: ChartTimeWindow.minutes2.range(endingAt: model.system.sampledAt),
+                            height: ConsoleMetrics.chartSecondaryHeight)
         }
     }
 

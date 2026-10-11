@@ -4,8 +4,15 @@ See what your Mac is doing and keep track of the background work your agents sta
 FleetConsole combines a native macOS menu-bar monitor, a local controller, and the
 `fleetctl` command-line tool. Requires macOS 14 or later.
 
-FleetConsole is MIT licensed. Every feature is available without an account,
-activation key, trial deadline, or payment. SwiftTerm retains its own MIT notices.
+FleetConsole source is MIT licensed. Local monitoring and controller tools require
+no account or payment. The planned multi-device add-on is $10/month through Ouros;
+linking is available in this review build while provider billing is prepared.
+SwiftTerm retains its own MIT notices.
+
+CPU and memory lead the Overview with taller plots. Choose CPU or Memory to focus
+a single chart, then zoom between 15 seconds, 30 seconds, 1 minute and 2 minutes.
+The horizontal axis shows actual observation times, including sampling gaps;
+individual spikes are preserved. Disk, GPU, network and sensors expand below.
 
 ## One place to look
 
@@ -99,6 +106,20 @@ your existing `orcs` wrapper and local model. Missing tools show an explanation.
 | Search / Refresh | ⌘K / ⌘R |
 | Toggle inspector | ⌥⌘I |
 | Terminal / Files / Interpret | ⇧⌘T / ⇧⌘F / ⇧⌘D |
+
+## Linked devices and AI credits
+
+Choose **Link a Device…** in the sidebar. Enter its name and hostname or IP;
+optionally enter an SSH username and opt into reading its FleetConsole service
+inventory. The controller probes reachability and reads metrics through your
+existing SSH configuration. Remote processes are read-only. Unlinking removes
+only the configuration entry. First-run setup creates no example peers.
+
+The device screen links to Ouros billing for prepaid AI credits. FleetConsole
+credit-funded inference, supervised repair agents and an MCP server are planned;
+this build does not spend credits or perform AI repairs. The $10/month FleetConsole
+offer and entitlement still need provider activation. See the
+[multi-device integration contract](docs/MULTI-DEVICE.md).
 
 ## Local data and configuration
 

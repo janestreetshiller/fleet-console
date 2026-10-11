@@ -575,15 +575,23 @@ final class SystemMonitor {
     /// cannot grow them without limit. Disk I/O is kept as separate read/write
     /// series — a combined "I/O" number hides a write storm behind idle reads,
     /// which is precisely the case the chart exists to catch.
-    private(set) var cpuHistory: [Double] = []
-    private(set) var gpuHistory: [Double] = []
-    private(set) var memoryHistory: [Double] = []
-    private(set) var diskReadHistory: [Double] = []
-    private(set) var diskWriteHistory: [Double] = []
-    private(set) var networkDownloadHistory: [Double] = []
-    private(set) var networkUploadHistory: [Double] = []
+    private(set) var cpuSeries = MetricHistory()
+    var cpuHistory: [Double] { cpuSeries.samples.map(\.value) }
+    private(set) var gpuSeries = MetricHistory()
+    var gpuHistory: [Double] { gpuSeries.samples.map(\.value) }
+    private(set) var memorySeries = MetricHistory()
+    var memoryHistory: [Double] { memorySeries.samples.map(\.value) }
+    private(set) var diskReadSeries = MetricHistory()
+    var diskReadHistory: [Double] { diskReadSeries.samples.map(\.value) }
+    private(set) var diskWriteSeries = MetricHistory()
+    var diskWriteHistory: [Double] { diskWriteSeries.samples.map(\.value) }
+    private(set) var networkDownloadSeries = MetricHistory()
+    var networkDownloadHistory: [Double] { networkDownloadSeries.samples.map(\.value) }
+    private(set) var networkUploadSeries = MetricHistory()
+    var networkUploadHistory: [Double] { networkUploadSeries.samples.map(\.value) }
 
-    static let historyLength = 60
+    private(set) var sampledAt = Date()
+
     static let interval: TimeInterval = 2
 
     private let sampler = HostSampler()
@@ -628,6 +636,7 @@ final class SystemMonitor {
         // cost of a feature it cannot see.
         let readSensors = isPremiumUnlocked(.smcSensors)
         queue.async { [weak self] in
+            let sampledAt = Date()
             let cpu = sampler.cpu()
             let gpu = sampler.gpu()
             let memory = sampler.memory()
@@ -637,7 +646,7 @@ final class SystemMonitor {
             let sensors = readSensors ? smc.sample() : SensorSample()
             Task { @MainActor in
                 self?.publish(cpu: cpu, gpu: gpu, memory: memory, storage: storage,
-                              network: network, power: power, sensors: sensors)
+                              network: network, power: power, sensors: sensors, sampledAt: sampledAt)
             }
         }
     }
@@ -646,7 +655,8 @@ final class SystemMonitor {
     /// row that reads this object.
     private func publish(cpu: CPUSample, gpu: GPUSample, memory: MemorySample,
                          storage: StorageSample, network: NetworkTrafficSample,
-                         power: PowerSample, sensors: SensorSample) {
+                         power: PowerSample, sensors: SensorSample, sampledAt: Date) {
+        self.sampledAt = sampledAt
         if self.cpu != cpu { self.cpu = cpu }
         if self.gpu != gpu { self.gpu = gpu }
         if self.memory != memory { self.memory = memory }
@@ -657,26 +667,21 @@ final class SystemMonitor {
         let thermal = ThermalSample(state: ProcessInfo.processInfo.thermalState)
         if self.thermal != thermal { self.thermal = thermal }
 
-        if cpu.sampled { append(cpu.usage, to: &cpuHistory) }
-        if let utilization = gpu.utilization { append(utilization, to: &gpuHistory) }
-        append(memory.usedShare, to: &memoryHistory)
+        if cpu.sampled { cpuSeries.append(cpu.usage, at: sampledAt) }
+        if let utilization = gpu.utilization { gpuSeries.append(utilization, at: sampledAt) }
+        if memory.totalBytes > 0 { memorySeries.append(memory.usedShare, at: sampledAt) }
         if let read = storage.readBytesPerSec, let write = storage.writeBytesPerSec {
-            append(read, to: &diskReadHistory)
-            append(write, to: &diskWriteHistory)
+            diskReadSeries.append(read, at: sampledAt)
+            diskWriteSeries.append(write, at: sampledAt)
         }
         if let download = network.downloadBytesPerSec, let upload = network.uploadBytesPerSec {
-            append(download, to: &networkDownloadHistory)
-            append(upload, to: &networkUploadHistory)
+            networkDownloadSeries.append(download, at: sampledAt)
+            networkUploadSeries.append(upload, at: sampledAt)
         }
         sampling = false
     }
 
-    private func append(_ value: Double, to history: inout [Double]) {
-        history.append(value)
-        if history.count > Self.historyLength {
-            history.removeFirst(history.count - Self.historyLength)
-        }
-    }
+
 }
 
 // MARK: - Thresholds

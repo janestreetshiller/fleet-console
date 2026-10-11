@@ -60,7 +60,7 @@ struct DeviceRowView: View {
     var body: some View {
         DisclosureRow(id: device.id, expanded: $expanded,
                       help: "\(device.health.label) — \(device.model.isEmpty ? device.name : device.model)") {
-            FleetRowLabel(icon: device.evidence.isSelf ? "desktopcomputer" : "macpro.gen3",
+            FleetRowLabel(icon: "desktopcomputer",
                           tone: device.health.tone,
                           title: device.name,
                           subtitle: summary,

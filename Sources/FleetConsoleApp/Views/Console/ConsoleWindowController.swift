@@ -108,6 +108,7 @@ final class ConsoleWindowController {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.toolbarStyle = .unifiedCompact
+        installInspectorToggle(on: window)
         // The titlebar remains draggable. Treating the entire live dashboard as
         // a drag region makes AppKit walk every chart/gauge path on each update.
         window.isMovableByWindowBackground = false
@@ -182,64 +183,32 @@ final class ConsoleWindowController {
         if activate { window.center() }
     }
 
-    /// The controller status pill, pinned at the trailing edge of the titlebar.
-    /// Implemented as an accessory view because toolbar *items* are managed by
-    /// SwiftUI once `.toolbar` bridges in; the accessory lives beside them.
-    ///
-    /// The fixed 168pt is the ribbon's own reserved space. It is deliberately
-    /// unchanged by the tool rail: the rail lives in the content view, one layer
-    /// below the titlebar container, and takes its width out of the split view
-    /// instead of out of this.
-    private func installTitlebarAccessory(into window: NSWindow) {
+    /// Reserve the right titlebar edge independently of SwiftUI toolbar ordering.
+    /// The same command is used by this control and the View menu shortcut.
+    private func installInspectorToggle(on window: NSWindow) {
         let accessory = NSTitlebarAccessoryViewController()
-        let pill = TitlebarStatusPill(model: model)
-        let hostingView = NSHostingView(rootView: pill)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 168, height: 24)
-        accessory.view = hostingView
+        let hosting = NSHostingView(rootView: InspectorTitlebarControl(console: console))
+        hosting.frame = NSRect(x: 0, y: 0, width: 38, height: 30)
+        accessory.view = hosting
         accessory.layoutAttribute = .right
         window.addTitlebarAccessoryViewController(accessory)
     }
 }
 
-/// Controller connectivity, compressed to a pip and one line of evidence.
-/// Reads the same fields the menu-bar tooltip does, so the window and the
-/// menu bar can never tell two different stories.
-private struct TitlebarStatusPill: View {
-    let model: AppModel
-
+private struct InspectorTitlebarControl: View {
+    @Bindable var console: ConsoleModel
     var body: some View {
-        HStack(spacing: 6) {
-            StatusPip(tone: model.connected ? .good : .bad, size: 7, pulsing: model.connected)
-            if let daemon = model.daemon, model.connected {
-                // Truncates rather than pushing the capsule wider: a long version
-                // string must not grow this pill into the toolbar items beside
-                // it. Same rule everywhere in the ribbon.
-                Text("fleetd \(daemon.version) · up \(Fmt.duration(daemon.uptime))")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            } else {
-                Text("controller offline")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
+        Button {
+            NotificationCenter.default.post(name: ConsoleCommand.toggleInspector, object: nil)
+        } label: {
+            Image(systemName: "sidebar.trailing")
+                .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
         }
-        .padding(.horizontal, 9)
-        .padding(.vertical, 4)
-        .background(
-            Capsule().fill(.quaternary.opacity(0.6))
-        )
-        .overlay(
-            Capsule().strokeBorder(ConsoleColor.hairline, lineWidth: 1)
-        )
-        .help(model.connected
-              ? "Controller socket connected. \(model.daemon.map { "pid \($0.pid)" } ?? "")"
-              : (model.connectionError ?? "fleetd is not answering"))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(model.connected ? "Controller connected" : "Controller offline")
+        .buttonStyle(.borderless)
+        .accessibilityLabel(console.inspectorVisible ? "Hide Inspector" : "Show Inspector")
+        .accessibilityValue(console.inspectorVisible ? "Visible" : "Hidden")
+        .help(console.inspectorVisible ? "Hide inspector (⌥⌘I)"
+              : "Show inspector (⌥⌘I). Closes a tool panel if more space is needed.")
     }
 }
 

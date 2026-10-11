@@ -97,14 +97,9 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
 
 // MARK: - View
 
-private struct WelcomeView: View {
+struct WelcomeView: View {
     @Bindable var model: AppModel
     let dismiss: () -> Void
-
-    /// 0 → 1 while the needle sweeps. Drives the gauge, the ring and the
-    /// caption so the three never disagree about where the intro is.
-    @State private var phase: Double = 0
-    @State private var entered = false
 
     /// The skip option is the premium feature; the *Skip button* below is not
     /// — skipping one showing and suppressing the welcome for every launch are
@@ -123,10 +118,7 @@ private struct WelcomeView: View {
         .sketchSubstrate(seed: 0.61, grainSeed: 61)
         // Escape dismisses; the animation's own skip affordance is the button.
         .onExitCommand { dismiss() }
-        .onAppear {
-            withAnimation(ConsoleMotion.welcomeEntrance) { entered = true }
-            startSweep()
-        }
+
     }
 
     private var header: some View {
@@ -140,63 +132,21 @@ private struct WelcomeView: View {
         .padding(.vertical, ConsoleMetrics.panelInset)
     }
 
-    /// The product pitch: one sentence about what the app is, then the gauge.
-    /// A feature list here would be a store page; the console itself is the
-    /// feature list, one click away.
     private var stage: some View {
-        VStack(spacing: ConsoleMetrics.sectionGap) {
-            Text("Your whole fleet, in the menu bar.")
+        VStack(alignment: .leading, spacing: ConsoleMetrics.sectionGap) {
+            Text("See what your Mac is doing.")
                 .font(ConsoleFont.heroTitle)
-                .multilineTextAlignment(.center)
-
-            Text("FleetConsole watches the daemons, leases and processes you "
-                 + "already run — and puts the evidence one click from the clock.")
+            Text("Live metrics and background work, one click from the menu bar.")
                 .font(ConsoleFont.body)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 420)
-
-            gaugeStage
+                .fixedSize(horizontal: false, vertical: true)
+            Label("Explore CPU and memory over time", systemImage: "chart.xyaxis.line")
+            Label("Inspect processes, services and leases", systemImage: "list.bullet")
+            Label("Link more computers through the device add-on", systemImage: "desktopcomputer")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .font(ConsoleFont.body)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .padding(.horizontal, ConsoleMetrics.gutter)
-        .opacity(entered ? 1 : 0)
-        .offset(y: entered ? 0 : 6)
-    }
-
-    /// The live sweep: a real RetroGauge runs 0 → 78% → 12% inside a breathing
-    /// ring. The needle's value is the animation's phase — not a recording of
-    /// the instrument, the instrument.
-    private var gaugeStage: some View {
-        ZStack {
-            Circle()
-                .trim(from: 0, to: phase)
-                .stroke(StatusTone.warn.ink,
-                        style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 216, height: 216)
-                .opacity(0.6)
-
-            RetroGauge(value: gaugeValue, tone: gaugeTone, caption: "CPU",
-                       readout: ConsoleFmt.utilPercent(gaugeValue))
-                .frame(width: 184, height: 184)
-        }
-        .frame(height: 240)
-    }
-
-    /// The sweep's story: spin up, hold at working load, settle. Piecewise so
-    /// the needle spends most of the intro in the band that shows off the
-    /// gauge's warning colour.
-    private var gaugeValue: Double? {
-        switch phase {
-        case ..<0.4: return phase / 0.4 * 0.78
-        case ..<0.75: return 0.78
-        default: return 0.78 - (phase - 0.75) / 0.25 * 0.66
-        }
-    }
-
-    private var gaugeTone: StatusTone {
-        SystemThresholds.utilization(gaugeValue ?? 0)
     }
 
     private var footer: some View {
@@ -220,10 +170,6 @@ private struct WelcomeView: View {
         .padding(.vertical, ConsoleMetrics.panelInset)
     }
 
-
-    private func startSweep() {
-        withAnimation(ConsoleMotion.welcomeSweep) { phase = 1 }
-    }
 
     private func openConsole() {
         NotificationCenter.default.post(name: ConsoleCommand.showHome, object: nil)

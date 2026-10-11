@@ -153,6 +153,9 @@ enum ConsoleMetrics {
     static let iconRowGlyph: CGFloat = 13
     /// Live charts.
     static let chartHeight: CGFloat = 89
+    static let chartPrimaryHeight: CGFloat = 233
+    static let chartFocusHeight: CGFloat = 377
+    static let chartSecondaryHeight: CGFloat = 144
     /// Trace weight, and the inset that keeps it whole. A stroke centred on the
     /// plot boundary loses half its width to the edge, so the plot area is held
     /// off the frame by more than half a line — the trace is the content here,

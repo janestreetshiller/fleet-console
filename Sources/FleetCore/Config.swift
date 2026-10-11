@@ -470,25 +470,12 @@ public struct FleetConfig: Codable, Sendable {
         "pnpm dev", "streamlit", "jupyter", "fastapi", "ollama serve",
     ]
 
-    /// Seeded from the local machine + Tailscale peers so the first run is not empty.
+    /// Only this machine is present until the user explicitly links a device.
     public static func makeDefault(selfHostName: String?, selfTailscaleName: String?) -> FleetConfig {
         var cfg = FleetConfig()
-        cfg.devices = [
-            DeviceConfig(id: "mac-mini-m4",
-                         name: "Mac mini M4",
-                         model: "Apple M4",
-                         localHost: "localhost",
-                         tailscaleHost: selfTailscaleName ?? selfHostName,
-                         probePort: 22,
-                         isSelf: true),
-            DeviceConfig(id: "intel-mac",
-                         name: "Intel Mac",
-                         model: "Intel",
-                         localHost: nil,
-                         tailscaleHost: "heavyweights-control",
-                         probePort: 22,
-                         isSelf: false),
-        ]
+        cfg.devices = [DeviceConfig(id: "self", name: selfHostName ?? "This Mac",
+                                   localHost: "localhost", tailscaleHost: selfTailscaleName,
+                                   probePort: nil, isSelf: true)]
         return cfg
     }
 

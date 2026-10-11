@@ -23,7 +23,7 @@ import FleetCore
 
 @MainActor
 enum SurfaceRenderer {
-    static let flag = "--render-surfaces"
+    nonisolated static let flag = "--render-surfaces"
 
     /// The console window's canonical size, and the popover's own width.
     private static let popoverWidth: CGFloat = FleetMetrics.popoverWidth
@@ -162,7 +162,27 @@ enum SurfaceRenderer {
             renderPopover(model: model, fixture: fixture, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
             renderTaskComposer(appearance: appearance, into: out)
+            renderStandalone(AnyView(DeviceManagementView(model: model)), name: "device-management",
+                             size: NSSize(width: 560, height: 650), appearance: appearance, into: out)
+            renderStandalone(AnyView(WelcomeView(model: model, dismiss: {})), name: "welcome",
+                             size: NSSize(width: 560, height: 420), appearance: appearance, into: out)
         }
+    }
+
+    private static func renderStandalone(_ view: AnyView, name: String, size: NSSize,
+                                         appearance: Appearance, into out: URL) {
+        let hosting = NSHostingView(rootView: view)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.appearance = NSAppearance(named: appearance.name)
+        hosting.appearance = window.appearance
+        window.contentView = hosting
+        window.backgroundColor = .windowBackgroundColor
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.orderFront(nil)
+        settle(turns: 40)
+        capture(window, to: out.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
+        window.orderOut(nil)
     }
 
     /// The Task Composer window on its own — a surface the sheet should prove
@@ -211,9 +231,9 @@ enum SurfaceRenderer {
     /// Turn the run loop so SwiftUI lays out, then reassert the fixture over
     /// whatever the live controller may have pushed, then turn it again so the
     /// reassertion is what gets drawn.
-    private static func hold(_ model: AppModel, _ fixture: Snapshot, turns: Int = 6) {
-        settle(turns: turns)
-        model.apply(fixture)
+    private static func hold(_ model: AppModel, _ fixture: Snapshot, turns: Int = 30) {
+        settle(turns: max(turns, 30))
+        mutate { model.apply(fixture) }
         // The connection banner and the titlebar pill read these directly rather
         // than inferring them from the snapshot, so a sheet rendered with the
         // subscription deliberately shut down would otherwise show every surface
@@ -351,6 +371,15 @@ enum SurfaceRenderer {
             capture(window, to: out.appendingPathComponent(
                 "console-\(module.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(appearance.rawValue).png"))
         }
+        // The narrow layout is a separate acceptance surface for every module.
+        window.setContentSize(NSSize(width: 982, height: 720))
+        for module in ConsoleModule.allCases {
+            mutate { controller.console.open(module) }
+            hold(model, fixture)
+            capture(window, to: out.appendingPathComponent(
+                "compact-\(module.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(appearance.rawValue).png"))
+        }
+        window.setContentSize(DashboardWindowGeometry.defaultContentSize)
 
         // Home — the priority view the window opens on.
         mutate { controller.console.goHome() }
@@ -361,7 +390,7 @@ enum SurfaceRenderer {
         mutate { controller.console.atHome = false }
         let inspectors: [(String, () -> Void)] = [
             ("service", {
-                controller.console.module = .services
+                controller.console.open(.services)
                 controller.console.selectedServiceID = Fixtures.healthyServiceID
             }),
             ("service-crashed", {
@@ -418,8 +447,9 @@ enum SurfaceRenderer {
     /// take effect until it has turned. One turn is enough for a module switch;
     /// a tool panel spawning a process needs more.
     private static func settle(turns: Int = 6) {
-        for _ in 0..<turns {
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+        let deadline = Date().addingTimeInterval(Double(turns) * 0.02)
+        while Date() < deadline {
+            RunLoop.current.run(mode: .default, before: deadline)
         }
     }
 

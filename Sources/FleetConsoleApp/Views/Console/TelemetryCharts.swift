@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import FleetCore
 
 // Live telemetry, drawn with Swift Charts.
 //
@@ -26,15 +27,44 @@ import Charts
 // keeps its plain domain. A rescaled axis you cannot read is the failure this
 // change exists to avoid.
 
-/// One sample in a telemetry series. Index-based: histories are ring buffers,
-/// so the x position is the sample's age, not a wall-clock time.
 private struct Trace: Identifiable {
     let id: Int
+    let time: Double
     let value: Double
 }
 
-private func traces(of values: [Double]) -> [Trace] {
-    values.enumerated().map { Trace(id: $0.offset, value: $0.element) }
+private func traces(of values: [Double], times: [Date], range: ClosedRange<Date>?) -> [Trace] {
+    let timed = !times.isEmpty && times.count == values.count
+    return values.enumerated().compactMap { index, value in
+        if timed, let range, !range.contains(times[index]) { return nil }
+        return Trace(id: index, time: timed ? times[index].timeIntervalSince1970 : Double(index), value: value)
+    }
+}
+
+private struct TimelineAxis: ViewModifier {
+    let times: [Date]
+    let count: Int
+    let range: ClosedRange<Date>?
+    @ViewBuilder func body(content: Content) -> some View {
+        if !times.isEmpty, times.count == count, let range {
+            let middle = range.lowerBound.addingTimeInterval(range.upperBound.timeIntervalSince(range.lowerBound) / 2)
+            content
+                .chartXScale(domain: range)
+                .chartXAxis {
+                    AxisMarks(values: [range.lowerBound, middle, range.upperBound]) { mark in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5)).foregroundStyle(ConsoleColor.hairline)
+                        AxisValueLabel(anchor: mark.index == 0 ? .leading : mark.index == mark.count - 1 ? .trailing : .center) {
+                            if let date = mark.as(Date.self) {
+                                Text(date, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute().second())
+                                    .font(ConsoleFont.caption).monospacedDigit()
+                            }
+                        }
+                    }
+                }
+        } else {
+            content.chartXScale(domain: 0...Double(max(1, count - 1))).chartXAxis(.hidden)
+        }
+    }
 }
 
 // MARK: - Bounded window
@@ -105,28 +135,26 @@ private struct BoundedWindow {
 /// be mistakable for a machine at 100%.
 struct LoadWaveChart: View {
     let values: [Double]
+    var times: [Date] = []
+    var range: ClosedRange<Date>?
     var tint: Color = .accentColor
     var height: CGFloat = ConsoleMetrics.chartHeight
+
+    var metric: String = "Load"
 
     private var labelsFit: Bool { height >= ConsoleMetrics.chartAxisMinHeight }
 
     var body: some View {
-        let window = BoundedWindow(values, autoRange: labelsFit)
-        return Chart(traces(of: values)) { trace in
-            AreaMark(x: .value("Sample", trace.id),
-                     yStart: .value("Base", window.lower),
-                     yEnd: .value("Load", min(1, max(0, trace.value))))
-                .foregroundStyle(.linearGradient(
-                    colors: [tint.opacity(0.32), tint.opacity(0.04)],
-                    startPoint: .top, endPoint: .bottom))
-                .interpolationMethod(.catmullRom)
-            LineMark(x: .value("Sample", trace.id),
-                     y: .value("Load", min(1, max(0, trace.value))))
-                .foregroundStyle(tint)
-                .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
-                .interpolationMethod(.catmullRom)
+        let points = traces(of: values, times: times, range: range)
+        let window = BoundedWindow(points.map(\.value), autoRange: labelsFit)
+        return Chart(points) { trace in
+            if !times.isEmpty && times.count == values.count {
+                loadMarks(trace, x: .value("Time", Date(timeIntervalSince1970: trace.time)), window: window)
+            } else {
+                loadMarks(trace, x: .value("Sample", trace.id), window: window)
+            }
         }
-        .chartXAxis(.hidden)
+        .modifier(TimelineAxis(times: times, count: values.count, range: range))
         .chartYAxis {
             // Two marks, the window's own bounds, and nothing else: no ticks,
             // no domain line, hairline gridlines. The axis is here to state the
@@ -154,11 +182,26 @@ struct LoadWaveChart: View {
         .accessibilityLabel(accessibilityLabel(window))
     }
 
+    @ChartContentBuilder
+    private func loadMarks<X: Plottable>(_ trace: Trace, x: PlottableValue<X>, window: BoundedWindow) -> some ChartContent {
+        AreaMark(x: x, yStart: .value("Base", window.lower), yEnd: .value("Load", min(1, max(0, trace.value))))
+            .foregroundStyle(.linearGradient(colors: [tint.opacity(0.32), tint.opacity(0.04)], startPoint: .top, endPoint: .bottom))
+            .interpolationMethod(.linear)
+            .accessibilityHidden(true)
+        LineMark(x: x, y: .value("Load", min(1, max(0, trace.value))))
+            .foregroundStyle(tint)
+            .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
+            .interpolationMethod(.linear)
+            .accessibilityLabel(metric)
+            .accessibilityValue(ConsoleFmt.utilPercent(trace.value))
+    }
+
     private func accessibilityLabel(_ window: BoundedWindow) -> String {
-        let base = "Load history, \(values.count) samples, "
+        let base = "\(metric) history, \(traces(of: values, times: times, range: range).count) visible samples, "
             + "current \(ConsoleFmt.utilPercent(values.last))"
-        guard window.zoomed else { return base }
-        return base + ", axis \(ConsoleFmt.utilPercent(window.lower)) to "
+        let timeDescription = range.map { ", \(Int($0.upperBound.timeIntervalSince($0.lowerBound))) seconds displayed" } ?? ""
+        guard window.zoomed else { return base + timeDescription }
+        return base + timeDescription + ", axis \(ConsoleFmt.utilPercent(window.lower)) to "
             + ConsoleFmt.utilPercent(window.upper)
     }
 }
@@ -176,6 +219,8 @@ struct LoadWaveChart: View {
 struct ThroughputChart: View {
     let read: [Double]
     let write: [Double]
+    var times: [Date] = []
+    var range: ClosedRange<Date>?
     var height: CGFloat = ConsoleMetrics.chartHeight
     var readLabel: String = TelemetrySeries.read.label
     var writeLabel: String = TelemetrySeries.write.label
@@ -191,7 +236,8 @@ struct ThroughputChart: View {
     private var labelsFit: Bool { height >= ConsoleMetrics.chartAxisMinHeight }
 
     private var peak: Double {
-        max(read.max() ?? 0, write.max() ?? 0, Self.minimumCeiling)
+        max(traces(of: read, times: times, range: range).map(\.value).max() ?? 0,
+            traces(of: write, times: times, range: range).map(\.value).max() ?? 0, Self.minimumCeiling)
     }
 
     /// Log above the floor when labelled; the previous linear-with-a-floor
@@ -208,7 +254,7 @@ struct ThroughputChart: View {
 
     var body: some View {
         chart
-            .chartXAxis(.hidden)
+            .modifier(TimelineAxis(times: seriesTimes, count: read.count, range: range))
             .chartYAxis {
                 AxisMarks(values: axisValues) { mark in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5))
@@ -243,25 +289,34 @@ struct ThroughputChart: View {
         }
     }
 
+    private var seriesTimes: [Date] { times.count == read.count && times.count == write.count ? times : [] }
+
     private var marks: some View {
         Chart {
-            ForEach(traces(of: read)) { trace in
-                LineMark(x: .value("Sample", trace.id),
-                         y: .value("Bytes", plotted(trace.value)),
-                         series: .value("Direction", readLabel))
-                    .foregroundStyle(TelemetrySeries.read.color)
-                    .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
-                    .interpolationMethod(.catmullRom)
+            ForEach(traces(of: read, times: seriesTimes, range: range)) { trace in
+                if !seriesTimes.isEmpty {
+                    line(trace, x: .value("Time", Date(timeIntervalSince1970: trace.time)), label: readLabel, color: TelemetrySeries.read.color)
+                } else {
+                    line(trace, x: .value("Sample", trace.id), label: readLabel, color: TelemetrySeries.read.color)
+                }
             }
-            ForEach(traces(of: write)) { trace in
-                LineMark(x: .value("Sample", trace.id),
-                         y: .value("Bytes", plotted(trace.value)),
-                         series: .value("Direction", writeLabel))
-                    .foregroundStyle(TelemetrySeries.write.color)
-                    .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
-                    .interpolationMethod(.catmullRom)
+            ForEach(traces(of: write, times: seriesTimes, range: range)) { trace in
+                if !seriesTimes.isEmpty {
+                    line(trace, x: .value("Time", Date(timeIntervalSince1970: trace.time)), label: writeLabel, color: TelemetrySeries.write.color)
+                } else {
+                    line(trace, x: .value("Sample", trace.id), label: writeLabel, color: TelemetrySeries.write.color)
+                }
             }
         }
+    }
+
+    private func line<X: Plottable>(_ trace: Trace, x: PlottableValue<X>, label: String, color: Color) -> some ChartContent {
+        LineMark(x: x, y: .value("Bytes", plotted(trace.value)), series: .value("Direction", label))
+            .foregroundStyle(color)
+            .lineStyle(StrokeStyle(lineWidth: ConsoleMetrics.chartStroke))
+            .interpolationMethod(.linear)
+            .accessibilityLabel("\(metric) \(label)")
+            .accessibilityValue(ConsoleFmt.byteRate(trace.value))
     }
 
     /// Lifts a sample onto the axis. On the log scale this is what keeps an

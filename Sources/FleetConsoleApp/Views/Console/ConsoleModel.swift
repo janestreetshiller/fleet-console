@@ -70,6 +70,8 @@ final class ConsoleModel {
     /// That is a layout accident standing in for a control. This is the intent;
     /// width can still overrule it, never the other way round.
     var inspectorRevealed = false
+    /// Actual visibility, published by the root layout for the titlebar control.
+    var inspectorVisible = false
 
     /// True for the duration of a window-edge drag.
     ///

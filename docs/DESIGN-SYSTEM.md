@@ -375,18 +375,19 @@ digits it exists to show.
 
 ### Telemetry — `TelemetryCharts.swift`
 
-Swift Charts, with the y scale chosen per *kind* of series rather than one rule
-for both. A **bounded** series (utilisation, memory share) gets a linear axis
-over a window that tracks the observed band, so volatility on top of a high
-baseline is what you see — and the window states itself in two axis labels,
-because a trace that fills the plot must never be mistakable for a machine at
-100%. An **unbounded** series (byte rates) gets a log axis with a 1 KB/s floor,
-because it genuinely spans decades and spends most of its life near zero. Both
-rules have the same guard: a chart too short to carry its labels keeps its plain
-domain, since a rescaled axis nobody can read is the failure the change avoids.
+Swift Charts plots timestamped local observations. CPU and memory lead the
+Overview, with 233pt plots together and a 377pt plot when one metric is focused.
+Time zoom offers 15s, 30s, 1min and 2min; the visible observations retain peaks and
+sampling gaps. Linear interpolation connects observations without inventing
+smooth overshoot. The logo, series hues and gradient fill remain pending owner
+artwork and color choices.
 
-Modules: `TelemetryCard` (an instrument — dial, trace and facts on one card),
-`RetroGauge`, `LoadWaveChart`, `ThroughputChart`, `LegendDot`.
+Utilization uses a labelled linear y window with a minimum 15-point span.
+Throughput uses a labelled log axis with a 1 KB/s floor. Secondary charts use
+144pt plots. Compact service history, which carries no timestamps in the wire
+contract, keeps its sample axis hidden rather than inventing wall-clock times.
+
+Components: `TelemetryCard`, `LoadWaveChart`, `ThroughputChart`, `LegendDot`.
 
 ### `RetroGauge(value:tone:caption:readout:)` — `Design/RetroGauge.swift`
 

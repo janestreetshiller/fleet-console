@@ -2,28 +2,8 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-// The console's root: three columns, one toolbar, one search, one tool rail.
-//
-//   ┌─────────────┬──────────────────────────┬─────────────┬──┐
-//   │ Fleet mesh  │ Home or module (⌘1…⌘6)   │ Inspector   │▐ │
-//   │ (devices)   │ priority view / detail   │ (selection) │▐ │
-//   └─────────────┴──────────────────────────┴─────────────┴──┘
-//                                                     tool rail ┘
-//
-// The toolbar is SwiftUI's `.toolbar` bridged onto the AppKit window's
-// NSToolbar (unified-compact, hidden title): the module picker sits in the
-// principal slot, search is the native toolbar search field, and the sidebar
-// toggle is automatic. Menu commands arrive as `ConsoleCommand` notifications
-// from the AppKit main menu.
-//
-// The tool rail is a trailing `safeAreaInset`, not an overlay — see
-// `Chrome/ChromeToolRail.swift` for why that is the only arrangement that
-// cannot land on the toolbar's words.
-
-/// The window chrome the split view carries, in one place so the three-column
-/// and two-column arrangements above cannot drift apart. The toolbar and the
-/// search field must stay attached to the `NavigationSplitView` itself — that is
-/// what bridges them onto the window's NSToolbar.
+// A native navigation sidebar, content column, optional trailing inspector and
+// optional tool panel. Keep toolbar/search on the split view for AppKit bridging.
 private struct ConsoleChrome<Bar: ToolbarContent>: ViewModifier {
     @Bindable var console: ConsoleModel
     let prompt: String
@@ -100,7 +80,9 @@ struct ConsoleRootView: View {
         // dropdown does that with no window up at all, so a subscription
         // installed on appearance is a subscription installed too late.
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.toggleInspector)) { _ in
-            console.inspectorRevealed.toggle()
+            let reveal = !showsInspector
+            if inspectorBlockedByWidth && reveal { tools.dismiss() }
+            console.inspectorRevealed = reveal
         }
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.toggleTool)) { note in
             guard let raw = note.userInfo?[ConsoleCommand.userInfoTool] as? String,
@@ -118,6 +100,9 @@ struct ConsoleRootView: View {
         // new rows through the table's NSTableView delegate, and clearing a
         // selection bound to that table re-enters the delegate mid-pass (the
         // "reentrant operation" warning macOS will assert on).
+        .onChange(of: showsInspector, initial: true) { _, visible in
+            console.inspectorVisible = visible
+        }
         .onChange(of: model.lastSnapshotAt) {
             Task { @MainActor in console.reconcileSelection(model: model) }
         }
@@ -172,56 +157,16 @@ struct ConsoleRootView: View {
         tools.revealed != nil && contentWidth < Self.inspectorAndPanelFloor
     }
 
-    // MARK: The butterfly
-    //
-    // The two side columns are one column reflected. They take the same width at
-    // every window size — the golden minor section, halved, clamped to the same
-    // rungs — and they open and close on the same easing, so the window breathes
-    // symmetrically about its centre rather than one side snapping while the
-    // other slides.
-    //
-    // Getting there meant taking the inspector *out* of `NavigationSplitView`.
-    // It was column three of a three-column split view, and hiding it swapped
-    // the whole `NavigationSplitView` for a two-column one — a different view
-    // type, so SwiftUI tore down the tree and built a new one. That is why the
-    // inspector appeared and vanished instantly while the sidebar slid: there
-    // was no transition to animate, there was a structural replacement. It also
-    // meant every toggle rebuilt the sidebar and the module column for a change
-    // that concerned neither.
-    //
-    // The inspector is now a sibling in the same `HStack` as the tool rail,
-    // which is the arrangement the rail has always used and the one thing in
-    // this window that has never had a layout bug. One split view now, always
-    // two columns, no structural swap — and a width that can actually animate.
-
-    /// The resting width of either side column at the current window size.
+    /// The inspector uses the available content width after any tool panel.
     private var sideColumnWidth: CGFloat {
         let panel = tools.revealed == nil ? 0 : ConsoleToolMetrics.panelIdeal
-        let split = max(0, contentWidth - ChromeRailMetrics.railWidth - panel)
+        let split = max(0, contentWidth - panel)
         return ConsoleLayout.sideColumn(splitWidth: split)
     }
 
     private var splitView: some View {
         NavigationSplitView {
             FleetSidebarView(model: model, console: console)
-                // The *exact-width* overload, not `min:ideal:max:`.
-                //
-                // With the three-argument form the two sides did not mirror, and
-                // measuring a render is what showed it: 224pt of sidebar against
-                // 275pt of inspector, from one number handed to both. SwiftUI
-                // treats `ideal` on a split-view column as a preference it is
-                // free to override — it holds the user's drag state and its own
-                // fitting pass above your request — so the left column settled
-                // near its floor while the right, an ordinary framed view, took
-                // the width it was given. A mirror where one half is advisory is
-                // not a mirror.
-                //
-                // Fixing the width costs nothing here even now that the window
-                // resizes freely: the column is a ratio of the current width,
-                // clamped between two rungs, so it is the arrangement rather
-                // than a default the user is expected to drag away from. What
-                // changed with the aspect lock is which dimensions the window
-                // offers, not how the split view divides the one it has.
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
         } detail: {
             contentColumn
@@ -316,25 +261,6 @@ struct ConsoleRootView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        // Leading, not centred. The module cluster is navigation — where you
-        // are — and navigation belongs at the start of the ribbon, not floating
-        // in the middle of it competing with the title.
-        ToolbarItem(placement: .navigation) {
-            if console.isLocalDeviceSelected {
-                Label("This Mac", systemImage: "desktopcomputer")
-                    .font(ConsoleFont.subtitle.weight(.medium))
-                    .accessibilityLabel("Viewing this Mac")
-            } else {
-                // A remote node has one module: itself. The picker yields to a
-                // plain title rather than offering modules that cannot apply.
-                Label(fleetDeviceName, systemImage: "desktopcomputer")
-                    .font(ConsoleFont.subtitle.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-            }
-        }
-
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 ForEach(ConsoleTool.allCases) { tool in
@@ -345,7 +271,7 @@ struct ConsoleRootView: View {
                     }
                 }
             } label: {
-                Label("Tools", systemImage: "terminal")
+                Label("Tools", systemImage: "wrench.and.screwdriver")
                     .labelStyle(.titleAndIcon)
             }
             .help("Terminal, files and local interpretation")
@@ -362,35 +288,6 @@ struct ConsoleRootView: View {
             .help("Re-evidence everything the window shows (⌘R)")
         }
 
-        // The trailing counterpart to AppKit's automatic sidebar toggle. It sits
-        // at the far end of the ribbon, which is where every macOS app that has
-        // an inspector puts it, and it uses the system's own inspector glyph so
-        // it reads as the same control users already know.
-        ToolbarItem(placement: .primaryAction) {
-            Button {
-                console.inspectorRevealed.toggle()
-            } label: {
-                Label("Inspector", systemImage: "sidebar.trailing")
-            }
-            .keyboardShortcut("i", modifiers: [.command, .option])
-            .help(inspectorBlockedByWidth
-                  ? "The window is too narrow for the inspector and a tool panel at once — close the panel or widen the window"
-                  : (console.inspectorRevealed
-                     ? "Hide the inspector (⌥⌘I)"
-                     : "Show the inspector (⌥⌘I)"))
-        }
-    }
-
-    /// Home is a destination, not another segment: the picker keeps only the
-    /// modules and simply shows none of them selected while home is on screen,
-    /// which is the truth. Picking a segment leaves home.
-    private var moduleSelection: Binding<ConsoleModule?> {
-        Binding {
-            console.atHome ? nil : console.module
-        } set: { selected in
-            guard let selected else { return }
-            console.open(selected)
-        }
     }
 
     private var fleetDeviceName: String {

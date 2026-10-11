@@ -13,6 +13,7 @@ import FleetCore
 struct FleetSidebarView: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
+    @State private var managingDevices = false
 
     var body: some View {
         // One list, not two. This Mac and the remote nodes were previously split
@@ -42,14 +43,16 @@ struct FleetSidebarView: View {
                         .tag("module:" + module.rawValue)
                 }
             }
-            if model.deviceRows.contains(where: { !$0.record.evidence.isSelf }) {
-                Section("Other Computers") {
+                Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
                         .tag("device:" + row.id)
                 }
+                Button { managingDevices = true } label: {
+                    Label("Link a Device…", systemImage: "plus.circle")
                 }
-            }
+                .help("Multi-device add-on: $10/month through Ouros; linking is available in this preview")
+                }
         }
         .listStyle(.sidebar)
         // The mesh sits on the page like everything else. Without this the
@@ -84,6 +87,7 @@ struct FleetSidebarView: View {
             sidebarFooter
         }
         .onAppear { model.refreshDevices() }
+        .sheet(isPresented: $managingDevices) { DeviceManagementView(model: model) }
     }
 
     private var navigationSelection: Binding<String> {
@@ -111,25 +115,22 @@ struct FleetSidebarView: View {
             Hairline()
             HStack(spacing: 6) {
                 StatusPip(tone: model.connected ? .good : .bad, size: 7)
-                Text(model.connected ? "Connected" : "Controller offline")
+                Text(model.connected ? "Controller connected" : "Controller offline")
                     .font(ConsoleFont.caption)
                     .foregroundStyle(.secondary)
-                Spacer()
-                if let snapshot = model.lastSnapshotAt {
-                    Text(Fmt.relative(snapshot))
-                        .font(ConsoleFont.mono(.caption2))
-                        .monospacedDigit()
-                        .foregroundStyle(SurfaceInk.secondary)
-                }
+            }
+            if let snapshot = model.lastSnapshotAt {
+                Text("Updated \(Fmt.relative(snapshot))")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
             }
             HStack(spacing: 6) {
-                Image(systemName: model.network.internet.reachable == false
-                      ? "wifi.exclamationmark" : "wifi")
+                Image(systemName: "globe")
                     .font(ConsoleFont.caption)
                     .foregroundStyle(model.network.internet.reachable == false
                                      ? StatusTone.bad.ink : Color.secondary)
                 Text(model.network.internet.reachable == false
-                     ? "Internet unreachable" : model.network.internet.summary)
+                     ? "Internet unreachable" : "Internet · \(model.network.internet.summary)")
                     .font(ConsoleFont.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
@@ -190,6 +191,7 @@ private struct DeviceNodeRow: View {
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
+        .help("\(record.name) · \(record.health.label) · \(detailLine)")
         .accessibilityLabel("\(record.name), \(record.health.label)"
                             + (record.evidence.icmpRTTms.map { ", \(ConsoleFmt.latency($0))" } ?? ""))
     }
@@ -220,7 +222,7 @@ private struct DeviceNodeRow: View {
             parts.append("LAN")
         }
         if let port = record.probePort {
-            parts.append("ssh :\(port)")
+            parts.append("TCP :\(port)")
         }
         return parts.isEmpty ? "no route configured" : parts.joined(separator: " · ")
     }

@@ -464,7 +464,7 @@ struct InspectorLine: View {
             Text(value)
                 .font(mono ? ConsoleFont.mono(.caption) : ConsoleFont.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(wrap ? 4 : 1)
+                .lineLimit(wrap ? nil : 1)
                 .truncationMode(.middle)
                 .fixedSize(horizontal: false, vertical: wrap)
                 .textSelection(.enabled)

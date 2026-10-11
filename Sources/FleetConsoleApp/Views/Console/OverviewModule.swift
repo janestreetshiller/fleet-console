@@ -1,27 +1,9 @@
 import SwiftUI
 import FleetCore
 
-// Module: Overview — the live telemetry screen.
-//
-// Four instruments, each one a card: CPU (wave + per-core grid), memory
-// (used share + pressure), disk I/O (read/write throughput), and GPU where the
-// accelerator reports one. Numbers that move every two seconds are rendered
-// with monospaced digits so the columns never jitter — the HIG rule for live
-// data, applied everywhere without exception.
-//
-// The cards **flow** rather than stack. Every one of them was full width and
-// full stop, so the module was as tall as the sum of its instruments however
-// much width the window had: with the sidebar and inspector both open the
-// content column is around 420pt and a card is a screenful, and with them both
-// closed it is over 900pt and a card is a 900pt-wide chart of sixty samples
-// beside 500pt of nothing. An adaptive grid spends width when there is width and
-// falls back to one column when there is not, which is the same argument the
-// chrome tool panel already makes about the terminal.
-//
-// The process map is the exception and stays full width: it is a treemap, its
-// tiles are read as area, and halving its width does not halve the information —
-// it makes the fortieth tile unclickable.
-
+// CPU and memory are the primary instruments. Time zoom preserves individual
+// observations; focusing one metric gives it the full width and a taller plot.
+// Secondary instruments are expandable so they do not compress the main traces.
 struct OverviewModule: View {
     @Bindable var model: AppModel
     /// Read for one reason: the toolbar's search field is present on this module
@@ -37,24 +19,14 @@ struct OverviewModule: View {
     /// and the inspector both change it while the window stays the same size.
     @State private var contentWidth: CGFloat = 0
 
-    private var instrumentCount: Int {
-        5 + (system.gpu.available ? 1 : 0) + (system.power.hasBattery ? 1 : 0)
-    }
-
-    /// How many instruments sit on a row.
-    ///
-    /// A plain `.adaptive` grid takes every column the width allows, and at the
-    /// width this module usually has that is three — which puts CPU, Memory and
-    /// Disk on one row and leaves GPU alone beside two empty slots. The hole is
-    /// the widest thing on the surface and it reads as a missing card. So the
-    /// count steps down when the last row would hold exactly one of three or
-    /// more: four cards become 2x2 rather than 3+1.
-    private var instrumentColumns: Int {
-        ConsoleLayout.telemetryColumns(contentWidth: contentWidth,
-                                       instrumentCount: instrumentCount,
-                                       minimumCardWidth: ConsoleMetrics.cardMinWidth,
-                                       gap: ConsoleMetrics.cardGap)
-    }
+    private enum Focus: String, CaseIterable { case both = "CPU & Memory", cpu = "CPU", memory = "Memory" }
+    @State private var focus: Focus = .both
+    @State private var timeWindow: ChartTimeWindow = .minutes2
+    @State private var moreMetrics = false
+    private var timeRange: ClosedRange<Date> { timeWindow.range(endingAt: system.sampledAt) }
+    private var primaryColumns: Int { focus == .both && contentWidth >= 800 ? 2 : 1 }
+    private var plotHeight: CGFloat { focus == .both ? ConsoleMetrics.chartPrimaryHeight : ConsoleMetrics.chartFocusHeight }
+    private var instrumentColumns: Int { contentWidth >= 800 ? 2 : 1 }
 
     var body: some View {
         ScrollView {
@@ -64,24 +36,31 @@ struct OverviewModule: View {
                     subtitle: subtitle,
                     symbol: ConsoleModule.overview.symbol)
 
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(),
-                                                            spacing: ConsoleMetrics.cardGap,
-                                                            alignment: .top),
-                                         count: instrumentColumns),
-                          alignment: .leading,
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { focusPicker; Spacer(minLength: 8); timePicker }
+                    VStack(alignment: .leading, spacing: 8) { focusPicker; timePicker }
+                }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: primaryColumns),
                           spacing: ConsoleMetrics.cardGap) {
-                    cpuCard
-                    memoryCard
-                    diskCard
-                    if system.gpu.available { gpuCard }
-                    networkCard
-                    sensorCard
-                    if system.power.hasBattery { powerCard }
+                    if focus != .memory { cpuCard }
+                    if focus != .cpu { memoryCard }
                 }
                 .background(GeometryReader { proxy in
                     Color.clear.onAppear { contentWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, new in contentWidth = new }
+                        .onChange(of: proxy.size.width) { _, width in contentWidth = width }
                 })
+                DisclosureGroup("Disk, GPU, Network & Sensors", isExpanded: $moreMetrics) {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: instrumentColumns),
+                              spacing: ConsoleMetrics.cardGap) {
+                        diskCard
+                        if system.gpu.available { gpuCard }
+                        networkCard
+                        sensorCard
+                        if system.power.hasBattery { powerCard }
+                    }
+                    .padding(.top, ConsoleMetrics.cardGap)
+                }
+                .font(ConsoleFont.cardTitle)
 
                 processMapCard
                 footer
@@ -92,6 +71,33 @@ struct OverviewModule: View {
         .scrollContentBackground(.hidden)
     }
 
+    private var focusPicker: some View {
+        Picker("Chart focus", selection: $focus) {
+            ForEach(Focus.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .help("Give CPU or memory the full chart width")
+    }
+
+    private var historyStatus: String {
+        guard let first = system.cpuSeries.samples.first?.time else { return "Collecting history…" }
+        let seconds = Int(max(0, system.sampledAt.timeIntervalSince(first)))
+        return seconds < timeWindow.rawValue - 2 ? "Live · \(seconds) s collected" : "Live"
+    }
+
+    private var timePicker: some View {
+        HStack(spacing: 8) {
+            Text(historyStatus).font(ConsoleFont.caption).foregroundStyle(.secondary)
+            Picker("Time range", selection: $timeWindow) {
+                ForEach(ChartTimeWindow.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .fixedSize()
+            .help("Zoom the visible time range without averaging samples")
+        }
+    }
+
     private var subtitle: String {
         var parts = [system.topology.brand]
         if !system.topology.coreSummary.isEmpty { parts.append(system.topology.coreSummary) }
@@ -100,17 +106,6 @@ struct OverviewModule: View {
 
     // MARK: Sensors
 
-    /// The SMC card: fan speed and die temperature from the hardware, not from
-    /// `thermalState`'s four bands.
-    ///
-    /// The card is premium-gated, and the three states it renders are three
-    /// different sentences on purpose:
-    ///   * locked — what the feature *is*, so the paywall advertises honestly;
-    ///   * available but no keys — the SMC answered and held nothing (the
-    ///     normal Apple silicon answer), said as "no keys", not as zeros;
-    ///   * unavailable — no SMC at all (VMs, very old Macs).
-    /// A fourth state — a licensed machine reporting a number — needs no
-    /// prose; the number is the sentence.
     private var sensorCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -181,12 +176,10 @@ struct OverviewModule: View {
                 ? "user \(ConsoleFmt.utilPercent(system.cpu.userShare)) · sys \(ConsoleFmt.utilPercent(system.cpu.systemShare))"
                 : "sampling…"
         ) {
-            // The standard trace height, not the tall one. The card is a grid cell
-            // now, and a CPU chart 32pt taller than its three neighbours sets the
-            // height of the whole row it lands in.
             LoadWaveChart(values: system.cpuHistory,
+                          times: system.cpuSeries.samples.map(\.time), range: timeRange,
                           tint: cpuTint,
-                          height: ConsoleMetrics.chartHeight)
+                          height: plotHeight, metric: "CPU")
             HStack(alignment: .bottom) {
                 CoreGrid(values: system.cpu.perCore, topology: system.topology)
                 Spacer(minLength: 4)
@@ -221,8 +214,9 @@ struct OverviewModule: View {
             subtitle: "pressure \(system.memory.pressure.label)"
         ) {
             LoadWaveChart(values: system.memoryHistory,
+                          times: system.memorySeries.samples.map(\.time), range: timeRange,
                           tint: .accentColor,
-                          height: ConsoleMetrics.chartHeight)
+                          height: plotHeight, metric: "Memory")
             // Wrapped rather than laid out in one row of five. At a grid cell's
             // width the old row hyphenated "COMPRESSED" and then pushed the total
             // off the card; a flow lays out as many as fit and moves the rest down
@@ -327,7 +321,8 @@ struct OverviewModule: View {
         ) {
             ThroughputChart(read: system.diskReadHistory,
                             write: system.diskWriteHistory,
-                            height: ConsoleMetrics.chartHeight)
+                            times: system.diskReadSeries.samples.map(\.time), range: timeRange,
+                            height: ConsoleMetrics.chartSecondaryHeight)
             HStack(spacing: 10) {
                 LegendDot(label: TelemetrySeries.read.label,
                           value: ConsoleFmt.byteRate(system.storage.readBytesPerSec),
@@ -359,9 +354,10 @@ struct OverviewModule: View {
             subtitle: system.gpu.model
         ) {
             LoadWaveChart(values: system.gpuHistory,
+                          times: system.gpuSeries.samples.map(\.time), range: timeRange,
                           tint: system.gpu.utilization.map { SystemThresholds.utilization($0).color }
                                 ?? .accentColor,
-                          height: ConsoleMetrics.chartHeight)
+                          height: ConsoleMetrics.chartSecondaryHeight, metric: "GPU")
             if let used = system.gpu.inUseMemoryBytes {
                 HStack {
                     MemoryFact(label: "In use", value: used)
@@ -386,6 +382,7 @@ struct OverviewModule: View {
             }
             ThroughputChart(read: system.networkDownloadHistory,
                             write: system.networkUploadHistory,
+                            times: system.networkDownloadSeries.samples.map(\.time), range: timeRange,
                             readLabel: "Download", writeLabel: "Upload", metric: "Network")
             HStack(spacing: 13) {
                 rateMetric("Download", rate: system.network.downloadBytesPerSec)

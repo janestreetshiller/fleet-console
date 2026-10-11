@@ -15,11 +15,12 @@ final class DaemonClient: @unchecked Sendable {
 
     private init() {
         let arguments = ProcessInfo.processInfo.arguments
-        requestPolicy = RPCRequestPolicy.forArguments(arguments)
         #if FLEET_SURFACE_RENDERER
+        requestPolicy = arguments.contains(SurfaceRenderer.flag) ? .observational : RPCRequestPolicy.forArguments(arguments)
         socketPath = RPCRequestPolicy.daemonSocketPath(forArguments: arguments,
                                                      surfaceRenderer: true)
         #else
+        requestPolicy = RPCRequestPolicy.forArguments(arguments)
         socketPath = FleetPaths.socket.path
         #endif
     }
@@ -56,6 +57,11 @@ final class DaemonClient: @unchecked Sendable {
     /// and the queue is FIFO where unstructured tasks are not.
     func startSubscription(onSnapshot: @escaping @MainActor (Snapshot) -> Void,
                            onConnection: @escaping @MainActor (Bool, String?) -> Void) {
+        #if FLEET_SURFACE_RENDERER
+        // Fixture sheets must not race a live subscription. Live verification
+        // takes the ordinary subscription path and uses real controller data.
+        if ProcessInfo.processInfo.arguments.contains(SurfaceRenderer.flag) { return }
+        #endif
         let thread = Thread { [weak self] in
             guard let self else { return }
             var backoff: useconds_t = 500_000
@@ -96,6 +102,12 @@ final class DaemonClient: @unchecked Sendable {
 
     func send(_ request: RPCRequest, timeout: TimeInterval = 30,
               completion: @escaping @MainActor (Result<RPCResponse, Error>) -> Void) {
+        #if FLEET_SURFACE_RENDERER
+        if ProcessInfo.processInfo.arguments.contains(SurfaceRenderer.flag), request.op == .snapshot {
+            Self.onMain { completion(.failure(FleetError.rejected("Live snapshots are disabled in fixture capture."))) }
+            return
+        }
+        #endif
         guard requestPolicy.allows(request.op) else {
             Self.onMain {
                 completion(.failure(FleetError.rejected(
