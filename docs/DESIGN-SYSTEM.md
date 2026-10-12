@@ -402,7 +402,7 @@ It used to be a machined instrument — a filled face, a radial shade to recess
 it, a two-stop gradient bezel lighting it from the top-left, and an Aqua
 highlight over the top third. All four were arguing with the substrate: a lit
 plastic dial floating over a drifting field is an object photographed onto a
-page, and the page is the point. What is drawn now is what a compass leaves —
+page. What is drawn now is what a compass leaves —
 the outer circle, the dashed inner circle the tick ladder was measured from, and
 a pivot in the plate's own colour with an ink ring round it. Nothing is filled,
 so the plate and the field show through the scale. Every dimension, threshold
@@ -427,7 +427,7 @@ It inherits the rest of the system unchanged:
 * **Reduce Motion** stops the sweep; the needle steps between samples instead.
 
 The face carries no label: the card two points to the right already says
-"Memory", and at 92pt the word set across the arc rather than inside it.
+"Memory", and at 92pt the word is set across the arc rather than inside it.
 `caption` survives as the accessibility label, the one place the name is not
 already on screen.
 
@@ -590,11 +590,10 @@ lives in `ConsoleModel`.
 enum and a surface that is not in it must not consume one. ⇧⌘H reaches it.
 
 It wears the same `ModuleHeader` as every other surface. It briefly did not: the
-title was a centred serif italic largetitle, on the argument that home is the one
-place the window is allowed a voice. A serif italic appears nowhere else in the
-app and in no macOS surface, so it read as another application's screen pasted
-in — and centring it broke the leading-edge alignment the sidebar, the toolbar
-and every card underneath share. Its second card is labelled **Modules**, not
+title was a centred serif italic largetitle. A serif italic appears nowhere else
+in the app and in no macOS surface, so it read as another application's screen
+pasted in — and centring it broke the leading-edge alignment the sidebar, the
+toolbar and every card underneath share. Its second card is labelled **Modules**, not
 "Go deeper": the rows under it are exactly `ConsoleModule.allCases`, the same six
 names the picker and the View menu use, and a section label names its contents
 rather than instructing the reader.

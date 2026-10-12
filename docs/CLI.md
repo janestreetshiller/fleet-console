@@ -123,13 +123,12 @@ Adopts an already-running process into the registry. It gets an owner, a purpose
 a lease, an event timeline and a row that is no longer labelled *unmanaged* — and
 the controller still refuses to signal it.
 
-That refusal is the point of the verb, not a limitation of it. A **launched**
-service is one the controller started, so it owns the consequences of stopping
-it; a **claimed** one was already running when the sweep found it. So `stop`,
-`restart`, `pause`, `resume`, `kill` and the lease reaper all reject a claimed
-record, the app draws none of those controls for one, and an expired claim is
-reported and left alone rather than reaped. Claiming buys visibility, not
-authority. Stop it where you started it.
+That refusal is the point of the verb. A **launched** service is one the
+controller started, so it owns the consequences of stopping it; a **claimed** one
+was already running when the sweep found it. So `stop`, `restart`, `pause`,
+`resume`, `kill` and the lease reaper all reject a claimed record, the app draws
+none of those controls for one, and an expired claim is reported and left alone
+rather than reaped. Claiming buys visibility, not authority.
 
 The target is re-verified before adoption: an unmanaged id is `pid:hash(start
 signature)`, and a pid recycled between the sweep and the command is refused by
@@ -139,7 +138,7 @@ pid already registered, and the controller's own process group are all refused.
 Its uptime is the process's own, taken from `ps -o lstart`, not the moment it was
 claimed — a claimed record that reset the clock would hide exactly how long a
 leak had been running. Logs read as "(claimed, not launched — its output goes
-wherever it was started)": its descriptors were wired up before we arrived, so
+wherever it was started)": its descriptors were wired up before the claim, so
 there is no log file here and never will be.
 
 ### `fleetctl ignore <command>`
