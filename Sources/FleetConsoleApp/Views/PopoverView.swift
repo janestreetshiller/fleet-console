@@ -1,8 +1,8 @@
 import SwiftUI
 import FleetCore
 
-// Services starts with the service rows. Verdict/count chrome lives in the shell;
-// evidence, provenance and safe actions stay with the record they describe.
+// Attention can outlive a service row or describe the controller/a device.
+// Keep its explanation and dashboard handoff beside the service inventory.
 struct ServicesContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
@@ -15,6 +15,9 @@ struct ServicesContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 if !model.connected { ControllerDownBanner(model: model) }
+                if !model.attention.isEmpty {
+                    AttentionSection(model: model, expandedService: $expanded, openDashboard: openDashboard)
+                }
                 ServicesSection(model: model, expanded: $expanded, pendingAction: $pendingAction, labels: labels)
                 LocalToolsSection(model: model)
                 Spacer(minLength: 8)
@@ -88,6 +91,7 @@ struct ControllerDownBanner: View {
 struct AttentionSection: View {
     @Bindable var model: AppModel
     @Binding var expandedService: String?
+    var openDashboard: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -95,12 +99,19 @@ struct AttentionSection: View {
 
             ForEach(model.attention.prefix(6)) { item in
                 AttentionRow(item: item) {
-                    expandedService = item.serviceID ?? item.unmanagedID
+                    if let serviceID = item.serviceID,
+                       model.activeServices.contains(where: { $0.id == serviceID }) {
+                        expandedService = serviceID
+                    } else {
+                        openDashboard()
+                    }
                 }
             }
 
             if model.attention.count > 6 {
-                Text("+ \(model.attention.count - 6) more in the dashboard")
+                Button("+ \(model.attention.count - 6) more in the dashboard", action: openDashboard)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("attention.dashboard")
                     .font(FleetFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
                     .padding(.horizontal, FleetMetrics.gutter)
@@ -128,6 +139,8 @@ struct AttentionRow: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("attention.\(item.id)")
+        .accessibilityLabel("\(item.title). \(item.detail)")
         .onHover { hovering = $0 }
         .rowBackground(hovering: hovering)
         .padding(.horizontal, FleetMetrics.rowHighlightMargin)

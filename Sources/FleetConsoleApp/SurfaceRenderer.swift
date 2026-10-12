@@ -167,6 +167,31 @@ enum SurfaceRenderer {
         // to the running app, not to the public fixture sheet.
         VLANRegistry.shared.adopt(Fixtures.segments)
 
+        // A focused regression capture through the real popover shell. These
+        // alerts intentionally have no active service row to expand.
+        if CommandLine.arguments.contains("--attention-only") {
+            var attentionFixture = fixture
+            attentionFixture.services = []
+            attentionFixture.unmanaged = []
+            attentionFixture.devices = []
+            attentionFixture.attention = [
+                AttentionItem(id: "daemon-crashloop", severity: .critical,
+                              title: "Controller crash-loop", detail: "The controller restarted repeatedly. Review its event log."),
+                AttentionItem(id: "recent-crash", severity: .critical,
+                              title: "Indexer crashed", detail: "The finished service has no active row. Review its last exit.", serviceID: "finished-indexer"),
+                AttentionItem(id: "unreachable-device", severity: .warning,
+                              title: "Demo device unreachable", detail: "The last device check failed. Review its connection.")
+            ]
+            for appearance in Appearance.allCases {
+                NSApp.appearance = NSAppearance(named: appearance.name)
+                model.requestedSection = .services
+                renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {}, registration: registration)),
+                                     named: "popover-attention-no-services", model: model, fixture: attentionFixture,
+                                     appearance: appearance, into: out)
+            }
+            return
+        }
+
         for appearance in Appearance.allCases {
             NSApp.appearance = NSAppearance(named: appearance.name)
             renderPopover(model: model, fixture: fixture, registration: registration, appearance: appearance, into: out)
