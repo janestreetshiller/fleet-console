@@ -1,34 +1,20 @@
 import SwiftUI
 import FleetCore
 
-// Module: Services — what the controller owns, and what it found that it does
-// not own.
-//
-// Managed services first (they are the point of the app), then unmanaged
-// processes (the reconciler's catch), then agents (the owners). Selecting a
-// row drives the inspector; destructive verbs stay behind the same alert the
-// popover uses, naming the pid and the evidence before anything is signalled.
-
+// Services owns service identity and evidence. Owners remain in each row; the
+// agent roster has its own destination, and unmanaged processes stay disclosed.
 struct ServicesModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
+    var labels: ServiceLabelsStore = .shared
 
     @State private var pendingAction: DestructiveAction?
+    @State private var showUnmanaged = false
 
-    private var query: String { console.search.trimmingCharacters(in: .whitespaces) }
+    private var query: String { console.search.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     private var managed: [ServiceRow] {
-        let rows = model.activeServices
-        guard !query.isEmpty else { return rows }
-        return rows.filter { row in
-            let record = row.record
-            return record.friendlyName.localizedCaseInsensitiveContains(query)
-                || record.ownerAgent.localizedCaseInsensitiveContains(query)
-                || record.purpose.localizedCaseInsensitiveContains(query)
-                || record.commandLine.localizedCaseInsensitiveContains(query)
-                || record.effectivePorts.contains(where: { String($0).contains(query) })
-                || (record.pid.map { String($0).contains(query) } ?? false)
-        }
+        model.activeServices.filter { labels.matches(query, record: $0.record) }
     }
 
     private var unmanaged: [UnmanagedProcess] {
@@ -44,32 +30,30 @@ struct ServicesModule: View {
 
     var body: some View {
         List(selection: $console.selectedServiceID) {
-            Section {
-                if managed.isEmpty {
-                    Text(query.isEmpty
-                         ? "No services under management. `fleetctl launch` starts one."
-                         : "No managed services match “\(query)”.")
-                        .font(ConsoleFont.caption)
-                        .foregroundStyle(SurfaceInk.secondary)
-                } else {
-                    ForEach(managed) { row in
-                        ManagedServiceRow(row: row, model: model) { action in
-                            pendingAction = action
-                        }
+            if managed.isEmpty {
+                Text(query.isEmpty
+                     ? (model.connected ? "No services under management. `fleetctl launch` starts one."
+                                        : "Controller unavailable — service state is unknown.")
+                     : "No services match “\(query)”.")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
+            } else {
+                ForEach(managed) { row in
+                    ManagedServiceRow(row: row, model: model, labels: labels) { pendingAction = $0 }
                         .tag(row.id)
-                    }
                 }
-            } header: {
-                ModuleListHeader(title: "Managed", count: managed.count,
-                                 symbol: "square.stack.3d.up")
             }
 
-            Section {
-                if unmanaged.isEmpty {
-                    Text("No unmanaged listeners or dev-server-shaped processes.")
+            if !model.unmanaged.isEmpty {
+                DisclosureGroup(isExpanded: $showUnmanaged) {
+                    Text("Not started by FleetConsole; never signalled. Select a row to claim or allow-list it.")
                         .font(ConsoleFont.caption)
                         .foregroundStyle(SurfaceInk.secondary)
-                } else {
+                    if unmanaged.isEmpty {
+                        Text("No unmanaged processes match “\(query)”.")
+                            .font(ConsoleFont.caption)
+                            .foregroundStyle(SurfaceInk.secondary)
+                    }
                     ForEach(unmanaged) { process in
                         UnmanagedRow(process: process)
                             .tag(process.id)
@@ -78,114 +62,86 @@ struct ServicesModule: View {
                                 console.selectedServiceID = nil
                             }
                     }
-                }
-            } header: {
-                ModuleListHeader(title: "Unmanaged", count: unmanaged.count,
-                                 symbol: "questionmark.circle")
-            }
-
-            if !model.agentSummaries.isEmpty {
-                Section {
-                    ForEach(model.agentSummaries) { agent in
-                        AgentRow(agent: agent)
+                } label: {
+                    HStack {
+                        Text("Unmanaged")
+                        ConsoleBadge(text: "\(unmanaged.count)")
+                        Spacer()
+                        let leaks = unmanaged.filter { $0.formerServiceID != nil }.count
+                        if leaks > 0 {
+                            ConsoleBadge(text: "\(leaks) leaked", tone: .warn,
+                                         symbol: "exclamationmark.triangle")
+                        }
                     }
-                } header: {
-                    ModuleListHeader(title: "Agents", count: model.agentSummaries.count,
-                                     symbol: "person.2")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
                 }
+                .accessibilityIdentifier("services.unmanaged.disclosure")
             }
         }
         .listStyle(.inset)
-        // The table sits on the page like every other surface: without
-        // this it paints AppKit's own table background over the field and
-        // the module reads as a panel dropped on top of the window rather
-        // than as part of it.
         .scrollContentBackground(.hidden)
-        .overlay(alignment: .top) {
-            // The module header sits above the list so the title does not scroll
-            // away — every other module does the same.
-        }
         .safeAreaInset(edge: .top) {
-            ModuleHeader(
-                title: "Services",
-                subtitle: "\(model.activeServices.count) active · \(model.unmanaged.count) unmanaged",
-                symbol: ConsoleModule.services.symbol)
-            .padding(.horizontal, ConsoleMetrics.gutter)
-            .padding(.vertical, 10)
-            .background(.bar)
-            .hairline()
+            ModuleHeader(title: "Services", subtitle: "\(model.activeServices.count) active",
+                         symbol: ConsoleModule.services.symbol)
+                .padding(.horizontal, ConsoleMetrics.gutter)
+                .padding(.vertical, 10)
+                .background(.bar)
+                .hairline()
         }
-        .alert(item: $pendingAction) { action in
-            Alert(title: Text(action.title),
-                  message: Text(action.message),
-                  primaryButton: .destructive(Text(action.kind.rawValue)) {
-                      switch action.kind {
-                      case .stop: model.stop(action.service)
-                      case .restart: model.restart(action.service)
-                      case .kill: model.forceKill(action.service)
-                      }
-                  },
-                  secondaryButton: .cancel())
+        .onChange(of: query) { _, query in
+            if !query.isEmpty && !unmanaged.isEmpty { showUnmanaged = true }
         }
+        .onChange(of: console.selectedUnmanagedID, initial: true) { _, id in
+            if id != nil { showUnmanaged = true }
+        }
+        .destructiveActionAlert($pendingAction, model: model)
+        .actionErrorAlert(model: model)
     }
 }
 
 // MARK: - Rows
 
-private struct ModuleListHeader: View {
-    let title: String
-    let count: Int
-    let symbol: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: symbol)
-                .font(ConsoleFont.caption.weight(.semibold))
-            Text(title)
-                .font(ConsoleFont.subtitle.weight(.semibold))
-            Spacer()
-            ConsoleBadge(text: "\(count)")
-        }
-        .foregroundStyle(.secondary)
-        .textCase(nil)
-    }
-}
-
 private struct ManagedServiceRow: View {
     let row: ServiceRow
     let model: AppModel
+    let labels: ServiceLabelsStore
     let onAction: (DestructiveAction) -> Void
 
     private var record: ServiceRecord { row.record }
+    private var isStale: Bool { record.evidence.isStale(tolerance: model.staleTolerance) }
 
     var body: some View {
         HStack(spacing: 10) {
-            EntityIcon(symbol: Iconography.service(record), tone: record.state.tone, size: FleetMetrics.iconRowLarge)
+            EntityIcon(symbol: Iconography.service(record),
+                       tone: isStale ? .unknown : record.state.tone, size: FleetMetrics.iconRowLarge)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(record.friendlyName)
+                    Text(labels.displayName(for: record))
                         .font(ConsoleFont.rowTitle.weight(.medium))
                         .lineLimit(1)
-                    Text(record.state.label)
-                        .font(ConsoleFont.caption)
-                        .foregroundStyle(record.state.tone.ink)
+                    if let color = labels.label(for: record.id).color {
+                        ServiceColorTag(color: color).font(ConsoleFont.badge)
+                    }
                 }
-                Text("\(record.ownerAgent) · \(record.purpose)")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
+                HStack(spacing: 6) {
+                    Text(record.state.label + (isStale ? " · stale" : ""))
+                        .foregroundStyle(isStale ? StatusTone.unknown.ink : record.state.tone.ink)
+                    if record.claimed { ConsoleBadge(text: "Claimed", tone: .neutral) }
+                    Text("\(record.ownerAgent) · \(record.purpose)")
+                        .foregroundStyle(SurfaceInk.secondary)
+                        .lineLimit(1)
+                }
+                .font(ConsoleFont.caption)
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
                 HStack(spacing: 8) {
                     if let cpu = record.resources.cpuPct {
-                        Text(ConsoleFmt.cpuPercent(cpu))
-                            .monospacedDigit()
+                        Text(ConsoleFmt.cpuPercent(cpu)).monospacedDigit()
                     }
                     if let mem = record.resources.memMB {
-                        Text(Fmt.mem(mem))
-                            .monospacedDigit()
+                        Text(Fmt.mem(mem)).monospacedDigit()
                     }
                 }
                 .font(ConsoleFont.mono(.caption))
@@ -197,12 +153,13 @@ private struct ManagedServiceRow: View {
                     .monospacedDigit()
                     .foregroundStyle(SurfaceInk.secondary)
             }
+            ServiceLabelEditButton(service: record, labels: labels, compact: true)
+                .font(ConsoleFont.caption)
         }
         .padding(.vertical, 3)
+        .help("\(labels.displayName(for: record)) · recorded as \(record.friendlyName) · \(record.state.label)\(isStale ? " · stale" : "")")
         .contextMenu {
-            // Renew is the one verb a claimed record keeps: a lease is a promise
-            // about how long you expect the thing to be here, and extending it
-            // signals nothing to the process.
+            // A claimed record still keeps lease renewal, never signal controls.
             if record.isSignallableByController {
                 Button("Stop…") { onAction(DestructiveAction(kind: .stop, service: record)) }
                 Button("Restart…") { onAction(DestructiveAction(kind: .restart, service: record)) }
@@ -226,7 +183,9 @@ private struct UnmanagedRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            EntityIcon(symbol: Iconography.unmanaged(process), tone: .warn, size: FleetMetrics.iconRowLarge)
+            EntityIcon(symbol: Iconography.unmanaged(process),
+                       tone: process.formerServiceID != nil ? .warn : .neutral,
+                       size: FleetMetrics.iconRowLarge)
             VStack(alignment: .leading, spacing: 2) {
                 Text(process.command)
                     .font(ConsoleFont.rowTitle.weight(.medium))
@@ -253,80 +212,5 @@ private struct UnmanagedRow: View {
         .hoverHighlight()
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(process.command), unmanaged, pid \(process.pid)")
-    }
-}
-
-private struct AgentRow: View {
-    let agent: AgentSummary
-
-    var body: some View {
-        HStack(spacing: 10) {
-            // `AppGlyph`, not a bare `EntityIcon`.
-            //
-            // The popover's agent rows have borrowed the tool's own desktop
-            // artwork since `AppGlyph` was written; the dashboard's never did,
-            // so the one surface called the dashboard showed a generic person
-            // tile for `codex` while the popover two clicks away showed the
-            // app's logo. That is the same fact rendered two ways, which is the
-            // thing this design system exists to stop.
-            //
-            // The fallback is the tile it used to draw unconditionally, with
-            // the same tone, so an agent with no desktop app is unchanged.
-            AppGlyph(symbol: "person.crop.rectangle.stack",
-                     fallback: .tile,
-                     tone: agent.awaitingReply > 0 ? .warn
-                           : agent.needingAttention > 0 ? .bad
-                           : agent.running > 0 ? .good : .neutral,
-                     size: FleetMetrics.iconRowLarge,
-                     agentTool: agent.id)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(agent.id)
-                    .font(ConsoleFont.rowTitle.weight(.medium))
-                    .lineLimit(1)
-                Text(agent.purposes.first ?? (agent.running > 0 ? "running" : "idle"))
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            HStack(spacing: 6) {
-                if agent.awaitingReply > 0 {
-                    ConsoleBadge(text: "\(agent.awaitingReply) awaiting", tone: .warn,
-                                 symbol: "questionmark.bubble")
-                }
-                // Shown whenever the agent owns a record, including when none of
-                // them are running. Hiding the count at zero left an agent whose
-                // only service had expired with a blank cell beside siblings that
-                // had numbers, which reads as a row that failed to draw rather
-                // than as a zero. Blank now means one thing: owns no services.
-                if agent.owned > 0 {
-                    Text("\(agent.running) running")
-                        .font(ConsoleFont.mono(.caption))
-                        .monospacedDigit()
-                        .foregroundStyle(agent.running > 0 ? AnyShapeStyle(.secondary)
-                                                           : AnyShapeStyle(.tertiary))
-                }
-            }
-        }
-        .padding(.vertical, 3)
-        .contentShape(Rectangle())
-        .hoverHighlight()
-        .contextMenu {
-            Text("Agent: \(agent.id)")
-            Divider()
-            Button("Copy Agent ID") {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(agent.id, forType: .string)
-            }
-            if !agent.purposes.isEmpty {
-                Button("Copy Purposes") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(agent.purposes.joined(separator: "\n"),
-                                                   forType: .string)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(agent.id), \(agent.running) services running")
     }
 }

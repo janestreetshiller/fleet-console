@@ -39,6 +39,7 @@ enum ConsoleCommand {
     static let showHome = Notification.Name("com.fleetconsole.console.showHome")
     static let toggleTool = Notification.Name("com.fleetconsole.console.toggleTool")
     static let toggleInspector = Notification.Name("com.fleetconsole.console.toggleInspector")
+    static let toggleSidebar = Notification.Name("com.fleetconsole.console.toggleSidebar")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
 }
@@ -62,6 +63,11 @@ final class ConsoleModel {
     /// Toolbar search. Applies to the module in view — processes, services and
     /// events each decide what fields it matches.
     var search = ""
+
+    /// Concealed until requested, like the tab drawer in the Termin9 shell.
+    var sidebarRevealed = false
+
+    func toggleSidebar() { sidebarRevealed.toggle() }
 
     /// Whether the inspector column is wanted. The leading sidebar has had a
     /// toggle since the toolbar bridged onto NSToolbar — AppKit supplies it —

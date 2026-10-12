@@ -1,0 +1,29 @@
+name: Core CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  macos:
+    name: Build and test public core
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Record toolchains
+        run: |
+          swift --version
+          cargo --version
+      - name: Build release tools
+        run: swift build -c release --disable-index-store -Xswiftc -disable-cmo
+      - name: Test core
+        run: swift test --disable-index-store
+      - name: Test Rust workspace
+        run: cargo test --manifest-path rust/Cargo.toml --workspace --locked

@@ -1,18 +1,7 @@
 import SwiftUI
 import FleetCore
 
-/// The **Processes** section of the menu-bar popover.
-///
-/// The console window has had a full process table for a while — six columns,
-/// sortable, filterable. This is not a small copy of it. A menu-bar surface
-/// answers one question, which here is *what is this machine spending itself
-/// on right now*, and the answer is two short lists rather than one long one:
-/// the heaviest processes by CPU and the heaviest by memory. Those are usually
-/// different processes, and a single ranking hides whichever one you did not
-/// sort by.
-///
-/// Everything past that question is one click away in the dashboard, which is
-/// where a table belongs.
+/// One process ranking, with CPU and memory as explicit sort choices.
 struct ProcessesContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
@@ -22,25 +11,33 @@ struct ProcessesContent: View {
     @State private var pendingTermination: ProcessRow?
     /// Set when a signal was refused between the click and the syscall.
     @State private var refusal: String?
+    @State private var weight: ProcessWeight = .cpu
 
     private var inventory: ProcessInventory { model.processes }
     private var terminationEnabled: Bool { model.settings.features.allowProcessTermination }
 
-    /// Five is what fits above the fold at popover density without the section
-    /// under it disappearing. It is also about the number of processes that can
-    /// be meaningfully "the heavy ones" before the list becomes a table.
-    private static let topCount = 5
+    private static let topCount = 10
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                summary
-
-                CompactHeader(title: "By CPU", trailing: cpuTotalLabel)
-                list(inventory.topByCPU(Self.topCount), weight: .cpu)
-
-                CompactHeader(title: "By memory", trailing: memoryTotalLabel)
-                list(inventory.topByMemory(Self.topCount), weight: .memory)
+                HStack(spacing: 8) {
+                    Text("\(inventory.rows.count) processes")
+                        .font(FleetFont.caption).foregroundStyle(.secondary)
+                        .help(census)
+                    Spacer(minLength: 8)
+                    Picker("Rank processes by", selection: $weight) {
+                        Text("CPU").tag(ProcessWeight.cpu)
+                        Text("Memory").tag(ProcessWeight.memory)
+                    }
+                    .pickerStyle(.segmented).fixedSize().controlSize(.small)
+                    IconButton(symbol: "square.grid.2x2", help: "Open Activity Monitor") {
+                        model.openActivityMonitor()
+                    }
+                }
+                .padding(.horizontal, FleetMetrics.gutter)
+                .padding(.vertical, 8)
+                list(weight.ranked(inventory.rows, limit: Self.topCount), weight: weight)
 
                 Spacer(minLength: 6)
             }
@@ -65,35 +62,6 @@ struct ProcessesContent: View {
 
     // MARK: - Summary
 
-    /// One sentence, not a row of tiles. The same argument the Services tab's
-    /// verdict line makes: four numerals whose labels have to be read to know
-    /// which is which flatten the one distinction the surface exists to draw.
-    private var summary: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "gearshape.2")
-                .font(FleetFont.rowTitle)
-                .foregroundStyle(.secondary)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(headline)
-                    .font(FleetFont.title)
-                Text(census)
-                    .font(FleetFont.subtitle)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.vertical, 10)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(headline). \(census)")
-    }
-
-    private var headline: String {
-        let count = inventory.rows.count
-        guard count > 0 else { return "No process table yet" }
-        return "\(count) processes"
-    }
 
     /// States worth naming are named; the ordinary majority is not enumerated.
     /// A line reading "612 sleeping" every time would train you to skip it, and
@@ -112,17 +80,6 @@ struct ProcessesContent: View {
         return parts.joined(separator: " · ")
     }
 
-    private var cpuTotalLabel: String? {
-        let total = inventory.rows.reduce(0.0) { $0 + $1.cpuPercent }
-        guard total > 0 else { return nil }
-        return String(format: "%.0f%% total", total)
-    }
-
-    private var memoryTotalLabel: String? {
-        let total = inventory.topByMemory(Self.topCount).reduce(Int64(0)) { $0 + $1.residentBytes }
-        guard total > 0 else { return nil }
-        return "\(SystemFmt.size(total)) in top \(Self.topCount)"
-    }
 
     // MARK: - Lists
 
@@ -305,4 +262,17 @@ private struct ProcessPopoverRow: View {
 /// Top level rather than nested inside the section: the row is a separate type
 /// and has to name it, and a nested enum would mean the row referring back up to
 /// the view that happens to own it today.
-enum ProcessWeight { case cpu, memory }
+enum ProcessWeight: Hashable {
+    case cpu, memory
+
+    func ranked(_ rows: [ProcessRow], limit: Int) -> [ProcessRow] {
+        Array(rows.sorted { lhs, rhs in
+            switch self {
+            case .cpu:
+                return lhs.cpuPercent == rhs.cpuPercent ? lhs.pid < rhs.pid : lhs.cpuPercent > rhs.cpuPercent
+            case .memory:
+                return lhs.residentBytes == rhs.residentBytes ? lhs.pid < rhs.pid : lhs.residentBytes > rhs.residentBytes
+            }
+        }.prefix(max(0, limit)))
+    }
+}

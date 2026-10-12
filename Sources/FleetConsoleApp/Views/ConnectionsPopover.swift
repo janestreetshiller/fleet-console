@@ -54,7 +54,6 @@ struct ConnectionsPopover: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                CompactHeader(title: "Internet & LAN")
                 internetRow
                 NetworkSection(model: model)
 

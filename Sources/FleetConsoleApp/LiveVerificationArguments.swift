@@ -2,6 +2,7 @@
 /// Kept independent of AppKit so tests exercise the shipping argument parser.
 enum LiveVerificationArguments {
     static func duration(_ arguments: [String]) -> Double? {
+        if arguments.contains("--review-ui") && !arguments.contains("--verify-quick-view") { return nil }
         guard let index = arguments.firstIndex(of: "--verify-live"),
               index + 1 < arguments.count,
               !arguments[index + 1].isEmpty,
@@ -10,7 +11,7 @@ enum LiveVerificationArguments {
         var cursor = index + 2
         while cursor < arguments.count {
             switch arguments[cursor] {
-            case "--verify-quick-view":
+            case "--verify-quick-view", "--review-ui":
                 cursor += 1
             case "--verify-daemon-socket":
                 guard cursor + 1 < arguments.count,

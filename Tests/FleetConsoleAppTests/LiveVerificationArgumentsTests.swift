@@ -2,6 +2,12 @@ import Testing
 @testable import FleetConsoleApp
 
 struct LiveVerificationArgumentsTests {
+    @Test func reviewUIFlagKeepsDurationParsingStrict() {
+        #expect(LiveVerificationArguments.duration(["FleetConsoleApp", "--verify-live", "/capture", "--verify-quick-view", "--review-ui"]) == 20)
+        #expect(LiveVerificationArguments.duration(["FleetConsoleApp", "--verify-live", "/capture", "10", "--review-ui", "--verify-quick-view"]) == 10)
+        #expect(LiveVerificationArguments.duration(["FleetConsoleApp", "--verify-live", "/capture", "--review-ui"]) == nil)
+    }
+
     @Test func quickViewFlagUsesDefaultDuration() {
         #expect(LiveVerificationArguments.duration(["FleetConsoleApp", "--verify-live", "/capture", "--verify-quick-view"]) == 20)
     }

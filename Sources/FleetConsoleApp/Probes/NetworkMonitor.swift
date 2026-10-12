@@ -93,9 +93,18 @@ final class NetworkMonitor {
     // Nonisolated so `deinit` can invalidate it; nothing observes this handle.
     @ObservationIgnored nonisolated(unsafe) private var refreshTimer: Timer?
 
+    private nonisolated static var allowsLiveProbes: Bool {
+        #if FLEET_SURFACE_RENDERER
+        !CommandLine.arguments.contains(SurfaceRenderer.flag)
+        #else
+        true
+        #endif
+    }
+
     /// The cadence comes from config, clamped there. A hand-edited `0` would
     /// otherwise mean "fork `netstat`, `ifconfig` and `scutil` continuously".
     init(interval: TimeInterval = FleetConfig.UIConfig.Intervals().clampedNetworkRefresh) {
+        guard Self.allowsLiveProbes else { return }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.refresh() }
         }
@@ -108,6 +117,7 @@ final class NetworkMonitor {
     }
 
     func refresh() {
+        guard Self.allowsLiveProbes else { return }
         guard !isRefreshing else { return }
         isRefreshing = true
         probeQueue.async { [weak self] in
@@ -163,6 +173,7 @@ final class NetworkMonitor {
     }
 
     func refreshEthernetOnly() {
+        guard Self.allowsLiveProbes else { return }
         probeQueue.async { [weak self] in
             let ports = Self.readHardwarePorts()
             let status = Self.probeEthernet(ports: ports)
@@ -171,6 +182,7 @@ final class NetworkMonitor {
     }
 
     func refreshTailscaleOnly() {
+        guard Self.allowsLiveProbes else { return }
         probeQueue.async { [weak self] in
             let status = Self.probeTailscale()
             Task { @MainActor in self?.tailscale = status }

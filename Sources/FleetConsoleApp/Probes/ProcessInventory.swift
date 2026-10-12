@@ -126,6 +126,14 @@ final class ProcessInventory {
     @ObservationIgnored private var sampling = false
 
     init(interval: TimeInterval = FleetConfig.UIConfig.Intervals().clampedProcessSample) {
+        #if FLEET_SURFACE_RENDERER
+        if CommandLine.arguments.contains(SurfaceRenderer.flag) {
+            rows = Fixtures.processRows
+            childrenOf = Dictionary(grouping: rows, by: \.ppid)
+            capturedAt = Date()
+            return
+        }
+        #endif
         timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.sample() }
         }
@@ -139,6 +147,9 @@ final class ProcessInventory {
     }
 
     func sample() {
+        #if FLEET_SURFACE_RENDERER
+        if CommandLine.arguments.contains(SurfaceRenderer.flag) { return }
+        #endif
         guard !sampling else { return }
         sampling = true
         queue.async { [weak self] in

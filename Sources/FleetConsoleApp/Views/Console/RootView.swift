@@ -41,6 +41,7 @@ struct ConsoleRootView: View {
             ChromeToolField(model: model, console: console, tools: tools,
                             outerWidth: contentWidth)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) { DashboardFooter(model: model) }
         // One easing for both sides. `showsInspector` is the value that changes
         // when the inspector is toggled *or* when width takes it away, so both
         // routes animate identically instead of one sliding and one snapping.
@@ -73,6 +74,9 @@ struct ConsoleRootView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.refresh)) { _ in
             console.refresh(model: model)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.toggleSidebar)) { _ in
+            console.toggleSidebar()
         }
         // showHome and selectModule are deliberately absent: they are observed in
         // ConsoleWindowController, which exists before this view does. A sender
@@ -165,7 +169,10 @@ struct ConsoleRootView: View {
     }
 
     private var splitView: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: Binding(
+            get: { console.sidebarRevealed ? .all : .detailOnly },
+            set: { console.sidebarRevealed = $0 != .detailOnly }
+        )) {
             FleetSidebarView(model: model, console: console)
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 280)
         } detail: {

@@ -36,12 +36,9 @@ USAGE
   ── housekeeping ──────────────────────────────────────────────────────────────
   fleetctl reconcile                              sweep for processes outside the registry
   fleetctl license --secret <s> [--date YYYY-MM-DD]
-                                                  mint an FLT1 licence key (offline, no daemon).
-                                                  The secret must match the app's vendor secret —
-                                                  this is the checkout seam for the freemium model
-                                                  adopt a running process into the registry:
-                                                  it gets an owner, a lease and a timeline,
-                                                  and the controller still will not signal it
+                                                  legacy offline FLT1 key mint (no daemon).
+                                                  Not required for free local features;
+                                                  optional multi-device access uses Ouros.
   fleetctl ignore  <command>                      "this listener is expected" → allow-list
   fleetctl claim   <pid|id> [--name <s>] [--owner <a>] [--purpose <why>] [--lease 1h]
                                                   adopt a running process into the registry:

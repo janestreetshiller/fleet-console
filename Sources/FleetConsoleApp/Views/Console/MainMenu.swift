@@ -136,9 +136,10 @@ enum MainMenu {
         submenu.addItem(.separator())
 
         let sidebar = submenu.addItem(withTitle: "Toggle Sidebar",
-                                      action: #selector(NSSplitViewController.toggleSidebar(_:)),
+                                      action: #selector(MenuActionTarget.toggleSidebar),
                                       keyEquivalent: "s")
         sidebar.keyEquivalentModifierMask = [.command, .control]
+        sidebar.target = actions
 
         // The inspector's menu entry. The sidebar's toggle comes free from
         // AppKit; the trailing column's does not, so both halves of the window
@@ -254,6 +255,11 @@ enum MainMenu {
         openConsole?()
         NotificationCenter.default.post(name: ConsoleCommand.toggleTool, object: nil,
                                         userInfo: [ConsoleCommand.userInfoTool: rawValue])
+    }
+
+    @objc func toggleSidebar() {
+        openConsole?()
+        NotificationCenter.default.post(name: ConsoleCommand.toggleSidebar, object: nil)
     }
 
     @objc func toggleInspector() {

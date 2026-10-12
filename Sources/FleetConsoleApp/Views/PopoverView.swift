@@ -1,28 +1,12 @@
 import SwiftUI
 import FleetCore
 
-// The Services section of the one menu-bar popover, plus the pieces its
-// neighbours share — the destructive-action alerts, the controller-down banner,
-// the attention list and the local-tools list.
-//
-// This header used to say "Two menu-bar surfaces", name the sections Servers /
-// Agents / Connections, and argue that they were "separate items because they
-// answer different questions at different moments". The app has put up one
-// status item with four tabs for some time. `docs/DESIGN-SYSTEM.md` names three
-// comments that described the old menu bar after it was gone and says they were
-// fixed; two of them were, and this was the third. The marker check it added
-// reads the identifiers the app constructs, so it could not see a stale sentence
-// in a source file — which is the shape of every remaining doc-rot bug in here:
-// what nothing counts, drifts.
-
-// MARK: - Services
-
-/// The Services half of the Fleet item. Rows expand in place, so there is no
-/// separate "overview vs details" mode to choose between — one less control, and
-/// the actions are always one click away.
+// Services starts with the service rows. Verdict/count chrome lives in the shell;
+// evidence, provenance and safe actions stay with the record they describe.
 struct ServicesContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
+    var labels: ServiceLabelsStore = .shared
 
     @State private var expanded: String?
     @State private var pendingAction: DestructiveAction?
@@ -30,81 +14,16 @@ struct ServicesContent: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                verdict
                 if !model.connected { ControllerDownBanner(model: model) }
-                if !model.attention.isEmpty {
-                    AttentionSection(model: model, expandedService: $expanded)
-                }
-                ServicesSection(model: model, expanded: $expanded, pendingAction: $pendingAction)
+                ServicesSection(model: model, expanded: $expanded, pendingAction: $pendingAction, labels: labels)
                 LocalToolsSection(model: model)
                 Spacer(minLength: 8)
             }
+            .padding(.top, 4)
         }
         .frame(maxHeight: FleetMetrics.sectionMaxHeight)
         .destructiveActionAlert($pendingAction, model: model)
         .actionErrorAlert(model: model)
-    }
-
-    /// What this tab is actually for: whether anything needs a decision.
-    ///
-    /// This was four `StatTile`s — Running, Agents, Unmanaged, Attention — which
-    /// is the same header the Agents and Network tabs open with, and two of the
-    /// four numbers (Agents, Running) were repeated verbatim on the Agents tab.
-    /// Four counters also flatten the one distinction this surface exists to
-    /// draw: "3 running, 0 attention" and "0 running, 3 attention" are the same
-    /// shape on screen and opposite facts. The console's Home surface already
-    /// leads with the verdict and puts the counts underneath it, in those words
-    /// — this is that, at popover density.
-    private var verdict: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: verdictSymbol)
-                .font(FleetFont.rowTitle)
-                .foregroundStyle(verdictTone.ink)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verdictTitle)
-                    .font(FleetFont.title)
-                Text(census)
-                    .font(FleetFont.subtitle)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.top, 10)
-        .padding(.bottom, 10)
-    }
-
-    private var verdictTone: StatusTone {
-        if model.criticalCount > 0 { return .bad }
-        return model.attention.isEmpty ? .good : .warn
-    }
-
-    private var verdictSymbol: String {
-        switch verdictTone {
-        case .bad: return "exclamationmark.octagon.fill"
-        case .warn: return "exclamationmark.triangle.fill"
-        default: return "checkmark.circle.fill"
-        }
-    }
-
-    private var verdictTitle: String {
-        if model.criticalCount > 0 {
-            return "\(model.criticalCount) need\(model.criticalCount == 1 ? "s" : "") a decision"
-        }
-        if !model.attention.isEmpty {
-            return "\(model.attention.count) to look at"
-        }
-        return "Nothing needs a decision"
-    }
-
-    /// The counts, stated once, as a sentence rather than as a row of numerals
-    /// whose labels have to be read to know which is which.
-    private var census: String {
-        let services = model.runningServices.count
-        var parts = ["\(services) service\(services == 1 ? "" : "s") running"]
-        if !model.unmanaged.isEmpty { parts.append("\(model.unmanaged.count) unmanaged") }
-        return parts.joined(separator: " · ")
     }
 }
 

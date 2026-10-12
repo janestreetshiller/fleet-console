@@ -153,26 +153,50 @@ struct PopoverHeader<Trailing: View>: View {
 
 struct PopoverFooter: View {
     @Bindable var model: AppModel
-    var trailingLabel: String = "Open Dashboard"
+    var trailingLabel: String = "Dashboard"
     var openDashboard: () -> Void
 
-
     var body: some View {
-        HStack(spacing: 6) {
-            if model.connected, let daemon = model.daemon {
-                ConnectionPip(connected: true, label: "Connected")
-                    .help("Controller uptime: \(Fmt.duration(daemon.uptime))")
-            } else {
-                ConnectionPip(connected: false, label: "controller not running")
+        FleetFooterRibbon {
+        HStack(spacing: 12) {
+            StatusPip(tone: model.connected ? .good : .bad, size: 7)
+                .accessibilityLabel(model.connected ? "Controller connected" : "Controller offline")
+                .help(model.connected ? "Controller connected" : "Controller not running")
+            Button { model.openURL("https://ouros.md") } label: {
+                HStack(spacing: 4) {
+                    Text("Ouros")
+                    Image(systemName: "arrow.up.right").font(FleetFont.marker)
+                }
+                .font(FleetFont.subtitle)
+                .foregroundStyle(.secondary)
+                .padding(.vertical, 7)
             }
-            Spacer()
-            Button(trailingLabel) { openDashboard() }
-                .buttonStyle(.bordered)
-                .controlSize(.regular)
-                .font(FleetFont.body)
+            .buttonStyle(.plain)
+            .accessibilityLabel("Visit the Ouros website")
+            IconButton(symbol: "chevron.left.forwardslash.chevron.right", help: "FleetConsole source and support") {
+                model.openURL("https://github.com/janestreetshiller/fleet-console-core")
+            }
+            Spacer(minLength: 8)
+            Button(action: openDashboard) {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.grid.2x2")
+                    Text(trailingLabel)
+                    Image(systemName: "arrow.right").font(FleetFont.micro)
+                }
+                .font(FleetFont.body.weight(.medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(FleetColor.surfaceWash, in: RoundedRectangle(cornerRadius: FleetMetrics.tileCorner))
+                .overlay {
+                    RoundedRectangle(cornerRadius: FleetMetrics.tileCorner)
+                        .strokeBorder(ConsoleColor.hairlineStrong, lineWidth: 1)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: FleetMetrics.tileCorner))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Open Dashboard")
+            .help("Open Dashboard (⌘0)")
         }
-        .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.vertical, 7)
-
+        }
     }
 }

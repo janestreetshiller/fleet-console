@@ -29,18 +29,24 @@ final class TaskComposerModel {
     var statusIsError = false
     var isSubmitting = false
 
-    /// Agent names the composer can assign to — from the live roster, with the
-    /// operator as a fallback so the picker is never empty before the first scan.
+    /// Ownership IDs from the local address book and controller profiles.
+    /// Registration does not imply a detected session; operator stays selectable.
     var agentOptions: [String] {
-        let names = agentProfiles.map(\.id)
-        return names.isEmpty ? ["operator"] : names
+        let names = Set(agentProfiles.map(\.id) + registration.registeredIDs)
+        return ["operator"] + names.filter { $0 != "operator" }.sorted()
     }
 
-    init(agentProfiles: [AgentProfile] = []) {
+    init(agentProfiles: [AgentProfile] = [], registration: AgentRegistrationModel = .shared) {
         self.agentProfiles = agentProfiles
+        self.registration = registration
     }
 
     private var agentProfiles: [AgentProfile]
+    private let registration: AgentRegistrationModel
+
+    func reconcileOwnerAgent() {
+        if !agentOptions.contains(ownerAgent) { ownerAgent = "operator" }
+    }
 
     func validated() -> LaunchRequest? {
         let name = taskName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -125,6 +131,7 @@ struct TaskComposerView: View {
         }
         .frame(width: 480, height: 560)
         .sketchSubstrate(seed: 0.37, grainSeed: 37)
+        .onChange(of: model.agentOptions) { _, _ in model.reconcileOwnerAgent() }
         .onExitCommand { dismiss() }
     }
 

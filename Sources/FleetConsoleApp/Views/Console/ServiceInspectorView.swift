@@ -13,6 +13,7 @@ import FleetCore
 struct ServiceInspectorView: View {
     @Bindable var model: AppModel
     let serviceID: String
+    var labels: ServiceLabelsStore = .shared
 
     @State private var events: [ServiceEvent] = []
     @State private var logTail: String?
@@ -64,16 +65,31 @@ struct ServiceInspectorView: View {
     private func header(_ record: ServiceRecord) -> some View {
         // `state.label` verbatim: "Running (unverified)" is not a placeholder
         // for "Healthy", and the header is exactly where that would get lost.
-        InspectorHeader(symbol: Iconography.service(record), tone: record.state.tone,
-                        title: record.friendlyName,
-                        subtitle: record.state.label,
-                        subtitleKind: .status)
+        let stale = record.evidence.isStale(tolerance: model.staleTolerance)
+        return VStack(alignment: .leading, spacing: ConsoleMetrics.panelInset) {
+            InspectorHeader(symbol: Iconography.service(record),
+                            tone: stale ? .unknown : record.state.tone,
+                            title: labels.displayName(for: record),
+                            subtitle: record.state.label + (stale ? " · stale" : ""),
+                            subtitleKind: .status)
+            HStack {
+                ServiceLabelEditButton(service: record, labels: labels)
+                Spacer(minLength: 0)
+                if let color = labels.label(for: record.id).color {
+                    ServiceColorTag(color: color)
+                }
+            }
+            .font(ConsoleFont.caption)
+        }
     }
 
     // MARK: Evidence
 
     private func evidenceCard(_ record: ServiceRecord) -> some View {
         InspectorCard(title: "Evidence") {
+            if labels.label(for: record.id).name != nil {
+                InspectorLine(key: "Recorded name", value: record.friendlyName, wrap: true)
+            }
             EvidenceChips(evidence: record.evidence, health: record.health,
                           stale: record.evidence.isStale(tolerance: model.staleTolerance))
             InspectorLine(key: "PID", value: ConsoleFmt.pid(record.pid)

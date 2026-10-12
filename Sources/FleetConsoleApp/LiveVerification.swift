@@ -179,7 +179,12 @@ enum LiveVerification {
 
     private static func verifyQuickView(output: URL, seconds: Double) -> Bool {
         let model = AppModel()
-        let hosting = NSHostingView(rootView: FleetPopover(model: model, openDashboard: {}))
+        let controller = ConsoleWindowController(model: model)
+        let openDashboard: () -> Void = {
+            controller.show(activate: false)
+            if CommandLine.arguments.contains("--review-ui") { controller.window?.center() }
+        }
+        let hosting = NSHostingView(rootView: FleetPopover(model: model, openDashboard: openDashboard))
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: FleetMetrics.popoverWidth, height: 320),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = hosting
@@ -206,8 +211,8 @@ enum LiveVerification {
                 RPCOp(rawValue: name).map { RPCRequestPolicy.observational.allows($0) } == true
             }
         let daemonPassed = LiveDaemonReadiness.snapshot(connected: model.connected, hasDaemon: model.daemon != nil, ageSeconds: age)
-        let metrics = QuickViewMetrics(cpu: model.system.cpu, memory: model.system.memory)
-        let passed = metrics.cpu.value != nil && metrics.memory.value != nil && readOnly
+        let metrics = QuickViewMetrics(cpu: model.system.cpu, memory: model.system.memory, storage: model.system.storage)
+        let telemetryPassed = metrics.cpu.value != nil && metrics.memory.value != nil && metrics.disk.value != nil && readOnly
             && !model.processes.rows.isEmpty
             && TelemetryReadiness.network(probeSucceeded: network.probeSucceeded,
                 hasActiveLink: !network.interfaceNames.isEmpty, download: network.downloadBytesPerSec,
@@ -215,12 +220,28 @@ enum LiveVerification {
             && TelemetryReadiness.power(probeSucceeded: power.probeSucceeded, hasBattery: power.hasBattery,
                                        charge: power.chargeFraction)
             && daemonPassed
-        for (label, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-            NSApp.appearance = NSAppearance(named: appearance)
-            window.appearance = NSAppearance(named: appearance)
-            spin(0.2)
-            capture(window, to: output.appendingPathComponent("quick-view-\(label).png"))
+        var captures: [String] = []
+        var sizes: [[String: Any]] = []
+        var uniform = true
+        let initialSize = window.contentLayoutRect.size
+        for section in FleetSection.allCases {
+            model.requestedSection = section
+            let name = section.menuTitle.lowercased().replacingOccurrences(of: " ", with: "-")
+            for (label, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                NSApp.appearance = NSAppearance(named: appearance)
+                window.appearance = NSAppearance(named: appearance)
+                spin(0.2)
+                let size = hosting.fittingSize
+                uniform = uniform && abs(size.width - FleetMetrics.popoverWidth) < 0.5
+                    && abs(size.height - initialSize.height) < 0.5
+                let filename = "\(name)-\(label).png"
+                capture(window, to: output.appendingPathComponent(filename))
+                captures.append(filename)
+                sizes.append(["section": section.menuTitle, "appearance": label,
+                              "width": size.width, "height": size.height])
+            }
         }
+        let passed = telemetryPassed && uniform
         #if DEBUG
         let configuration = "debug"
         #else
@@ -234,13 +255,26 @@ enum LiveVerification {
             "processPeakResidentBytes": usage.ru_maxrss,
             "cpuBrand": model.system.topology.brand, "logicalCores": model.system.topology.logicalCores,
             "readOnlyPassed": readOnly, "daemonSnapshotPassed": daemonPassed,
-            "captures": ["quick-view-light.png", "quick-view-dark.png"]
+            "uniformPopoverPassed": uniform, "captureSizes": sizes, "captures": captures
         ]
         do {
             let data = try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
             try data.write(to: output.appendingPathComponent("receipt.json"))
             print(String(decoding: data, as: UTF8.self))
         } catch { fputs("Quick View receipt failed: \(error)\n", stderr); exit(1) }
+        if passed && CommandLine.arguments.contains("--review-ui") {
+            model.requestedSection = .quickView
+            spin(0.2)
+            NSApp.setActivationPolicy(.accessory)
+            MainMenu.install { openDashboard() }
+            window.styleMask = [.titled, .closable, .miniaturizable]
+            window.title = "FleetConsole UI Review"
+            window.center()
+            window.orderFront(nil)
+            print("UI review pid \(ProcessInfo.processInfo.processIdentifier), window \(window.windowNumber)")
+            fflush(stdout)
+            NSApp.run()
+        }
         window.orderOut(nil)
         DaemonClient.shared.stop()
         guard passed else { exit(1) }

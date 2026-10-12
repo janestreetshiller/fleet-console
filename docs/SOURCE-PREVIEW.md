@@ -1,37 +1,20 @@
-# Controlled source preview
+# Public source boundary
 
-FleetConsole's current source carries the MIT license. For this preview, semi-open
-means controlled reviewer access through the existing private repository plus a
-reviewed source snapshot. The MIT license continues to grant its stated rights.
-Repository visibility, a public announcement and binary distribution are separate
-maintainer actions.
+FleetConsole uses a freemium distribution model: local monitoring and service management are free, with optional Ouros multi-device access at $10 USD/month.
 
-## Share the snapshot
+The public repository is https://github.com/janestreetshiller/fleet-console-core. Its MIT source snapshot includes:
 
-Use the committed review revision to create a fresh `git archive` source package.
-That package contains the source, tests, documentation, resources, dependency
-lockfiles and license notices. Its publication set uses `.gitattributes` to omit
-machine-local agent instruction adapters. The package starts with the reviewed
-current tree, while the private repository retains its existing history and work.
-A release privacy check reviews the authored identifiers; secret scans review both
-that snapshot and reachable history. Retain the author copyright and intentional
-repository/provider URLs.
+- `Sources/FleetCore`: shared models, storage, socket protocol and safety rules.
+- `Sources/fleetd`: the local controller.
+- `Sources/fleetctl`: the CLI.
+- `Tests/FleetCoreTests`: regression coverage for the shared core.
+- `rust/fleet-proto` and `rust/fleet-conformance`: protocol models and live read-only checks.
+- A standalone Swift package manifest, Rust lockfile, focused documentation and CI.
 
-Run the build and test commands in [the release guide](RELEASE.md) against the
-exact revision. Keep runtime screenshots and raw benchmark receipts local because
-they contain real host/process information; the assessment reports sanitized
-measurements. Review public captures from the deterministic renderer individually.
+The native desktop UI source, SwiftTerm integration, private development history, local instruction adapters, signing material, runtime state and privately supplied soundtrack are not published. A new Git repository contains only the allowlisted committed snapshot; it does not import the private repository's history or remotes. The public package builds the daemon and CLI without fetching SwiftTerm or referring to the private app target.
 
-## Reviewer workflow
+The free macOS app download is published alongside the core source only after Developer ID signing, Apple acceptance, stapled-ticket validation and extracted-archive checks. The bundled MIT and SwiftTerm notices remain intact. Source availability and payment terms are separate: MIT rights for the published code do not depend on a subscription.
 
-Read [the README](../README.md), run the Swift and Rust checks, and stage an app
-with a fresh output directory. Local monitoring and controller tools are free;
-optional multi-device access uses Ouros. Local app builds use ad-hoc signatures.
-A shared macOS download follows the Developer ID and Apple ticket checks in the
-release guide, using the maintainer's existing credentials.
+Use `Scripts/export-public-source.py <fresh-directory> [revision]` from the private release tree. Run `Scripts/test-public-source.py`, inspect the exported manifest, scan the actual export for secrets, and run its own Swift/Rust checks before pushing. Keep runtime receipts private. Public marketing captures must use the current native views, reviewed demo data and explicit fixture provenance.
 
-Agent clients launch managed services through `fleetctl`, with an owner, purpose
-and lease. They read `list`, `show`, `logs`, `events` and `doctor` before acting.
-Renew a needed lease or stop a launched service when its work ends. A claimed
-process gets ownership records and visibility; signalling authority stays limited
-to controller-launched services. The daemon checks process identity before acting.
+Agent clients launch through `fleetctl`, with an owner, purpose and lease. Read before acting, renew what is needed, and stop launched work when it ends. Claims add visibility without signalling authority. Paused services retain their resources and postpone expiry cleanup until resumed.

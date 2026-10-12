@@ -208,7 +208,8 @@ final class ConsoleLayoutTests: XCTestCase {
             ConsoleLayout.titlebarReserve
                 + ConsoleLayout.moduleHeaderHeight
                 + ConsoleLayout.cardHeight
-                + ConsoleLayout.moduleBottomPadding)
+                + ConsoleLayout.moduleBottomPadding
+                + DashboardContentGeometry.footerHeight)
     }
 
     /// A card, down to the bottom of its trace: padding, title row, the gap

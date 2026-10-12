@@ -83,9 +83,7 @@ struct FleetSidebarView: View {
         // This view cannot see either, and the number it used to declare was the
         // half of the mirror that drifted — 236/268/320 against the inspector's
         // 280/320/420.
-        .safeAreaInset(edge: .bottom) {
-            sidebarFooter
-        }
+
         .onAppear { model.refreshDevices() }
         .sheet(isPresented: $managingDevices) { DeviceManagementView(model: model) }
     }
@@ -107,40 +105,7 @@ struct FleetSidebarView: View {
         }
     }
 
-    /// Controller state and the local network summary, pinned under the list.
-    /// The sidebar is the one column that is always visible, so the two facts
-    /// that colour everything else live at its foot.
-    private var sidebarFooter: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Hairline()
-            HStack(spacing: 6) {
-                StatusPip(tone: model.connected ? .good : .bad, size: 7)
-                Text(model.connected ? "Controller connected" : "Controller offline")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let snapshot = model.lastSnapshotAt {
-                Text("Updated \(Fmt.relative(snapshot))")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-            }
-            HStack(spacing: 6) {
-                Image(systemName: "globe")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(model.network.internet.reachable == false
-                                     ? StatusTone.bad.ink : Color.secondary)
-                Text(model.network.internet.reachable == false
-                     ? "Internet unreachable" : "Internet · \(model.network.internet.summary)")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            .padding(.bottom, 8)
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 0)
-        .background(.ultraThinMaterial)
-    }
+
 }
 
 // MARK: - Remote node

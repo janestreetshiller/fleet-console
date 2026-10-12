@@ -2,124 +2,339 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// Item 3 — Agents. Who is running what, what they have said, and a place to
-/// answer them.
-///
-/// The reply loop is the point: an agent posts a question with
-/// `fleetctl notify --ask`, it appears here (and as a notification), you answer,
-/// and the agent reads the answer back with `fleetctl inbox --agent <name>`.
-/// Nothing here talks to a model — it is a local mailbox between you and whatever
-/// process is running.
-/// The Agents half of the Fleet item: one profile card per agent, plus anything
-/// waiting on an answer from you.
+/// Ownership IDs are a local address book. Detected sessions and the mailbox
+/// remain evidence from their existing sources, never fabricated by registration.
 struct AgentsContent: View {
     @Bindable var model: AppModel
+    // Kept for existing callers; agent overflow never routes to the dashboard.
     var openDashboard: () -> Void
+    var registration: AgentRegistrationModel = .shared
+    @State private var sheet: AgentSheet?
 
-    @State private var expandedAgent: String?
-
-    /// The roster count, plus today's spend when the feature is on.
-    ///
-    /// The `+` marks a total that is short by an agent you can see: it is
-    /// counted over the *rendered* profiles only, because `gemini` and `aider`
-    /// publish nothing and would otherwise pin a permanent, meaningless `+` to
-    /// the header. An agent with a row and no figure explains itself when you
-    /// open it.
-    private var profilesTrailing: String? {
-        guard !model.agentProfiles.isEmpty else { return nil }
-        let count = "\(model.agentProfiles.count)"
-        guard model.settings.features.showAgentSpend,
-              let totals = model.agentCost.totals
-        else { return count }
-        let shown = Set(model.agentProfiles.map(\.id))
-        let unpriced = totals.snapshots.filter { shown.contains($0.id) && !$0.isKnown }.count
-        return "\(count) · \(Fmt.money(totals.knownTotalUSD))\(unpriced > 0 ? "+" : "")"
+    var body: some View {
+        AgentGlanceContent(profiles: model.agentProfiles, sessions: model.sessions,
+                           registration: registration,
+                           pendingReplyCount: model.awaitingReplies.count,
+                           messageCount: Set(model.awaitingReplies.map(\.id) + model.recentMessages.map(\.id)).count,
+                           register: { sheet = .register }, mailbox: { sheet = .mailbox },
+                           manage: { sheet = .manage })
+            .sheet(item: $sheet) { destination in
+                if destination == .mailbox {
+                    AgentsMailboxSheet(model: model)
+                } else {
+                    AgentsManagerSheet(model: model, registration: registration,
+                                       startRegistration: destination == .register)
+                }
+            }
+            .onAppear { registration.reload() }
     }
+
+    private enum AgentSheet: String, Identifiable {
+        case register, manage, mailbox
+        var id: String { rawValue }
+    }
+}
+
+/// No scroll view, expanding detail, or inline editor belongs in the menu glance.
+/// Five 36pt rows plus the controls and explicit overflow fit the 300pt viewport.
+struct AgentGlanceContent: View {
+    var profiles: [AgentProfile]
+    var sessions: [AgentSession]
+    var registration: AgentRegistrationModel
+    var pendingReplyCount: Int
+    var messageCount: Int
+    var register: () -> Void
+    var mailbox: () -> Void
+    var manage: () -> Void
+
+    private var roster: AgentGlanceRoster {
+        AgentGlanceRoster(registeredIDs: registration.registeredIDs, profiles: profiles, sessions: sessions)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Button(action: register) { Label("Register Agent ID", systemImage: "plus") }
+                    .controlSize(.small)
+                    .help(registration.statusIsError ? (registration.status ?? "Open the agent manager")
+                          : "Save an exact ownership ID locally; this does not start a session.")
+                Spacer(minLength: 4)
+                Button(pendingReplyCount > 0 ? "\(pendingReplyCount) waiting" : "Messages (\(messageCount))", action: mailbox)
+                    .controlSize(.small)
+                    .foregroundStyle(pendingReplyCount > 0 ? StatusTone.warn.ink : Color.primary)
+                    .help("\(pendingReplyCount) pending replies; \(messageCount) messages. Open the full mailbox.")
+            }
+            .padding(.horizontal, FleetMetrics.gutter)
+            .frame(height: 36)
+
+            Text(registration.statusIsError
+                 ? "Saved IDs unavailable · \(roster.detectedCount) detected sessions"
+                 : "\(roster.ownerCount) agent IDs · \(roster.detectedCount) detected sessions")
+                .font(FleetFont.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, FleetMetrics.gutter)
+                .frame(height: 20, alignment: .leading)
+
+            if roster.entries.isEmpty {
+                EmptyLine(text: "No registered IDs or detected sessions.")
+            } else {
+                ForEach(roster.visibleEntries) { entry in
+                    Button(action: manage) {
+                        switch entry {
+                        case .owner(let owner):
+                            CompactRow(icon: "person.crop.square", tone: .neutral, title: owner.id,
+                                       subtitle: owner.profile?.headline ?? "Idle",
+                                       trailing: owner.isRegistered ? "Registered" : "Managed")
+                                .help("Agent ID: \(owner.id)")
+                        case .session(let session):
+                            CompactRow(icon: session.symbol, tone: .good, title: session.tool,
+                                       subtitle: session.sessionName ?? (session.project == nil ? "Local session" : session.projectName),
+                                       trailing: session.sessionUID.map { String($0.prefix(8)) } ?? "Detected",
+                                       agentTool: session.tool)
+                                .help("Detected session: \(session.sessionUID ?? session.id)")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button(roster.overflowCount > 0
+                   ? "Show all \(roster.totalCount) (\(roster.overflowCount) more)" : "Manage agents…", action: manage)
+                .buttonStyle(.link)
+                .font(FleetFont.caption)
+                .padding(.horizontal, FleetMetrics.gutter)
+                .frame(height: 32, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .frame(height: 300, alignment: .top)
+    }
+}
+
+/// The complete roster and detected sessions live outside the fixed menu budget.
+struct AgentsManagerSheet: View {
+    @Bindable var model: AppModel
+    var registration: AgentRegistrationModel
+    var startRegistration = false
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Agents").font(FleetFont.title)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(FleetMetrics.gutter)
+            Hairline()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    AgentRosterSection(profiles: model.agentProfiles, registration: registration,
+                                       startRegistration: startRegistration)
+                    if !model.sessions.isEmpty {
+                        CompactHeader(title: "Detected sessions", trailing: "\(model.sessions.count)")
+                        ForEach(model.sessions) { session in
+                            HStack(spacing: FleetMetrics.rowGap) {
+                                EntityIcon(symbol: session.symbol, tone: .good, size: FleetMetrics.iconCompact)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(session.tool).font(FleetFont.rowTitleCompact)
+                                    Text(session.sessionUID ?? session.id)
+                                        .font(FleetFont.caption).foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 4)
+                                IconButton(symbol: "doc.on.doc", help: "Copy session ID") {
+                                    registration.copyID(session.sessionUID ?? session.id)
+                                }
+                            }
+                            .padding(.horizontal, FleetMetrics.gutter)
+                            .padding(.vertical, FleetMetrics.rowVerticalPadding)
+                        }
+                    } else {
+                        EmptyLine(text: "No sessions detected.")
+                    }
+                }
+            }
+        }
+        .frame(width: 560, height: 520)
+    }
+}
+
+/// All provided messages remain reachable, with pending replies first. Reuse the
+/// existing reply loop rather than routing into a nonexistent dashboard module.
+struct AgentsMailboxSheet: View {
+    @Bindable var model: AppModel
+    @Environment(\.dismiss) private var dismiss
     @State private var replyingTo: AgentMessage?
     @State private var replyText = ""
     @FocusState private var replyFocused: Bool
 
+    private var pendingIDs: Set<Int64> { Set(model.awaitingReplies.map(\.id)) }
+    private var answered: [AgentMessage] { model.recentMessages.filter { !pendingIDs.contains($0.id) } }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                if !model.awaitingReplies.isEmpty {
-                    CompactHeader(title: "Waiting on you", trailing: "\(model.awaitingReplies.count)")
-                    ForEach(model.awaitingReplies) { message in
-                        MessageRow(message: message, model: model,
-                                   replyingTo: $replyingTo, replyText: $replyText,
-                                   replyFocused: $replyFocused)
-                    }
-                }
-
-                if !model.sessions.isEmpty {
-                    CompactHeader(title: "Agent sessions", trailing: "\(model.sessions.count)")
-                    ForEach(model.sessions) { session in
-                        // `agentTool` and not `pid`: a CLI agent is not a GUI
-                        // process, so `NSRunningApplication` has nothing for its
-                        // pid. The icon — when there is one — comes from the
-                        // desktop app declared for this tool and installed on
-                        // this machine, and from nowhere else.
-                        CompactRow(icon: session.symbol,
-                                   tone: .good,
-                                   title: session.tool,
-                                   subtitle: session.summary,
-                                   trailing: String(format: "%.0f%% · %.0f MB", session.cpuPct, session.memMB),
-                                   agentTool: session.tool)
-                    }
-                }
-
-                let profiles = model.agentProfiles.filter {
-                    $0.owned > 0 || $0.totalLaunched > 0 || $0.awaitingReply > 0
-                        || $0.totalCrashed > 0 || $0.totalLeaked > 0
-                }
-                if !profiles.isEmpty {
-                    CompactHeader(title: "Managed work by agent", trailing: "\(profiles.count)")
-                    ForEach(profiles) { profile in
-                        AgentProfileCard(profile: profile, model: model, expanded: $expandedAgent)
-                    }
-                }
-
-                let cutoff = Date().addingTimeInterval(-24 * 60 * 60)
-                let messages = model.recentMessages.filter { !$0.isAwaitingReply }
-                let recent = messages.filter { $0.createdAt >= cutoff }
-                let earlier = messages.filter { $0.createdAt < cutoff }
-                if !recent.isEmpty {
-                    CompactHeader(title: "Messages in the last 24 hours")
-                    ForEach(recent.prefix(6)) { message in
-                        MessageRow(message: message, model: model,
-                                   replyingTo: $replyingTo, replyText: $replyText,
-                                   replyFocused: $replyFocused)
-                    }
-                    OverflowLine(count: max(0, recent.count - 6), action: openDashboard)
-                }
-                if model.sessions.isEmpty && model.awaitingReplies.isEmpty && profiles.isEmpty {
-                    EmptyLine(text: "No active agent sessions or managed work.")
-                }
-                if !earlier.isEmpty {
-                    DisclosureGroup("Earlier messages (\(earlier.count))") {
-                        ForEach(earlier.prefix(6)) { message in
-                            MessageRow(message: message, model: model,
-                                       replyingTo: $replyingTo, replyText: $replyText,
-                                       replyFocused: $replyFocused)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Mailbox (\(pendingIDs.count + answered.count))").font(FleetFont.title)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .padding(FleetMetrics.gutter)
+            Hairline()
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    if !model.awaitingReplies.isEmpty {
+                        CompactHeader(title: "Waiting on you", trailing: "\(model.awaitingReplies.count)")
+                        ForEach(model.awaitingReplies) { message in
+                            MessageRow(message: message, model: model, replyingTo: $replyingTo,
+                                       replyText: $replyText, replyFocused: $replyFocused)
                         }
                     }
-                    .font(FleetFont.body)
-                    .padding(.horizontal, FleetMetrics.gutter)
-                    .padding(.vertical, 12)
+                    ForEach(answered) { message in
+                        MessageRow(message: message, model: model, replyingTo: $replyingTo,
+                                   replyText: $replyText, replyFocused: $replyFocused)
+                    }
+                    if model.awaitingReplies.isEmpty && answered.isEmpty {
+                        EmptyLine(text: "No messages yet.")
+                    }
                 }
-
-                Spacer(minLength: 6)
+                .padding(.vertical, FleetMetrics.rowVerticalPadding)
             }
         }
-        .frame(maxHeight: FleetMetrics.sectionMaxHeight)
-        // The scan needs no controller, so it must not wait for one: without
-        // this, spend never appears while the daemon is down, because the only
-        // other caller rides the snapshot tick.
-        .onAppear {
-            if model.settings.features.showAgentSpend { model.agentCost.refresh() }
+        .frame(width: 560, height: 520)
+    }
+}
+
+/// The registration workflow is usable even when the controller is offline and
+/// the roster is empty. The same observable roster feeds the task composer.
+struct AgentRosterSection: View {
+    var profiles: [AgentProfile]
+    @Bindable var registration: AgentRegistrationModel
+
+    @State private var showingRegistration = false
+    @FocusState private var agentIDFocused: Bool
+
+    init(profiles: [AgentProfile], registration: AgentRegistrationModel, startRegistration: Bool = false) {
+        self.profiles = profiles
+        self.registration = registration
+        _showingRegistration = State(initialValue: startRegistration)
+    }
+
+    private var entries: [AgentRosterEntry] {
+        AgentRosterEntry.merge(registeredIDs: registration.registeredIDs, profiles: profiles)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Button {
+                    showingRegistration.toggle()
+                    agentIDFocused = showingRegistration
+                } label: {
+                    Label("Register Agent ID", systemImage: "plus")
+                }
+                .controlSize(.small)
+                .accessibilityIdentifier("agents.register.open")
+                .help("Save an exact agent ID locally for task ownership. Registration does not start or detect a session.")
+                Spacer(minLength: 4)
+                if !registration.registeredIDs.isEmpty {
+                    Text("\(registration.registeredIDs.count) registered")
+                        .font(FleetFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if showingRegistration {
+                HStack(spacing: 8) {
+                    TextField("e.g. codex-worker", text: $registration.agentID)
+                        .textFieldStyle(.roundedBorder)
+                        .font(FleetFont.body)
+                        .focused($agentIDFocused)
+                        .accessibilityLabel("Agent ID")
+                        .accessibilityIdentifier("agents.register.input")
+                        .help("Use 1–128 letters, numbers, dots, hyphens or underscores, starting with a letter or number. IDs are case-sensitive; use the same ID as your task owner.")
+                        .onSubmit(register)
+                    Button("Register", action: register)
+                        .controlSize(.small)
+                        .disabled(registration.agentID.isEmpty)
+                        .accessibilityIdentifier("agents.register.submit")
+                    Button("Cancel", action: cancel)
+                        .controlSize(.small)
+                        .accessibilityIdentifier("agents.register.cancel")
+                }
+                .onExitCommand(perform: cancel)
+            }
+
+
+            if let status = registration.status {
+                Text(status)
+                    .font(FleetFont.caption)
+                    .foregroundStyle(registration.statusIsError ? StatusTone.bad.ink : Color.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("agents.register.status")
+            }
+        }
+        .padding(.horizontal, FleetMetrics.gutter)
+        .padding(.vertical, FleetMetrics.rowVerticalPadding)
+
+        ForEach(entries) { entry in
+            HStack(spacing: FleetMetrics.rowGap) {
+                EntityIcon(symbol: "person.crop.square", tone: .neutral, size: FleetMetrics.iconCompact)
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(entry.id)
+                            .font(FleetFont.rowTitleCompact)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .help(entry.id)
+                            .accessibilityIdentifier("agents.id.\(entry.id)")
+                        Tag(text: entry.isRegistered ? "Registered" : "Managed", tone: .neutral)
+                    }
+                    Text(entry.profile?.headline ?? "Idle · no managed work recorded")
+                        .font(FleetFont.subtitle)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 2) {
+                    IconButton(symbol: "doc.on.doc", help: "Copy agent ID \(entry.id)") {
+                        registration.copyID(entry.id)
+                    }
+                    .accessibilityIdentifier("agents.copy.\(entry.id)")
+                    if entry.isRegistered {
+                        IconButton(symbol: "minus.circle", help: "Remove registered ID \(entry.id)") {
+                            registration.remove(entry.id)
+                        }
+                        .accessibilityIdentifier("agents.remove.\(entry.id)")
+                    } else {
+                        Color.clear.frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(width: FleetMetrics.actionSlot)
+            }
+            .padding(.horizontal, FleetMetrics.gutter)
+            .padding(.vertical, FleetMetrics.rowVerticalPadding)
         }
     }
 
+    private func register() {
+        if registration.register() {
+            showingRegistration = false
+            agentIDFocused = false
+        }
+    }
+
+    private func cancel() {
+        showingRegistration = false
+        agentIDFocused = false
+        registration.agentID = ""
+    }
 }
 
 struct MessageRow: View {

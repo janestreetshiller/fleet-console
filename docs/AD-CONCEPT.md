@@ -1,29 +1,29 @@
 # FleetConsole ad concept
 
-Status: edit concept for the two-view product preview.
+## Current release cut
 
-## Soundtrack reference
+Use the current native app views, not a redrawn interface. The public export is a silent editorial montage with demo identities; it is not interaction footage. Live host captures remain private until individually reviewed.
 
-[Freestylers by Dimitri K and Lil Texas](https://music.apple.com/nz/album/freestylers-single/1834093807), proposed by the maintainer. Use an approved instrumental version or instrumental passage as the edit reference. The published ad uses a commercially cleared recording with the required master and synchronization permissions. Apple Music credits the recording to Black Reaper Records.
+| Time | Native view | Caption |
+|---|---|---|
+| 0–6 s | Quick View: CPU, memory, disk-capacity map, upload/download | Your Mac at a glance. |
+| 6–13 s | Contained Overview with CPU and memory history | Open the dashboard. |
+| 13–19 s | Focused process view | See what is running. |
+| 19–26 s | Service inspector with a demo owner and lease | Give agent work an owner and a lease. |
+| 26–30 s | Editorial end card | FleetConsole · Free local tools · MIT core |
 
-## Cut
+The final information card and accompanying copy link to:
+https://github.com/janestreetshiller/fleet-console-core/releases/latest
 
-Start with the actual menu-bar Quick View and its CPU and memory dials. Keep the first shot readable long enough to establish the product.
+Local monitoring and service management are free. Optional multi-device access costs $10 USD/month through Ouros. The published MIT source covers FleetCore, fleetd, fleetctl and the Rust protocol; the native UI source remains private. Do not promise AI repairs, included inference credits or a donation checkout.
 
-Cut to the dashboard on a strong musical accent. Show the timed CPU chart, then select a process and open a service's logs. Let the track set the pace while the interface stays stable and legible.
+## Private soundtrack reference
 
-Finish with a controller-launched service's owner and lease, then the FleetConsole mark. Keep transitions tied to meaningful UI changes rather than every drum hit. Use real running-app footage and sanitized demo service data.
+The maintainer previously supplied a reference for Freestylers by Dimitri K and Lil Texas:
+https://music.apple.com/nz/album/freestylers-single/1834093807
 
-## On-screen copy
+The existing local edit and soundtrack are private reference material. Possession of that recording is not evidence of commercial clearance. Do not publish it without documented master and synchronization permissions; use a silent cut or a separately cleared soundtrack for launch. Preserve the original private edit and its provenance rather than replacing it.
 
-Your Mac at a glance.
+## Visual provenance
 
-See what is running.
-
-Give agent work an owner and a lease.
-
-FleetConsole.
-
-## Voice
-
-Short labels, ordinary language and a readable type size. The soundtrack supplies the intensity; the copy explains the job. Keep the source/license and optional multi-device terms in the accompanying post or final information card.
+Record source revision, capture method, fixture/live status, individual capture review, output hash, FFmpeg command and full-decode result alongside each export. Label native fixture renders as demo states and editorial still-image montages as such. Preserve older edits as historical evidence; the current launch pack identifies its replacement assets explicitly.

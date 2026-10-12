@@ -130,10 +130,27 @@ enum SurfaceRenderer {
 
     private static func render(into out: URL) {
         let model = AppModel()
-        // The renderer disables the controller subscription; local probes still
-        // run through AppModel. Fixture identity never comes from those probes.
+        // Only aggregate system telemetry stays live. Process and network
+        // identity collectors are disabled in this explicit fixture mode.
         DaemonClient.shared.stop()
+        model.network.ethernet = EthernetStatus(interface: "en0", connected: true,
+            ipv4: "198.51.100.10", linkSpeed: "1000baseT", duplex: "full")
+        model.network.wifi = WiFiStatus(interface: "en1", poweredOn: true, connected: true,
+            ssid: "Demo Wi-Fi", rssi: -55, noise: -90, transmitRateMbps: 866,
+            channel: "36", ipv4: "198.51.100.11")
+        model.network.tailscale = TailscaleUIStatus(installed: true, running: true,
+            backendState: "Running", deviceName: "demo-mac", dnsName: "demo.example.invalid",
+            ipv4: "203.0.113.42", tailnet: "demo.example.invalid", peerCount: 3, onlinePeerCount: 2)
         let fixture = Fixtures.snapshot()
+        // The client-local roster is separate from Snapshot. Never let fixture
+        // views fall back to the operator's persistent singleton.
+        let rosterFile = out.appendingPathComponent(".fixture-agents-\(UUID().uuidString).json")
+        do {
+            try JSONEncoder().encode(["claude", "codex", "operator"])
+                .write(to: rosterFile, options: .withoutOverwriting)
+        } catch { fatalError("Cannot create isolated fixture roster: \(error)") }
+        defer { try? FileManager.default.removeItem(at: rosterFile) }
+        let registration = AgentRegistrationModel(fileURL: rosterFile)
 
         // A declared VLAN segment, so the sheet shows the segment vocabulary
         // rather than the absence of it. Same rule as every other fixture here:
@@ -152,9 +169,9 @@ enum SurfaceRenderer {
 
         for appearance in Appearance.allCases {
             NSApp.appearance = NSAppearance(named: appearance.name)
-            renderPopover(model: model, fixture: fixture, appearance: appearance, into: out)
+            renderPopover(model: model, fixture: fixture, registration: registration, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
-            renderTaskComposer(appearance: appearance, into: out)
+            renderTaskComposer(registration: registration, appearance: appearance, into: out)
             renderStandalone(AnyView(DeviceManagementView(model: model)), name: "device-management",
                              size: NSSize(width: 560, height: 650), appearance: appearance, into: out)
             renderStandalone(AnyView(WelcomeView(model: model, dismiss: {})), name: "welcome",
@@ -181,9 +198,9 @@ enum SurfaceRenderer {
     /// The Task Composer window on its own — a surface the sheet should prove
     /// renders without defects (the assign picker, the plate labels, the launch
     /// footer) before it ever reaches a launch.
-    private static func renderTaskComposer(appearance: Appearance, into out: URL) {
+    private static func renderTaskComposer(registration: AgentRegistrationModel, appearance: Appearance, into out: URL) {
         let roster = ["claude", "codex", "operator"].map { AgentProfile(id: $0) }
-        let composer = TaskComposerModel(agentProfiles: roster)
+        let composer = TaskComposerModel(agentProfiles: roster, registration: registration)
         composer.taskName = "embed index"
         composer.ownerAgent = "claude"
         composer.purpose = "local api for triage"
@@ -244,20 +261,16 @@ enum SurfaceRenderer {
     // MARK: - Popover
 
     private static func renderPopover(model: AppModel, fixture: Snapshot,
+                                      registration: AgentRegistrationModel,
                                       appearance: Appearance, into out: URL) {
-        // The whole popover as it opens, plus each tab on its own. The tab bodies
-        // are separate surfaces because `FleetPopover` owns which tab is showing
-        // in `@State`, and a sheet that only ever captures the first one cannot
-        // be used to review the other two.
-        renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {})),
-                             named: "popover", model: model, fixture: fixture,
-                             appearance: appearance, into: out)
-        renderPopoverSurface(AnyView(AgentsContent(model: model, openDashboard: {})),
-                             named: "popover-agents", model: model, fixture: fixture,
-                             appearance: appearance, into: out)
-        renderPopoverSurface(AnyView(ProcessesContent(model: model, openDashboard: {})),
-                             named: "popover-processes", model: model, fixture: fixture,
-                             appearance: appearance, into: out)
+        // Capture the whole shared chrome on every tab, not detached tab bodies.
+        for section in FleetSection.allCases {
+            model.requestedSection = section
+            let name = section.menuTitle.lowercased().replacingOccurrences(of: " ", with: "-")
+            renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {}, registration: registration)),
+                                 named: "popover-" + name, model: model, fixture: fixture,
+                                 appearance: appearance, into: out)
+        }
         // The administration rows on their own. Inside the Connections tab they
         // sit below a scroll fold that a still capture cannot reach, and a
         // surface the sheet cannot show is a surface nobody reviews.
@@ -280,7 +293,7 @@ enum SurfaceRenderer {
                              appearance: appearance, into: out)
         renderPopoverSurface(AnyView(ConnectionsPopover(model: model, openDashboard: {},
                                                         embedded: false)),
-                             named: "popover-network", model: model, fixture: fixture,
+                             named: "standalone-network", model: model, fixture: fixture,
                              appearance: appearance, into: out)
     }
 
@@ -477,6 +490,18 @@ enum Fixtures {
     // Stable display-only identity. These paths are never opened by the fixture.
     static let userName = "demo"
     static let homePath = "/Users/demo"
+    // Demo process identities are injected before any collector/timer starts.
+    // Live verification does not use this branch or these measurements.
+    static let processRows: [ProcessRow] = [
+        (Int32(48122), "Demo API", "python3 -m http.server 8787", 4.2, Int64(186_000_000), [8787]),
+        (Int32(51903), "Demo Web", "npm run dev", 11.8, Int64(412_000_000), [5173]),
+        (Int32(52004), "Demo Indexer", "python3 indexer.py", 2.5, Int64(240_000_000), []),
+        (Int32(52005), "Demo Agent", "codex", 1.1, Int64(120_000_000), [])
+    ].map { pid, name, command, cpu, memory, ports in
+        ProcessRow(id: pid, pid: pid, ppid: 1, pgid: pid, uid: 501, user: userName,
+                   name: name, commandLine: command, cpuPercent: cpu, residentBytes: memory,
+                   ports: ports, startSignature: "demo-\(pid)", stateField: "S")
+    }
     private static let serviceLogsPath = "\(homePath)/Library/Logs/FleetConsole/services"
     private static let socketPath = "\(homePath)/Library/Application Support/FleetConsole/fleetd.sock"
 

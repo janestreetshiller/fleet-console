@@ -2,18 +2,23 @@
 
 ## Short post
 
-FleetConsole helps you keep track of the servers your coding agents leave running. Launch through `fleetctl` with an owner and a lease; the controller cleans up unpaused services when their leases expire. You get CPU and memory dials in the menu bar and a full dashboard for the history or service logs.
+FleetConsole is a free macOS app for keeping an eye on your Mac and the background work your coding agents start. Quick View has CPU and memory dials, a disk-capacity map and upload/download bars. Open the dashboard for charts, processes and service logs. The controller, CLI and core are MIT licensed; optional multi-device access uses Ouros at $10/month.
+
+Download: https://github.com/janestreetshiller/fleet-console-core/releases/latest
+Source: https://github.com/janestreetshiller/fleet-console-core
 
 ## Release announcement
 
-FleetConsole gives you a read of your Mac and a record of the services your agents start. Quick View shows CPU and memory dials in the menu bar, with network rates and service counts. Open the dashboard to see the history, inspect a process or read a service's logs and health-check results.
+FleetConsole puts four instruments in your menu bar: CPU, memory, disk capacity and network traffic. The five tabs share one compact frame, with configuration on the left, refresh on the right and a dashboard action below.
 
-Launch agent work through `fleetctl` to record its owner and purpose, with a lease for how long it should run. Renew the lease while you need the service; the local controller stops unpaused services when time runs out. You can pause, resume, renew and stop controller-launched services from the app. Pausing preserves the process group and its resources, and suspends expiry cleanup until the service resumes.
+Name and color-tag services so you can recognize them. Register agent IDs, see detected sessions and handle requests without turning the menu into a resource table. The dashboard opens to a contained overview, with a sidebar you can tuck away when you want more room for the charts.
 
-FleetConsole source is MIT licensed. Local monitoring and controller tools are free to use. Connect your Ouros account for optional multi-device access at $10 USD/month, with remote metrics and read-only service inventory over SSH.
+Launch background work through `fleetctl` with an owner, purpose and lease. Renew what you still need; the controller cleans up unpaused services it launched when their leases expire. Paused services keep their processes and resources until resumed. Claiming an existing process adds visibility, not permission to stop it.
 
-## Copy review
+Local monitoring and service management are free. FleetCore, fleetd, fleetctl and the Rust protocol are published under MIT. The native desktop UI source and private development history are not part of the public repository. Optional multi-device access costs $10 USD/month through Ouros and uses your existing SSH setup for remote metrics and read-only service inventory. AI credits and automatic repairs are not included.
 
-Grade: 9/10 for directness, specificity and accurate scope; this is an editorial judgment rather than a runtime metric.
+Download: https://github.com/janestreetshiller/fleet-console-core/releases/latest
 
-The final copy describes the implemented quick-view/dashboard split, names the actual service workflow and separates free local tools from optional paid remote access. The review checked native views, lease cleanup, app controls, MIT terms, subscription price and SSH probes. Performance superlatives and future-feature promises stay outside the announcement; resource measurements belong in the assessment alongside their workload.
+## Publication notes
+
+Use the shipping build number and verified release link from the release notes. Publish only reviewed captures from the current native views. Do not describe the whole app as open source, call disk capacity a temperature reading, promise autonomous repairs, or imply a donation checkout exists. Keep the prior privately supplied soundtrack out of public exports unless master and synchronization permissions are documented.

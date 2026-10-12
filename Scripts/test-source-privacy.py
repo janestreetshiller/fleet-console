@@ -70,6 +70,32 @@ class ScannerTests(unittest.TestCase):
 
 
 class SourcePrivacyTests(unittest.TestCase):
+    def test_renderer_roster_is_injected_instead_of_using_live_defaults(self):
+        renderer = (ROOT / "Sources/FleetConsoleApp/SurfaceRenderer.swift").read_text()
+        compact = re.sub(r"\s+", " ", renderer)
+        self.assertIn("FleetPopover(model: model, openDashboard: {}, registration: registration)", compact)
+        self.assertIn("TaskComposerModel(agentProfiles: roster, registration: registration)", compact)
+        self.assertNotIn("AgentRegistrationModel.shared", renderer)
+
+    def test_fixture_process_inventory_never_starts_the_live_collector(self):
+        inventory = (ROOT / "Sources/FleetConsoleApp/Probes/ProcessInventory.swift").read_text()
+        self.assertIn("if CommandLine.arguments.contains(SurfaceRenderer.flag)", inventory)
+        self.assertIn("rows = Fixtures.processRows", inventory)
+        self.assertLess(inventory.index("rows = Fixtures.processRows"), inventory.index("timer = Timer.scheduledTimer"))
+
+    def test_fixture_network_never_starts_live_identity_probes(self):
+        network = (ROOT / "Sources/FleetConsoleApp/Probes/NetworkMonitor.swift").read_text()
+        self.assertIn("guard Self.allowsLiveProbes else { return }", network)
+        self.assertEqual(network.count("guard Self.allowsLiveProbes else { return }"), 4)
+        renderer = (ROOT / "Sources/FleetConsoleApp/SurfaceRenderer.swift").read_text()
+        self.assertIn("model.network.tailscale = TailscaleUIStatus(", renderer)
+        self.assertIn('deviceName: "demo-mac"', renderer)
+
+    def test_standalone_network_capture_has_a_distinct_name(self):
+        renderer = (ROOT / "Sources/FleetConsoleApp/SurfaceRenderer.swift").read_text()
+        self.assertIn('named: "standalone-network"', renderer)
+        self.assertNotIn('named: "popover-network",', renderer)
+
     def test_public_deliverables_have_no_known_maintainer_identifiers(self):
         paths = manifest()
         self.assertIn("Sources/FleetConsoleApp/SurfaceRenderer.swift", paths)

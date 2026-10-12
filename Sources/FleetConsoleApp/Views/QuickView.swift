@@ -11,14 +11,23 @@ struct QuickViewDial {
 struct QuickViewMetrics {
     let cpu: QuickViewDial
     let memory: QuickViewDial
+    let disk: QuickViewDial
+    static let diskCellCount = 20
+    var diskFilledCells: Int {
+        disk.value.map { Int(($0 * Double(Self.diskCellCount)).rounded()) } ?? 0
+    }
 
-    init(cpu: CPUSample, memory: MemorySample) {
+    init(cpu: CPUSample, memory: MemorySample, storage: StorageSample = StorageSample()) {
         let cpuValue = cpu.sampled ? Self.validShare(cpu.usage) : nil
         let memoryValue = memory.totalBytes > 0 ? Self.validShare(memory.usedShare) : nil
+        let diskValue = storage.totalBytes > 0 && storage.availableBytes >= 0
+            && storage.availableBytes <= storage.totalBytes ? Self.validShare(storage.usedShare) : nil
         self.cpu = QuickViewDial(value: cpuValue,
                                  tone: cpuValue.map(SystemThresholds.utilization) ?? .unknown)
         self.memory = QuickViewDial(value: memoryValue,
                                     tone: memoryValue == nil ? .unknown : SystemThresholds.memory(memory))
+        self.disk = QuickViewDial(value: diskValue,
+                                  tone: diskValue.map { SystemThresholds.freeSpace(share: $0) } ?? .unknown)
     }
 
     private static func validShare(_ value: Double) -> Double? {
@@ -26,63 +35,105 @@ struct QuickViewMetrics {
     }
 }
 
-/// The menu-bar glance shares the dashboard's probes and bounded histories.
-/// It draws two static dials, with no chart layout, extra timers or collectors.
+/// A fixed logarithmic scale, not a percentage of a guessed link speed.
+struct QuickViewRate {
+    let bytesPerSecond: Double?
+    init(bytesPerSecond: Double?) {
+        self.bytesPerSecond = bytesPerSecond.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
+    }
+    var fraction: Double? {
+        bytesPerSecond.map { min(1, log1p($0) / log1p(1_000_000_000)) }
+    }
+    var readout: String { ConsoleFmt.byteRate(bytesPerSecond) }
+}
+
+/// Four instruments sharing the existing probes. No extra collectors or timers.
 struct QuickView: View {
     @Bindable var model: AppModel
-    private static let dialDiameter: CGFloat = 90
+    private static let instrumentSize: CGFloat = 90
 
     var body: some View {
-        let metrics = QuickViewMetrics(cpu: model.system.cpu, memory: model.system.memory)
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("This Mac").font(FleetFont.rowTitle)
-                Spacer()
-                Text(model.system.topology.brand)
-                    .font(FleetFont.caption).foregroundStyle(.secondary)
+        let metrics = QuickViewMetrics(cpu: model.system.cpu, memory: model.system.memory,
+                                       storage: model.system.storage)
+        HStack(alignment: .top, spacing: 10) {
+            instrument("CPU") {
+                RetroGauge(value: metrics.cpu.value, tone: metrics.cpu.tone, caption: "CPU",
+                           readout: metrics.cpu.readout, diameter: Self.instrumentSize)
             }
-            HStack(alignment: .top, spacing: 16) {
-                dial("CPU", metric: metrics.cpu, detail: model.system.topology.coreSummary)
-                dial("Memory", metric: metrics.memory,
-                     detail: metrics.memory.value == nil ? "Waiting for sample"
-                         : ConsoleFmt.bytes(model.system.memory.usedBytes) + " used",
-                     secondaryDetail: "Pressure " + model.system.memory.pressure.label)
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Network").font(FleetFont.rowTitle)
-                    Label(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec), systemImage: "arrow.down")
-                    Label(ConsoleFmt.byteRate(model.system.network.uploadBytesPerSec), systemImage: "arrow.up")
-                }
-                .font(FleetFont.body).monospacedDigit()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+            .help(model.system.topology.brand + " · " + model.system.topology.coreSummary)
+            instrument("Memory") {
+                RetroGauge(value: metrics.memory.value, tone: metrics.memory.tone, caption: "Memory",
+                           readout: metrics.memory.readout, diameter: Self.instrumentSize)
             }
-            HStack {
-                Text("\(model.runningServices.count) services running")
-                Spacer()
-                if model.criticalCount + model.warningCount > 0 {
-                    Label("\(model.criticalCount + model.warningCount) need attention", systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(StatusTone.warn.ink)
-                } else {
-                    Text("\(model.awaitingReplyCount) agent replies waiting")
-                }
-            }
-            .font(FleetFont.caption).foregroundStyle(.secondary)
+            .help("\(ConsoleFmt.bytes(model.system.memory.usedBytes)) used · pressure \(model.system.memory.pressure.label)")
+            instrument("Disk") { disk(metrics) }
+            instrument("Network") { network }
         }
-        .padding(FleetMetrics.gutter)
+        .padding(.horizontal, FleetMetrics.gutter)
+        .padding(.vertical, 22)
         .accessibilityElement(children: .contain)
     }
 
-    private func dial(_ title: String, metric: QuickViewDial, detail: String, secondaryDetail: String? = nil) -> some View {
-        VStack(spacing: 6) {
-            Text(title).font(FleetFont.rowTitle)
-            RetroGauge(value: metric.value, tone: metric.tone, caption: title,
-                       readout: metric.readout, diameter: Self.dialDiameter)
-            Text(detail).font(FleetFont.caption).foregroundStyle(.secondary)
-                .lineLimit(1)
-            if let secondaryDetail {
-                Text(secondaryDetail).font(FleetFont.caption).foregroundStyle(.secondary).lineLimit(1)
-            }
+    private func instrument<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(spacing: 12) {
+            Text(title).font(FleetFont.sectionLabel).foregroundStyle(.secondary)
+            content().frame(height: Self.instrumentSize)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    private func disk(_ metrics: QuickViewMetrics) -> some View {
+        VStack(spacing: 8) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: 5), spacing: 3) {
+                ForEach(0..<QuickViewMetrics.diskCellCount, id: \.self) { index in
+                    RoundedRectangle(cornerRadius: FleetMetrics.barCorner)
+                        .fill(index < metrics.diskFilledCells
+                              ? SystemThresholds.freeSpace(share: Double(index + 1) / Double(QuickViewMetrics.diskCellCount)).color
+                              : FleetColor.indicatorOff)
+                        .frame(height: 12)
+                }
+            }
+            Text(metrics.disk.readout).font(FleetFont.mono(12, weight: .medium)).monospacedDigit()
+        }
+        .frame(width: Self.instrumentSize)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Disk storage")
+        .accessibilityValue(metrics.disk.value == nil ? "Unavailable" : "\(metrics.disk.readout) used")
+        .help(metrics.disk.value == nil ? "Disk capacity unavailable"
+              : "\(ConsoleFmt.bytes(model.system.storage.availableBytes)) available of \(ConsoleFmt.bytes(model.system.storage.totalBytes)) · capacity, not temperature")
+    }
+
+    private var network: some View {
+        VStack(spacing: 12) {
+            rate("Download", symbol: "arrow.down", value: model.system.network.downloadBytesPerSec)
+            rate("Upload", symbol: "arrow.up", value: model.system.network.uploadBytesPerSec)
+        }
+        .frame(width: Self.instrumentSize)
+        .help("Live physical-interface traffic. Bars use a fixed logarithmic scale from 0 to 1 GB/s, not link utilization.")
+    }
+
+    private func rate(_ title: String, symbol: String, value: Double?) -> some View {
+        let metric = QuickViewRate(bytesPerSecond: value)
+        return VStack(spacing: 5) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol).foregroundStyle(.secondary)
+                Text(metric.readout).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .font(FleetFont.mono(11))
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: FleetMetrics.barCorner).fill(FleetColor.indicatorOff)
+                    if let fraction = metric.fraction {
+                        RoundedRectangle(cornerRadius: FleetMetrics.barCorner)
+                            .fill(SketchInk.accent)
+                            .frame(width: geometry.size.width * fraction)
+                    }
+                }
+            }
+            .frame(height: 7)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(metric.bytesPerSecond == nil ? "Unavailable" : metric.readout)
     }
 }

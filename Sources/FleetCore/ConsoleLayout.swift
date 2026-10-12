@@ -182,6 +182,7 @@ public enum ConsoleLayout {
     /// talking.
     public static let minimumContentHeight: CGFloat =
         titlebarReserve + moduleHeaderHeight + cardHeight + moduleBottomPadding
+        + DashboardContentGeometry.footerHeight
 
     /// The complete instrument count, not just the four original metrics.
     /// Avoid a single orphan card when reducing a row still uses available width.

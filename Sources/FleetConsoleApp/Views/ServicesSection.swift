@@ -6,16 +6,11 @@ struct ServicesSection: View {
     @Bindable var model: AppModel
     @Binding var expanded: String?
     @Binding var pendingAction: DestructiveAction?
+    var labels: ServiceLabelsStore = .shared
+    @State private var showUnmanaged = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "Managed Services",
-                          subtitle: "\(model.activeServices.count) active") {
-                IconButton(symbol: "arrow.triangle.2.circlepath", help: "Run a reconciliation sweep now") {
-                    model.reconcileNow()
-                }
-            }
-
             if model.activeServices.isEmpty {
                 Text(model.connected
                      ? "No managed services. Launch work through fleetctl to track its owner, logs and lease."
@@ -23,20 +18,45 @@ struct ServicesSection: View {
                     .font(FleetFont.subtitle)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, FleetMetrics.gutter)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, FleetMetrics.rowVerticalPadding)
             }
 
             ForEach(model.activeServices) { row in
-                ServiceRowView(row: row, model: model, expanded: $expanded, pendingAction: $pendingAction)
+                ServiceRowView(row: row, model: model, expanded: $expanded,
+                               pendingAction: $pendingAction, labels: labels)
             }
 
             if !model.unmanaged.isEmpty {
-                SectionHeader(title: "Other Background Processes",
-                              subtitle: "\(model.unmanaged.count) · not managed by FleetConsole")
-                ForEach(model.unmanaged) { process in
-                    UnmanagedRowView(process: process, model: model, expanded: $expanded)
+                DisclosureGroup(isExpanded: $showUnmanaged) {
+                    Text("Not started by FleetConsole; never signalled. Claim or allow-list from a row.")
+                        .font(FleetFont.caption)
+                        .foregroundStyle(SurfaceInk.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.vertical, 4)
+                    ForEach(model.unmanaged) { process in
+                        UnmanagedRowView(process: process, model: model, expanded: $expanded)
+                    }
+                } label: {
+                    HStack {
+                        Text("Unmanaged")
+                        Text("\(model.unmanaged.count)").monospacedDigit()
+                        Spacer()
+                        let leaks = model.unmanaged.filter { $0.formerServiceID != nil }.count
+                        if leaks > 0 {
+                            Label("\(leaks) leaked", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(StatusTone.warn.ink)
+                        }
+                    }
+                    .font(FleetFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
                 }
+                .padding(.horizontal, FleetMetrics.gutter)
+                .padding(.vertical, FleetMetrics.rowVerticalPadding)
+                .accessibilityIdentifier("services.unmanaged.disclosure")
             }
+        }
+        .onChange(of: expanded, initial: true) { _, id in
+            if let id, model.unmanaged.contains(where: { $0.id == id }) { showUnmanaged = true }
         }
     }
 }
@@ -46,22 +66,26 @@ struct ServiceRowView: View {
     let model: AppModel
     @Binding var expanded: String?
     @Binding var pendingAction: DestructiveAction?
+    var labels: ServiceLabelsStore = .shared
 
     private var service: ServiceRecord { row.record }
     private var isStale: Bool { service.evidence.isStale(tolerance: model.staleTolerance) }
 
     var body: some View {
         DisclosureRow(id: service.id, expanded: $expanded,
-                      help: "\(service.state.label) — \(service.purpose)") {
+                      help: rowHelp) {
             FleetRowLabel(icon: Iconography.service(service),
                           tone: isStale ? .unknown : service.state.tone,
                           badge: service.state.needsAttention ? service.state.tone : nil,
-                          title: service.friendlyName,
-                          subtitle: "\(service.ownerAgent) · \(service.projectFolderName)",
+                          title: labels.displayName(for: service),
+                          subtitle: "\(service.state.label)\(isStale ? " · stale" : "") · \(service.ownerAgent) · \(service.projectFolderName)",
                           trailingText: Fmt.duration(service.uptime),
                           trailingMono: true) {
                 if model.busyServiceIDs.contains(service.id) {
                     ProgressView().controlSize(.small).scaleEffect(0.6).frame(width: 14)
+                }
+                if let color = labels.label(for: service.id).color {
+                    ServiceColorTag(color: color, compact: true).font(FleetFont.micro)
                 }
                 // Provenance, not status: how the record entered the registry has
                 // no good/bad axis, and it decides what the row's verbs can do.
@@ -80,8 +104,17 @@ struct ServiceRowView: View {
                     .fixedSize()
             }
         } detail: {
-            ServiceDetail(service: service, model: model, pendingAction: $pendingAction, isStale: isStale)
+            ServiceDetail(service: service, model: model, pendingAction: $pendingAction,
+                          isStale: isStale, labels: labels)
         }
+        .accessibilityIdentifier("services.row.\(service.id)")
+    }
+
+    private var rowHelp: String {
+        var parts = [labels.displayName(for: service), service.state.label, service.purpose]
+        if let color = labels.label(for: service.id).color { parts.append("\(color.label) tag") }
+        if isStale { parts.append("Status not refreshed recently") }
+        return parts.joined(separator: " — ")
     }
 
     private var leaseCountdown: String {
@@ -96,6 +129,7 @@ struct ServiceDetail: View {
     let model: AppModel
     @Binding var pendingAction: DestructiveAction?
     let isStale: Bool
+    var labels: ServiceLabelsStore = .shared
 
     @State private var events: [ServiceEvent] = []
 
@@ -114,7 +148,19 @@ struct ServiceDetail: View {
 
             EvidenceChips(evidence: service.evidence, health: service.health, stale: isStale)
 
+            HStack {
+                ServiceLabelEditButton(service: service, labels: labels)
+                Spacer(minLength: 0)
+                if let color = labels.label(for: service.id).color {
+                    ServiceColorTag(color: color).font(FleetFont.micro)
+                }
+            }
+            .font(FleetFont.subtitle)
+
             Group {
+                if labels.label(for: service.id).name != nil {
+                    KeyValue(key: "Recorded name", value: service.friendlyName)
+                }
                 KeyValue(key: "Purpose", value: service.purpose)
                 KeyValue(key: "Owner", value: service.ownerAgent)
                 KeyValue(key: "Project", value: service.cwd, monospaced: true)
@@ -177,12 +223,14 @@ struct ServiceDetail: View {
                 Button("Logs") { openLogs() }
                 Button("Project Folder") { model.revealInFinder(service.cwd) }
                 Button("Renew Lease") { model.renew(service) }
+            }
                 // Absent, not disabled, and not merely left to fail at the daemon:
                 // a claimed record is one the controller did not start, so every
                 // signal verb is refused on the wire. Drawing five buttons that can
                 // only return an error is the same mistake as a Full Screen menu
                 // item on a window that refuses full screen.
-                if service.isSignallableByController {
+            if service.isSignallableByController {
+                RowActions {
                     if service.state == .paused {
                         Button("Resume") { model.resume(service) }
                     } else {

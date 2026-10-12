@@ -6,7 +6,10 @@ through timed charts, processes and service logs in the **Dashboard**. A local
 controller and `fleetctl` keep track of the work your coding agents start.
 Requires macOS 14 or later.
 
-The source is MIT licensed, and local monitoring and service control are free.
+FleetCore, the controller, CLI and Rust protocol are published under MIT; the
+native UI source remains private. Local monitoring and service control are free.
+The public source and downloads live at
+https://github.com/janestreetshiller/fleet-console-core.
 Optional multi-device access costs $10 USD/month through Ouros. Connect your Ouros
 account in Devices, refresh the subscription options, and complete secure checkout;
 refresh your subscription to link additional computers.
@@ -21,8 +24,8 @@ individual spikes are preserved. Disk, GPU, network and sensors expand below.
 
 One menu-bar cluster shows CPU and memory use, connection state, and an attention
 count when needed. Its dropdown starts on **Quick View** and remembers your last
-tab. Quick View shows CPU and memory dials, live network rates, service counts and
-an **Open Dashboard** button. The existing **Services**, **Agents**, **Processes**
+tab. Quick View shows CPU and memory dials, a disk-capacity map, upload/download
+bars and an **Open Dashboard** button. **Services**, **Agents**, **Processes**
 and **Network** tabs remain available. Right-click or Control-click for **Quick
 View**, the dashboard, named destinations, configuration and logs. Both views
 share the same resource probes and sampling cadence.

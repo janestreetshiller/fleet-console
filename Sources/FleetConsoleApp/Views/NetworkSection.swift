@@ -12,17 +12,6 @@ struct NetworkSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            SectionHeader(title: "Network") {
-                HStack(spacing: 2) {
-                    IconButton(symbol: "arrow.clockwise", help: "Refresh network status") {
-                        network.refresh()
-                    }
-                    IconButton(symbol: "gearshape", help: "Open Network settings") {
-                        network.openSettings(.network)
-                    }
-                }
-            }
-
             ethernetRow
             wifiRow
             tailscaleRow

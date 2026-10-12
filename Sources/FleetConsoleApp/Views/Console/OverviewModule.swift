@@ -3,7 +3,7 @@ import FleetCore
 
 // CPU and memory are the primary instruments. Time zoom preserves individual
 // observations; focusing one metric gives it the full width and a taller plot.
-// Secondary instruments are expandable so they do not compress the main traces.
+// Secondary instruments have a glance and a sheet, never an expanding main page.
 struct OverviewModule: View {
     @Bindable var model: AppModel
     /// Read for one reason: the toolbar's search field is present on this module
@@ -15,60 +15,80 @@ struct OverviewModule: View {
 
     private var system: SystemMonitor { model.system }
 
-    /// Width of the content column, measured rather than assumed — the sidebar
-    /// and the inspector both change it while the window stays the same size.
-    @State private var contentWidth: CGFloat = 0
-
     private enum Focus: String, CaseIterable { case both = "CPU & Memory", cpu = "CPU", memory = "Memory" }
     @State private var focus: Focus = .both
     @State private var timeWindow: ChartTimeWindow = .minutes2
     @State private var moreMetrics = false
     private var timeRange: ClosedRange<Date> { timeWindow.range(endingAt: system.sampledAt) }
-    private var primaryColumns: Int { focus == .both && contentWidth >= 800 ? 2 : 1 }
-    private var plotHeight: CGFloat { focus == .both ? ConsoleMetrics.chartPrimaryHeight : ConsoleMetrics.chartFocusHeight }
-    private var instrumentColumns: Int { contentWidth >= 800 ? 2 : 1 }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
-                ModuleHeader(
-                    title: "Overview",
-                    subtitle: subtitle,
-                    symbol: ConsoleModule.overview.symbol)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 16) { focusPicker; Spacer(minLength: 8); timePicker }
+        GeometryReader { geometry in
+            let layout = OverviewViewportGeometry(viewport: geometry.size, focused: focus != .both,
+                                                  instrumentCount: system.power.hasBattery ? 5 : 4,
+                                                  verticalSafeArea: geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
+            VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
+                ModuleHeader(title: "Overview", subtitle: subtitle, symbol: ConsoleModule.overview.symbol)
+                if layout.controlsStacked {
                     VStack(alignment: .leading, spacing: 8) { focusPicker; timePicker }
+                } else {
+                    HStack(spacing: 16) { focusPicker; Spacer(minLength: 8); timePicker }
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: primaryColumns),
-                          spacing: ConsoleMetrics.cardGap) {
-                    if focus != .memory { cpuCard }
-                    if focus != .cpu { memoryCard }
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: layout.primaryColumns),
+                          spacing: OverviewViewportGeometry.gap) {
+                    if focus != .memory { cpuCard(plotHeight: layout.plotHeight) }
+                    if focus != .cpu { memoryCard(plotHeight: layout.plotHeight) }
                 }
-                .background(GeometryReader { proxy in
-                    Color.clear.onAppear { contentWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, width in contentWidth = width }
-                })
-                DisclosureGroup("Disk, GPU, Network & Sensors", isExpanded: $moreMetrics) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: instrumentColumns),
-                              spacing: ConsoleMetrics.cardGap) {
-                        diskCard
-                        if system.gpu.available { gpuCard }
-                        networkCard
-                        sensorCard
-                        if system.power.hasBattery { powerCard }
-                    }
-                    .padding(.top, ConsoleMetrics.cardGap)
+                OverviewMetricGlance(storage: system.storage, gpu: system.gpu, network: system.network,
+                                     sensors: system.sensors, power: system.power, columns: layout.secondaryColumns) {
+                    moreMetrics = true
                 }
-                .font(ConsoleFont.cardTitle)
-
-                processMapCard
+                processMapCard(limit: layout.processLimit)
                 footer
             }
-            .padding(ConsoleMetrics.gutter)
-
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(width: layout.contentWidth)
+            .padding(.vertical, OverviewViewportGeometry.verticalPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .scrollContentBackground(.hidden)
+        .sheet(isPresented: $moreMetrics) { detailedMetrics }
+    }
+
+    /// Detailed instruments have their own scrollable surface. Opening them must
+    /// not move the primary traces or push the process actions below the window.
+    private var detailedMetrics: some View {
+        VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
+            ModuleHeader(title: "System Metrics", subtitle: subtitle, symbol: "slider.horizontal.3") {
+                Button("Done") { moreMetrics = false }
+                    .keyboardShortcut(.cancelAction)
+                    .accessibilityIdentifier("overview.metrics.done")
+            }
+            timePicker
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
+                          spacing: ConsoleMetrics.cardGap) {
+                    diskCard
+                    if system.gpu.available {
+                        gpuCard
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("GPU").font(ConsoleFont.cardTitle)
+                            Text("GPU metrics aren’t available on this Mac.")
+                                .font(ConsoleFont.body).foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
+                        .elevatedCard()
+                    }
+                    networkCard
+                    sensorCard
+                    if system.power.hasBattery { powerCard }
+                }
+                .padding(.bottom, ConsoleMetrics.cardGap)
+            }
+            .scrollContentBackground(.hidden)
+        }
+        .padding(ConsoleMetrics.gutter)
+        .frame(width: 760, height: 620)
+        .accessibilityIdentifier("overview.metrics.sheet")
     }
 
     private var focusPicker: some View {
@@ -77,6 +97,7 @@ struct OverviewModule: View {
         }
         .pickerStyle(.segmented)
         .fixedSize()
+        .accessibilityIdentifier("overview.focus")
         .help("Give CPU or memory the full chart width")
     }
 
@@ -94,6 +115,7 @@ struct OverviewModule: View {
             }
             .pickerStyle(.segmented)
             .fixedSize()
+            .accessibilityIdentifier("overview.time")
             .help("Zoom the visible time range without averaging samples")
         }
     }
@@ -163,7 +185,7 @@ struct OverviewModule: View {
 
     // MARK: CPU
 
-    private var cpuCard: some View {
+    private func cpuCard(plotHeight: CGFloat) -> some View {
         TelemetryCard(
             title: "CPU",
             plate: "01 · CPU",
@@ -194,6 +216,7 @@ struct OverviewModule: View {
                 }
             }
         }
+        .accessibilityIdentifier("overview.cpu")
     }
 
     private var cpuTint: Color {
@@ -202,7 +225,7 @@ struct OverviewModule: View {
 
     // MARK: Memory
 
-    private var memoryCard: some View {
+    private func memoryCard(plotHeight: CGFloat) -> some View {
         TelemetryCard(
             title: "Memory",
             plate: "02 · MEM",
@@ -223,74 +246,13 @@ struct OverviewModule: View {
             // one line, which is the same answer at any column count.
             MemoryFacts(memory: system.memory)
         }
+        .accessibilityIdentifier("overview.memory")
     }
 
     // MARK: Process map
 
-    /// The map's rows, filtered the same way `ProcessModule` filters its table —
-    /// name or command line, case-insensitive — so one query means one thing
-    /// across both surfaces.
-    private var mapRows: [ProcessRow] {
-        let query = console.search.trimmingCharacters(in: .whitespaces)
-        guard !query.isEmpty else { return model.processes.rows }
-        return model.processes.rows.filter { row in
-            row.name.localizedCaseInsensitiveContains(query)
-                || row.commandLine.localizedCaseInsensitiveContains(query)
-        }
-    }
-
-    private var processMapCard: some View {
-        let rows = mapRows.sorted { $0.residentBytes > $1.residentBytes }
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Top Processes").font(ConsoleFont.cardTitle)
-                Spacer()
-                Button("View All") { console.open(.processes) }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel("View all processes")
-            }
-            HStack {
-                Text("Process")
-                Spacer()
-                Text("CPU").frame(width: 70, alignment: .trailing)
-                Text("Memory").frame(width: 95, alignment: .trailing)
-            }
-            .font(ConsoleFont.caption)
-            .foregroundStyle(SurfaceInk.secondary)
-            ForEach(rows.prefix(5)) { row in
-                Button {
-                    console.open(.processes)
-                    console.selectedPID = row.pid
-                } label: {
-                    HStack {
-                        ProcessNameCell(row: row, managed: false)
-                        Spacer(minLength: 8)
-                        Text(ConsoleFmt.cpuPercent(row.cpuPercent))
-                            .frame(width: 70, alignment: .trailing)
-                        Text(ConsoleFmt.bytes(row.residentBytes))
-                            .frame(width: 95, alignment: .trailing)
-                    }
-                    .font(ConsoleFont.body)
-                    .monospacedDigit()
-                    .padding(.vertical, 6)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverHighlight()
-                .accessibilityLabel("Inspect \(row.displayName), CPU \(ConsoleFmt.cpuPercent(row.cpuPercent)), memory \(ConsoleFmt.bytes(row.residentBytes))")
-                Divider()
-            }
-            if rows.isEmpty {
-                Text(console.search.isEmpty ? "Reading processes…" : "No matching processes.")
-                    .font(ConsoleFont.body)
-                    .foregroundStyle(SurfaceInk.secondary)
-            }
-            Text("Largest by resident memory. Process CPU is measured per core.")
-                .font(ConsoleFont.caption)
-                .foregroundStyle(SurfaceInk.secondary)
-        }
-        .elevatedCard()
+    private func processMapCard(limit: Int) -> some View {
+        OverviewProcessPreview(rows: model.processes.rows, query: console.search, limit: limit, console: console)
     }
 
     // MARK: Disk
@@ -454,6 +416,145 @@ struct OverviewModule: View {
             }
         }
         .padding(.horizontal, 4)
+    }
+}
+
+// MARK: - Process preview
+
+/// Filter first, then cap a memory ranking. The complete table and inspector
+/// keep their existing navigation paths instead of being duplicated here.
+struct OverviewProcessPreview: View {
+    let rows: [ProcessRow]
+    let query: String
+    let limit: Int
+    @Bindable var console: ConsoleModel
+
+    private var matches: [ProcessRow] {
+        let search = query.trimmingCharacters(in: .whitespaces)
+        return rows.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search)
+            || $0.commandLine.localizedCaseInsensitiveContains(search) }
+            .sorted { $0.residentBytes > $1.residentBytes }
+    }
+
+    var body: some View {
+        let matching = matches
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Text("Top Processes").font(ConsoleFont.cardTitle)
+                Text("\(min(limit, matching.count)) of \(matching.count)")
+                    .font(ConsoleFont.caption).foregroundStyle(SurfaceInk.secondary)
+                Spacer()
+                Button("View All") { console.open(.processes) }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel("View all processes")
+                    .accessibilityIdentifier("overview.processes.all")
+            }
+            HStack {
+                Text("Process")
+                Spacer()
+                Text("CPU").frame(width: 70, alignment: .trailing)
+                Text("Memory").frame(width: 95, alignment: .trailing)
+            }
+            .font(ConsoleFont.caption)
+            .foregroundStyle(SurfaceInk.secondary)
+            ForEach(matching.prefix(limit)) { row in
+                VStack(spacing: 0) {
+                    Button {
+                        console.open(.processes)
+                        console.selectedPID = row.pid
+                    } label: {
+                        HStack {
+                            ProcessNameCell(row: row, managed: false)
+                            Spacer(minLength: 8)
+                            Text(ConsoleFmt.cpuPercent(row.cpuPercent))
+                                .frame(width: 70, alignment: .trailing)
+                            Text(ConsoleFmt.bytes(row.residentBytes))
+                                .frame(width: 95, alignment: .trailing)
+                        }
+                        .font(ConsoleFont.body)
+                        .monospacedDigit()
+                        .frame(height: 24)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverHighlight()
+                    .accessibilityLabel("Inspect \(row.displayName), CPU \(ConsoleFmt.cpuPercent(row.cpuPercent)), memory \(ConsoleFmt.bytes(row.residentBytes))")
+                    .accessibilityIdentifier("overview.process.\(row.pid)")
+                    Divider()
+                }
+            }
+            if matching.isEmpty {
+                Text(query.trimmingCharacters(in: .whitespaces).isEmpty ? "Reading processes…" : "No matching processes.")
+                    .font(ConsoleFont.body)
+                    .foregroundStyle(SurfaceInk.secondary)
+            }
+            Text("Top \(limit) by resident memory · CPU is measured per core.")
+                .font(ConsoleFont.caption)
+                .foregroundStyle(SurfaceInk.secondary)
+        }
+        .elevatedCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("overview.processes")
+    }
+}
+
+// MARK: - Secondary glance
+
+/// Small current readings remain on Overview; their full charts and hardware
+/// facts belong to the adjacent Details action. Absence is never an idle zero.
+struct OverviewMetricGlance: View {
+    let storage: StorageSample
+    let gpu: GPUSample
+    let network: NetworkTrafficSample
+    let sensors: SensorSample
+    let power: PowerSample
+    var columns: Int = 4
+    let showDetails: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: columns),
+                      alignment: .leading, spacing: OverviewViewportGeometry.gap) {
+                metric("Disk", value: storage.totalBytes > 0 ? ConsoleFmt.utilPercent(storage.usedShare) + " used" : "—",
+                       detail: storage.totalBytes > 0 ? ConsoleFmt.bytes(storage.availableBytes) + " free" : "Not available", id: "disk")
+                metric("GPU", value: ConsoleFmt.utilPercent(gpu.utilization),
+                       detail: gpu.available ? (gpu.utilization == nil ? "Not reported" : gpu.model ?? "Utilization") : "Not available", id: "gpu")
+                metric("Network", value: "↓ " + ConsoleFmt.byteRate(network.downloadBytesPerSec),
+                       detail: "↑ " + ConsoleFmt.byteRate(network.uploadBytesPerSec), id: "network")
+                    .help(network.interfaceNames.isEmpty ? "No active physical link" : network.interfaceNames.joined(separator: " · "))
+                metric("Sensors", value: SystemFmt.temperature(sensors.cpuTempC),
+                       detail: sensors.maxRPM.map { SystemFmt.rpm($0) } ?? "Fan not reported", id: "sensors")
+                if power.hasBattery {
+                    metric("Battery", value: ConsoleFmt.utilPercent(power.chargeFraction),
+                           detail: power.isCharging ? "Charging" : power.isPluggedIn ? "On power" : "On battery", id: "battery")
+                }
+            }
+            .frame(maxWidth: .infinity)
+            Button("Details", action: showDetails)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel("Show detailed metrics")
+                .accessibilityIdentifier("overview.metrics.details")
+        }
+        .frame(maxWidth: .infinity)
+        .elevatedCard(padding: 8)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("overview.glance")
+    }
+
+    private func metric(_ title: String, value: String, detail: String, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(ConsoleFont.caption).foregroundStyle(SurfaceInk.secondary)
+            Text(value).font(ConsoleFont.mono(.body)).monospacedDigit()
+            Text(detail).font(ConsoleFont.micro).foregroundStyle(SurfaceInk.secondary)
+        }
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .help("\(title): \(value) · \(detail)")
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("overview.glance.\(id)")
     }
 }
 
