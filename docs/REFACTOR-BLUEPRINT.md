@@ -1,16 +1,15 @@
 # FleetConsole — Refactor Blueprint
-**Role:** Principal Product Designer / Full-Stack UX Architect
-**Scope:** Full visual + UX + portfolio overhaul ahead of launch
+**Scope:** Visual and UX overhaul ahead of launch
 **Evidence base:** 42 surface renders (`build/design/surfaces/`), `docs/DESIGN-SYSTEM.md`, `docs/PRODUCT-SPEC.md`, `Design/*.swift` token layer, `Scripts/design-audit.sh`, all Console module views.
 
 ---
 
 ## Phase 1 — The Audit (Redline Critique)
 
-### What is already elite (do not touch, build on it)
-| Asset | Why it's professional-grade |
+### What is already working (do not touch, build on it)
+| Asset | Why it holds up |
 |---|---|
-| Token governance | `design-audit.sh` passes clean: zero literal fonts in view code, no opacity-on-colour, tones on a documented contrast ladder, Fibonacci metric ladder, mirrored constants, docs verified against code. This is rarer than any visual polish — it is the foundation of the whole story. |
+| Token governance | `design-audit.sh` passes clean: zero literal fonts in view code, no opacity-on-colour, tones on a documented contrast ladder, Fibonacci metric ladder, mirrored constants, docs verified against code. |
 | Semantic status system | Shape-before-colour encoding, five-tone ladder with per-tone ink, Differentiate-Without-Colour support. |
 | Data typography | Monospace digits, right-aligned metric columns, dimmed root/system processes, tabular timestamps. This reads as a serious instrument. |
 | Three-column console IA | Fleet / Module / Inspector is the correct spine. Keep it. |
@@ -34,8 +33,8 @@ The `.tertiary` rung sits too low against `backgroundPrimary` in dark mode. Recu
 - "14.15 GB reclaimable" (Storage header) — the module's headline number, buried
 - "Could it move?" rationale lines (Service inspector) — critical diagnostic info styled like disabled text
 - Agent metric labels ("running", "launched") — 9pt-equivalent grey on charcoal
-- Footer telemetry ("Thermal state nominal", "controller connected") — debug-text energy
-- Process Map legend ("area = resident memory · colour = CPU") — the key to the whole viz is squinting-size
+- Footer telemetry ("Thermal state nominal", "controller connected") — reads like debug output
+- Process Map legend ("area = resident memory · colour = CPU") — too small to read at a glance
 
 Rule: **nothing a user must read may sit below 4.5:1; nothing a user may act on below 3:1.** Raise the tertiary floor or promote these strings to secondary.
 
@@ -92,10 +91,10 @@ Currently zero perceptible motion: no value transitions on gauges, no pulse on s
 5. **Popover section grammar** — refresh/settings affordances either on every data section or on none; make "Listening" rows navigable (chevron) or explicitly read-only with a lock affordance.
 6. **Evidence chips: restore icon opacity** — chip icons at ~10% are noise; raise to readable or remove.
 
-### Tier 3 · Signature Features (weeks — the immersive layer)
-1. **Hero 1 — The Fleet Map** (process treemap): hover-lift on blocks, animated re-pack on snapshot diff, click-to-inspect synced to the Context Panel, legend promoted to an interactive key. This is the one screen nobody else has.
-2. **Hero 2 — Signal Glass depth system** (dark mode): the C2/C3 layer — 1px ink highlight, inner shadow, tone-tinted glow on critical chips — applied as one token set so every card gets depth for free.
-3. **Hero 3 — Status Choreography**: one motion language for state change. A service going degraded pulses once (same curve, same duration) in the sidebar dot, the list row, the popover card, and the map block. Plus a ⌘K command palette across devices/modules/services — the fastest "pro" signal available.
+### Tier 3 · Signature Features (weeks)
+1. **The Fleet Map** (process treemap): hover-lift on blocks, animated re-pack on snapshot diff, click-to-inspect synced to the Context Panel, legend promoted to an interactive key.
+2. **Signal Glass depth system** (dark mode): the C2/C3 layer — 1px ink highlight, inner shadow, tone-tinted glow on critical chips — applied as one token set so every card gets depth for free.
+3. **Status Choreography**: one motion language for state change. A service going degraded pulses once (same curve, same duration) in the sidebar dot, the list row, the popover card, and the map block. Plus a ⌘K command palette across devices/modules/services.
 
 ---
 
@@ -138,7 +137,7 @@ Light card:
 Charts (light):    stroke weight +0.5pt and darkened 10% vs dark-mode values
 ```
 
-### 4. Fleet Map spec (Hero 1)
+### 4. Fleet Map spec
 ```
 Labels:     name at caption; size value at badge; hide both below 44×28pt
             block; never shrink type — cull instead
@@ -162,7 +161,7 @@ Layout (top → bottom):
 No icon-and-sentence empty state remains in the product.
 ```
 
-### 6. Status Choreography (Hero 3)
+### 6. Status Choreography
 ```
 Pulse:      any tone transition → one scale pulse 1.0→1.06→1.0, 240ms,
             ease-out, applied identically to StatusDot, Tag, sidebar row
@@ -174,7 +173,7 @@ Skeleton:   shimmer = surfaceSecondary sweep @ 12% ink, 1.4s loop,
             only on first load of a module, never on refresh
 ```
 
-### 7. ⌘K Command Palette (Hero 3)
+### 7. ⌘K Command Palette
 ```
 Trigger:    ⌘K anywhere; popover-style panel, 520pt wide, top-third anchor
 Rows:       entity icon + name + section tag + shortcut, 8 max, fuzzy match
@@ -185,9 +184,7 @@ Motion:     140ms scale-fade in (0.98→1.0), matches popover entrance
 
 ---
 
-## The FleetConsole Design Language (consolidated identity)
-
-The system already has rules; what it lacks is a **name and a voice**. Proposed codification:
+## The FleetConsole Design Language
 
 > **"Quiet chrome, loud signal."**
 
@@ -200,17 +197,15 @@ The system already has rules; what it lacks is a **name and a voice**. Proposed 
 | Nothing dead | No void panels, no bare spinners, no identical timestamps | Context Panel + skeleton spec |
 | Motion is state | Animation only communicates transitions, never decorates | Choreography spec |
 
-Portfolio framing: FleetConsole is not "a dashboard with nice cards" — it is **a design system that compiles into an app**, with a CI-enforced styleguide (`design-audit.sh`), a single-file token layer, and docs that are mechanically verified against code. That governance story, plus the Fleet Map and the Evidence system, is the differentiator.
-
-## Three Hero Elements for the Portfolio
+## Three signature elements
 
 1. **The Fleet Map** — custom treemap with live re-pack animation and synced inspection. Shot: dark mode, one hovered block, tooltip visible, inspector synced.
-2. **The Evidence System** — EvidenceChips + lease + "Could it move?" verdicts in the service inspector. Shot: crashed service, failing chips in red, verdict stack visible. This demonstrates *design for trust*, which is rare in portfolios.
-3. **The Governance Pipeline** — token ladder → audit script → docs parity, shown as a triptych: the token file, the passing audit output, and the resulting UI. No bootcamp portfolio has this. Lead the case study with it.
+2. **The Evidence System** — EvidenceChips + lease + "Could it move?" verdicts in the service inspector. Shot: crashed service, failing chips in red, verdict stack visible.
+3. **The Governance Pipeline** — token ladder → audit script → docs parity, shown as a triptych: the token file, the passing audit output, and the resulting UI.
 
 ## Suggested capture order (for launch assets)
-1. Overview dark, Fleet Map hovered (Hero 1)
-2. Service inspector, crashed state (Hero 2)
+1. Overview dark, Fleet Map hovered (Fleet Map)
+2. Service inspector, crashed state (Evidence System)
 3. Popover, attention stack deduped (quick-win proof)
 4. Light-mode Storage with skeleton mid-scan (loading-state proof)
 5. ⌘K palette over dimmed console (pro-tool proof)

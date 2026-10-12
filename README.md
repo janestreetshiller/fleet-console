@@ -75,10 +75,9 @@ controller will not stop, restart, pause, kill, or reap it. Optional user-initia
 **End Process** is a separate, owner-only SIGTERM control, disabled by default.
 
 This is FleetConsole's benefit alongside [Stats](https://github.com/exelban/stats):
-Stats already offers combined menu-bar monitoring and broader hardware features.
+Stats offers combined menu-bar monitoring and broader hardware features.
 FleetConsole adds the owner, purpose, lease, evidence, logs, and supervision needed
-to manage agent work. A single cluster alone is not a novel feature, and this
-project does not claim lower resource use or superiority across every metric.
+to manage agent work.
 
 ## Build and try
 
