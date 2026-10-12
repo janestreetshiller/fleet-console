@@ -27,10 +27,24 @@ struct MenuBarMetersTests {
 
     @MainActor @Test("The popover's way to the dashboard is in its header, not a footer")
     func popoverHeaderCarriesTheDashboardAction() {
+        _ = NSApplication.shared
+        NSApp.setActivationPolicy(.prohibited)
+        if !NSApp.isRunning { NSApp.finishLaunching() }
+        // SwiftUI builds its accessibility tree only for a client that asks;
+        // the other UI suites switch it on the same way.
+        _ = NSApp.perform(NSSelectorFromString("accessibilitySetValue:forAttribute:"),
+                          with: NSNumber(value: true), with: "AXEnhancedUserInterface")
         let model = AppModel()
         let host = NSHostingView(rootView: FleetPopover(model: model, openDashboard: {}))
-        host.frame = NSRect(x: 0, y: 0, width: FleetMetrics.popoverWidth, height: 600)
-        host.layoutSubtreeIfNeeded()
+        // In a window, ordered in off-screen: the accessibility tree of a
+        // hosting view that has never been in one is not reliably populated.
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: FleetMetrics.popoverWidth, height: 600),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = host
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.orderFront(nil)
+        defer { window.orderOut(nil) }
+        for _ in 0..<12 { RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.025)) }
         func labels(_ object: Any) -> [String] {
             guard let node = object as? NSObject else { return [] }
             let own = (node.responds(to: NSSelectorFromString("accessibilityLabel"))

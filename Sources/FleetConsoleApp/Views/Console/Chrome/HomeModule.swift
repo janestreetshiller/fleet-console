@@ -21,6 +21,7 @@ import FleetCore
 struct HomeModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
+    var fixer: FixAgentSettings = .shared
 
     private var query: String { console.search.trimmingCharacters(in: .whitespaces) }
 
@@ -43,6 +44,7 @@ struct HomeModule: View {
             .padding(ConsoleMetrics.gutter)
         }
         .scrollContentBackground(.hidden)
+        .actionErrorAlert(model: model)
     }
 
     // MARK: - Priority
@@ -57,6 +59,12 @@ struct HomeModule: View {
                 if model.connected, !model.attention.isEmpty {
                     ConsoleBadge(text: "\(model.attention.count)",
                                  tone: model.criticalCount > 0 ? .bad : .warn)
+                    if let designated = fixer.designated {
+                        Button("Send to \(designated.title)") { send(attention) }
+                            .controlSize(.small)
+                            .help("Write a report of these problems and start \(designated.title) on it in the terminal.")
+                            .accessibilityIdentifier("home.fixer.send")
+                    }
                 }
             }
 
@@ -107,11 +115,21 @@ struct HomeModule: View {
                                     since: item.since) {
                             console.reveal(item, model: model)
                         }
+                        .contextMenu {
+                            if let designated = fixer.designated {
+                                Button("Send to \(designated.title)") { send([item]) }
+                            }
+                        }
                     }
                 }
             }
         }
         .elevatedCard()
+    }
+
+    /// The window is already open, so the hand-off needs no dashboard to open.
+    private func send(_ items: [AttentionItem]) {
+        if let problem = model.sendToFixer(items, openDashboard: {}) { model.actionError = problem }
     }
 
     // MARK: - Drill-down

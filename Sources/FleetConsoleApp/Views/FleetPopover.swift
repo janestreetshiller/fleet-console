@@ -41,12 +41,7 @@ struct FleetPopover: View {
                 case .services: ServicesContent(model: model, openDashboard: openDashboard)
                 case .agents: AgentsContent(model: model, openDashboard: openDashboard, registration: registration)
                 case .processes: ProcessesContent(model: model, openDashboard: openDashboard)
-                case .connections:
-                    VStack(spacing: 0) {
-                        ConnectionsPopover(model: model, openDashboard: openDashboard, embedded: true)
-                        Divider()
-                        NetworkAdminFooter(model: model)
-                    }
+                case .connections: NetworkGlance(model: model)
                 }
             }
             .frame(maxHeight: FleetMetrics.popoverBodyHeight)

@@ -40,8 +40,14 @@ enum ConsoleCommand {
     static let toggleTool = Notification.Name("com.fleetconsole.console.toggleTool")
     static let toggleInspector = Notification.Name("com.fleetconsole.console.toggleInspector")
     static let toggleSidebar = Notification.Name("com.fleetconsole.console.toggleSidebar")
+    /// Runs a command line in the window's terminal panel. Carries
+    /// `userInfoCommand`, `userInfoDirectory` and `userInfoSubject`.
+    static let runInTerminal = Notification.Name("com.fleetconsole.console.runInTerminal")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
+    static let userInfoCommand = "command"
+    static let userInfoDirectory = "directory"
+    static let userInfoSubject = "subject"
 }
 
 @Observable

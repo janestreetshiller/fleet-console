@@ -1038,6 +1038,24 @@ more thing you learn to stop seeing. Counts use monospaced digits so the item do
 not jitter, and it sets an `autosaveName` so its position survives a relaunch.
 The tooltip carries the detail: ownership, next lease expiry, who is waiting.
 
+### The designated fixer
+
+One agent outside the app is designated to fix what the app finds
+(`FixAgent.swift`): Claude Code, Codex or the resident Fleet agent, whichever
+are installed, chosen on the Agents tab. *Send N problems* there — or *Send to …*
+on Home's Needs attention card and on each of its rows — writes a Markdown
+report (the problems, each service's record, its recent events, its log paths)
+to `~/Library/Application Support/FleetConsole/fix-reports/`, opens the
+dashboard terminal in the service's working directory, and starts the fixer on
+the report. It runs where you can watch, answer and stop it; it acts through
+`fleetctl`, and it reports back with `fleetctl notify`, which is how its
+progress reaches the Agents tab.
+
+The Cloud Agent card is the hosted version's purchase path. Its price and its
+checkout come from the Ouros catalog offer `fleet-console-cloud-agent`; until
+the catalog lists that offer for the account, the card says it is not offered
+rather than showing a price nobody set.
+
 ### Identity: badge, row and profile card
 
 `Design/OurosIdentity.swift` holds the three pieces every Ouros app wears the
@@ -1072,6 +1090,25 @@ for configuration and links. The second row is the section picker at the full
 width of the content under it. The status pip, the Ouros link and the source
 link that used to sit in a ribbon under every tab are the identity line and the
 ⋯ menu now; nothing is pinned below the content, so a tab ends where it ends.
+
+**Network** is `NetworkGlance`: one tile per segment — Internet, Gateway,
+Ethernet, Wi-Fi, Tailscale, DNS, VPN, Thunderbolt, Devices, Listening — two
+columns, every one visible inside the 300pt body. A tile carries the one reading
+worth a glance in the tone's ink when it needs you; any tile, or **Details…**,
+opens the full rows, probes and admin consoles in a sheet. The tab used to be
+those rows inline, a screen and a half tall, scrolled to learn whether the VPN
+was up.
+
+**Agents** is four bands in the same 300pt: the designated fixer and its one
+action, the latest three mailbox entries (waiting-for-you first), the roster as
+a one-line count with *Register* and *Show all*, and the Cloud Agent card.
+
+**Services** set the state beside the name (`FleetRowLabel.titleDetail`, in the
+tone's ink when it is one to act on) so the line under it is the purpose the
+agent declared — what the service is *for*. The state's plain meaning
+(`ServiceState.meaning`) and the owner are in the tooltip. **Processes** lead
+with a role from `ProcessRole` — managed service and its purpose, agent session,
+app, server on a port, macOS system process — and keep the pid in the tooltip.
 
 Processes does not carry one. "Processes 641" is the size of the process table:
 the same number on every Mac at every moment, and nothing you would do anything
