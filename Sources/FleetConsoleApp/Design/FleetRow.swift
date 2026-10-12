@@ -18,6 +18,9 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
     var tone: StatusTone = .neutral
     var badge: StatusTone?
     let title: String
+    /// A short word set beside the title — a state — in the tone's ink when
+    /// it is one to act on, so the subtitle line is left for what the row is.
+    var titleDetail: String?
     var subtitle: String?
     var trailingText: String?
     var trailingMono = false
@@ -45,9 +48,18 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
                 }
             } else {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title)
-                        .font(titleFont)
-                        .lineLimit(2)
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(title)
+                            .font(titleFont)
+                            .lineLimit(2)
+                        if let titleDetail {
+                            Text(titleDetail)
+                                .font(FleetFont.caption)
+                                .foregroundStyle(tone == .bad || tone == .warn ? tone.ink : SurfaceInk.secondary)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                    }
                     if let subtitle {
                         Text(subtitle)
                             .font(FleetFont.caption)
@@ -97,7 +109,7 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
     }
 
     var accessibilityText: String {
-        [title, subtitle, trailingText].compactMap { $0 }.joined(separator: ", ")
+        [title, titleDetail, subtitle, trailingText].compactMap { $0 }.joined(separator: ", ")
     }
 }
 

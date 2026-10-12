@@ -13,6 +13,16 @@ struct OurosOffer: Decodable, Sendable {
         id == "fleet-console-multi-device" && priceCents == 1000 && currency == "usd"
             && interval == "month" && intervalCount == 1
     }
+
+    /// The hosted fixer. Its price comes from the catalog, never from here.
+    static let cloudAgentID = "fleet-console-cloud-agent"
+
+    /// "$10/month", from the catalog's own figures.
+    var priceLabel: String {
+        let amount = (Decimal(priceCents) / 100).formatted(.currency(code: currency.uppercased())
+            .precision(.fractionLength(priceCents % 100 == 0 ? 0 : 2)))
+        return intervalCount == 1 ? "\(amount)/\(interval)" : "\(amount) every \(intervalCount) \(interval)s"
+    }
 }
 
 struct OurosMembership: Decodable, Sendable {
@@ -72,6 +82,8 @@ private enum Failure: Error {
 @Observable @MainActor
 final class OurosBilling {
     private(set) var available = false
+    /// The catalog as last loaded; empty until a load succeeds.
+    private(set) var offers: [OurosOffer] = []
     private(set) var membership: OurosMembership?
     private(set) var busy = false
     private(set) var userCode: String?
@@ -149,6 +161,7 @@ final class OurosBilling {
     private func loadOffers() async throws {
         struct Catalog: Decodable { let configured: Bool; let offers: [OurosOffer] }
         let catalog: Catalog = try await request("/hvy/v1/fleet-console/offers", authenticated: false)
+        offers = catalog.configured ? catalog.offers : []
         available = catalog.configured && catalog.offers.contains(where: \.matchesMultiDevice)
     }
 
@@ -205,24 +218,47 @@ final class OurosBilling {
 
     func cancelConnection() { connectionTask?.cancel(); connectionTask = nil }
 
+    /// The cloud agent, when the catalog offers it to this account.
+    var cloudAgentOffer: OurosOffer? { offers.first { $0.id == OurosOffer.cloudAgentID } }
+
     func subscribe() async {
-        guard signedIn, available, !busy else { return }
+        guard available else { return }
+        await subscribe(offerID: "fleet-console-multi-device")
+    }
+
+    /// Checkout for one catalog offer. Each offer keeps its own idempotency key,
+    /// so starting a second purchase can never resume the first one's session.
+    func subscribe(offerID: String) async {
+        guard signedIn, !busy, offers.contains(where: { $0.id == offerID }) else { return }
         busy = true; defer { busy = false }
         do {
-            let keyName = "fleetconsole.ouros.checkout.\(membership?.accountID ?? "")"
-            checkoutKey = checkoutKey ?? UserDefaults.standard.string(forKey: keyName) ?? UUID().uuidString
-            UserDefaults.standard.set(checkoutKey, forKey: keyName)
+            let multiDevice = offerID == "fleet-console-multi-device"
+            let keyName = multiDevice
+                ? "fleetconsole.ouros.checkout.\(membership?.accountID ?? "")"
+                : "fleetconsole.ouros.checkout.\(offerID).\(membership?.accountID ?? "")"
+            // The in-memory key belongs to the multi-device checkout alone; any
+            // other offer reads and writes only its own stored key.
+            let operationKey = (multiDevice ? checkoutKey : nil)
+                ?? UserDefaults.standard.string(forKey: keyName) ?? UUID().uuidString
+            if multiDevice { checkoutKey = operationKey }
+            UserDefaults.standard.set(operationKey, forKey: keyName)
             struct Checkout: Decodable { var url: String?; var state: String? }
             let value: Checkout = try await request("/hvy/v1/fleet-console/checkout", method: "POST",
-                body: ["offerId": "fleet-console-multi-device"], operationKey: checkoutKey)
+                body: ["offerId": offerID], operationKey: operationKey)
             if let raw = value.url {
                 guard let url = URL(string: raw), url.scheme == "https", url.host == "checkout.stripe.com",
                       url.user == nil, url.password == nil else { throw Failure.invalidResponse }
                 NSWorkspace.shared.open(url); message = "Finish checkout, then refresh your subscription."
             } else if value.state == "expired" {
-                checkoutKey = nil; UserDefaults.standard.removeObject(forKey: keyName)
+                if multiDevice { checkoutKey = nil }
+                UserDefaults.standard.removeObject(forKey: keyName)
                 message = "Checkout expired. Subscribe again to start a new checkout."
-            } else { membership = try await request("/hvy/v1/fleet-console/entitlement"); message = active ? nil : "Payment is not confirmed. Refresh your subscription." }
+            } else if multiDevice {
+                membership = try await request("/hvy/v1/fleet-console/entitlement")
+                message = active ? nil : "Payment is not confirmed. Refresh your subscription."
+            } else {
+                message = "Checkout is complete. The cloud agent appears once Ouros confirms payment."
+            }
         } catch { handle(error) }
     }
 

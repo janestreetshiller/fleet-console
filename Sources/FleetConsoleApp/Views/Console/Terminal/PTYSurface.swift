@@ -410,6 +410,9 @@ final class PTYSession {
     @ObservationIgnored private let reaper = ProcessReaper()
     /// A launch that is waiting for its first settled grid.
     @ObservationIgnored private var deferredLaunch: Launch?
+    /// Keystrokes sent before the child exists. The PTY would buffer them for
+    /// a running shell anyway; this only covers the gap before `forkpty`.
+    @ObservationIgnored private var pendingInput: [String] = []
 
     /// Whether a grid below `TerminalGrid.minimum` may reach the child at all.
     /// Yazi's three panes collapse under it, so the file surface refuses and
@@ -470,6 +473,15 @@ final class PTYSession {
         }
     }
 
+    /// Types `text` into the child, or holds it until the child starts.
+    func send(_ text: String) {
+        guard phase == .running else {
+            pendingInput.append(text)
+            return
+        }
+        host.terminal.send(txt: text)
+    }
+
     func terminate() {
         guard phase == .running else { return }
         reaper.reapNow()
@@ -496,6 +508,11 @@ final class PTYSession {
         // `startProcess` reports failure by simply not running: `forkpty` failed,
         // or `execve` did and the child already `_exit(127)`ed.
         phase = process?.running == true ? .running : .exited(nil)
+        if phase == .running, !pendingInput.isEmpty {
+            let queued = pendingInput
+            pendingInput = []
+            queued.forEach { host.terminal.send(txt: $0) }
+        }
     }
 
     /// Focus for the panel that has just been opened. Called on first spawn only:

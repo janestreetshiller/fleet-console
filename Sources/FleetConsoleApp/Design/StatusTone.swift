@@ -195,6 +195,23 @@ extension ServiceState {
         }
     }
 
+    /// What the state means for you, in one sentence.
+    var meaning: String {
+        switch self {
+        case .starting: return "launched and not yet confirmed alive"
+        case .running: return "alive, but it has no health check, so nothing has confirmed it works"
+        case .healthy: return "alive and passing its health check"
+        case .degraded: return "alive, but its health check is slow or intermittently failing"
+        case .unhealthy: return "alive, but its health check keeps failing"
+        case .paused: return "suspended; it still holds its ports and memory"
+        case .expiring: return "its owner has not renewed it and it will be stopped soon"
+        case .expired: return "its owner stopped renewing it; it will be reaped"
+        case .stopping: return "being shut down"
+        case .stopped: return "not running"
+        case .crashed: return "exited unexpectedly"
+        }
+    }
+
     /// Never says "healthy" unless a health check actually passed.
     var label: String {
         switch self {

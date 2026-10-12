@@ -60,16 +60,6 @@ struct EventsModule: View {
         // the module reads as a panel dropped on top of the window rather
         // than as part of it.
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .top) {
-            ModuleHeader(
-                title: "Event Log",
-                subtitle: "\(shown.count) events",
-                symbol: ConsoleModule.events.symbol)
-            .padding(.horizontal, ConsoleMetrics.gutter)
-            .padding(.vertical, 10)
-            .background(.bar)
-            .hairline()
-        }
     }
 
     private func load() {

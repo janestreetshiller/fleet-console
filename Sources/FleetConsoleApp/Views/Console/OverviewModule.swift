@@ -23,15 +23,17 @@ struct OverviewModule: View {
 
     var body: some View {
         GeometryReader { geometry in
+            // `geometry.size` is already the unobscured module column: the
+            // toolbar's safe area is outside it, so nothing is subtracted twice.
             let layout = OverviewViewportGeometry(viewport: geometry.size, focused: focus != .both,
-                                                  instrumentCount: system.power.hasBattery ? 5 : 4,
-                                                  verticalSafeArea: geometry.safeAreaInsets.top + geometry.safeAreaInsets.bottom)
+                                                  instrumentCount: system.power.hasBattery ? 5 : 4)
             VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
-                ModuleHeader(title: "Overview", subtitle: subtitle, symbol: ConsoleModule.overview.symbol)
                 if layout.controlsStacked {
-                    VStack(alignment: .leading, spacing: 8) { focusPicker; timePicker }
+                    VStack(alignment: .leading, spacing: OverviewViewportGeometry.stackedControlSpacing) {
+                        focusPicker; timePicker
+                    }
                 } else {
-                    HStack(spacing: 16) { focusPicker; Spacer(minLength: 8); timePicker }
+                    ModuleControlBar { focusPicker } trailing: { timePicker }
                 }
                 QuantizedCardGrid(
                     minimumCellWidth: (layout.contentWidth - CGFloat(layout.primaryColumns - 1) * OverviewViewportGeometry.gap) / CGFloat(layout.primaryColumns),
@@ -46,7 +48,6 @@ struct OverviewModule: View {
                     moreMetrics = true
                 }
                 processMapCard(limit: layout.processLimit)
-                footer
             }
             .fixedSize(horizontal: false, vertical: true)
             .frame(width: layout.contentWidth)
@@ -60,11 +61,20 @@ struct OverviewModule: View {
     /// not move the primary traces or push the process actions below the window.
     private var detailedMetrics: some View {
         VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
-            ModuleHeader(title: "System Metrics", subtitle: subtitle, symbol: "slider.horizontal.3") {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("System Metrics")
+                    .font(ConsoleFont.cardTitle)
+                    .accessibilityAddTraits(.isHeader)
+                Text(subtitle)
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
                 Button("Done") { moreMetrics = false }
                     .keyboardShortcut(.cancelAction)
                     .accessibilityIdentifier("overview.metrics.done")
             }
+            .accessibilityElement(children: .contain)
             timePicker
             ScrollView {
                 QuantizedCardGrid(minimumCellWidth: 320, maximumColumns: 2) {
@@ -98,28 +108,21 @@ struct OverviewModule: View {
             ForEach(Focus.allCases, id: \.self) { Text($0.rawValue).tag($0) }
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
         .fixedSize()
         .accessibilityIdentifier("overview.focus")
         .help("Give CPU or memory the full chart width")
     }
 
-    private var historyStatus: String {
-        guard let first = system.cpuSeries.samples.first?.time else { return "Collecting history…" }
-        let seconds = Int(max(0, system.sampledAt.timeIntervalSince(first)))
-        return seconds < timeWindow.rawValue - 2 ? "Live · \(seconds) s collected" : "Live"
-    }
-
     private var timePicker: some View {
-        HStack(spacing: 8) {
-            Text(historyStatus).font(ConsoleFont.caption).foregroundStyle(.secondary)
-            Picker("Time range", selection: $timeWindow) {
-                ForEach(ChartTimeWindow.allCases, id: \.self) { Text($0.label).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .fixedSize()
-            .accessibilityIdentifier("overview.time")
-            .help("Zoom the visible time range without averaging samples")
+        Picker("Time range", selection: $timeWindow) {
+            ForEach(ChartTimeWindow.allCases, id: \.self) { Text($0.label).tag($0) }
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .fixedSize()
+        .accessibilityIdentifier("overview.time")
+        .help("Zoom the visible time range without averaging samples")
     }
 
     private var subtitle: String {
@@ -236,7 +239,10 @@ struct OverviewModule: View {
             // Always sampled: a share of physical memory is a ratio of two
             // absolute numbers, not a rate, so it needs no previous tick.
             gaugeValue: system.memory.usedShare,
-            subtitle: "pressure \(system.memory.pressure.label)"
+            // The used figure in the units you act on sits with the pressure,
+            // so the facts under the trace stay one row wide or two rows tall.
+            subtitle: "pressure \(system.memory.pressure.label) · "
+                + "\(ConsoleFmt.bytes(system.memory.usedBytes)) of \(ConsoleFmt.bytes(system.memory.totalBytes))"
         ) {
             LoadWaveChart(values: system.memoryHistory,
                           times: system.memorySeries.samples.map(\.time), range: timeRange,
@@ -392,33 +398,6 @@ struct OverviewModule: View {
         }
     }
 
-    // MARK: Footer
-
-    private var footer: some View {
-        HStack(spacing: 8) {
-            Image(systemName: Iconography.Metric.thermal)
-                .font(ConsoleFont.caption)
-                .foregroundStyle(SystemThresholds.thermal(system.thermal.state).ink)
-            Text("Thermal state \(system.thermal.label)")
-                .font(ConsoleFont.caption)
-                .foregroundStyle(.secondary)
-            // When the SMC is unlocked, the footer names what the band is
-            // standing in for — a state plus its degrees and RPM is a claim
-            // you can check against the card above.
-            if model.license.isUnlocked(.smcSensors), system.sensors.available {
-                Text("· \(SystemFmt.temperature(system.sensors.cpuTempC)) · \(SystemFmt.rpm(system.sensors.maxRPM))")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-            }
-            Spacer()
-            if let captured = model.processes.capturedAt {
-                Text("process table \(Fmt.relative(captured))")
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-            }
-        }
-        .padding(.horizontal, 4)
-    }
 }
 
 // MARK: - Process preview
@@ -456,7 +435,14 @@ struct OverviewProcessPreview: View {
                 Text("Process")
                 Spacer()
                 Text("CPU").frame(width: 70, alignment: .trailing)
-                Text("Memory").frame(width: 95, alignment: .trailing)
+                // The ranking key, marked where the eye reads the column.
+                HStack(spacing: 3) {
+                    Text("Memory")
+                    Image(systemName: "chevron.down").font(ConsoleFont.marker)
+                }
+                .frame(width: 95, alignment: .trailing)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("Memory, sorted descending")
             }
             .font(ConsoleFont.caption)
             .foregroundStyle(SurfaceInk.secondary)
@@ -491,9 +477,6 @@ struct OverviewProcessPreview: View {
                     .font(ConsoleFont.body)
                     .foregroundStyle(SurfaceInk.secondary)
             }
-            Text("Top \(limit) by resident memory · CPU is measured per core.")
-                .font(ConsoleFont.caption)
-                .foregroundStyle(SurfaceInk.secondary)
         }
         .elevatedCard()
         .accessibilityElement(children: .contain)
@@ -562,61 +545,32 @@ struct OverviewMetricGlance: View {
 
 // MARK: - Shared bits
 
-/// App / Wired / Compressed / Swap, plus the total, laid out as a flow.
-///
-/// The row this replaces was an `HStack` of four `MemoryFact`s and a trailing
-/// total, which needs about 380pt. In a grid cell it does not get 380pt, and an
-/// HStack's answer to that is to compress every child at once: the badge labels
-/// hyphenated and the total was pushed past the card's edge. `MemoryFact` already
-/// pins its own width for exactly this reason, so what is left is to let the row
-/// wrap — as many as fit, the rest on the next line, at any column count.
+/// App / Wired / Compressed / Swap: one row where it fits, two rows of two where
+/// it does not — never three, which made the memory card set its row's height
+/// and left the CPU card beside it with a band of nothing under its cores.
 private struct MemoryFacts: View {
     let memory: MemorySample
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
-            row(spacing: 14)
-            row(spacing: 10)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) {
-                    MemoryFact(label: "App", value: memory.appBytes)
-                    MemoryFact(label: "Wired", value: memory.wiredBytes)
-                    Spacer(minLength: 0)
-                }
-                HStack(spacing: 10) {
-                    MemoryFact(label: "Compressed", value: memory.compressedBytes)
-                    if memory.swapTotalBytes > 0 {
-                        MemoryFact(label: "Swap", value: memory.swapUsedBytes)
-                    }
-                    Spacer(minLength: 0)
-                }
-                total
+            HStack(spacing: 14) { first; second; Spacer(minLength: 0) }
+            Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 4) {
+                GridRow { first }
+                GridRow { second }
             }
         }
     }
 
-    private func row(spacing: CGFloat) -> some View {
-        HStack(spacing: spacing) {
-            MemoryFact(label: "App", value: memory.appBytes)
-            MemoryFact(label: "Wired", value: memory.wiredBytes)
-            MemoryFact(label: "Compressed", value: memory.compressedBytes)
-            if memory.swapTotalBytes > 0 {
-                MemoryFact(label: "Swap", value: memory.swapUsedBytes)
-            }
-            Spacer(minLength: 4)
-            total
-        }
+    @ViewBuilder private var first: some View {
+        MemoryFact(label: "App", value: memory.appBytes)
+        MemoryFact(label: "Wired", value: memory.wiredBytes)
     }
 
-    /// "13.3 GB of 17.18 GB" is the used figure the dial already reads as a
-    /// percentage, in the units you act on.
-    private var total: some View {
-        Text("\(ConsoleFmt.bytes(memory.usedBytes)) of \(ConsoleFmt.bytes(memory.totalBytes))")
-            .font(ConsoleFont.mono(.caption))
-            .monospacedDigit()
-            .foregroundStyle(SurfaceInk.secondary)
-            .lineLimit(1)
-            .fixedSize()
+    @ViewBuilder private var second: some View {
+        MemoryFact(label: "Compressed", value: memory.compressedBytes)
+        if memory.swapTotalBytes > 0 {
+            MemoryFact(label: "Swap", value: memory.swapUsedBytes)
+        }
     }
 }
 
@@ -649,47 +603,29 @@ private struct MemoryFact: View {
     }
 }
 
-/// The heading row every module opens with — title2 per the window type ramp,
-/// with the module's live subtitle and an optional trailing control.
+/// The row a module opens with when it has controls, and only then.
 ///
-/// Nothing here is allowed to wrap. The content column now shares its width
-/// with the chrome tool panel, so this row has to survive being narrowed: the
-/// title holds one line, and the subtitle gives up its space first and ends in
-/// a tail ellipsis rather than pushing the trailing control off the row.
-struct ModuleHeader<Trailing: View>: View {
-    let title: String
-    var subtitle: String?
-    let symbol: String
+/// No title, no subtitle, no symbol. The sidebar's selection already names the
+/// page, so a heading restating it was a second toolbar spending the height the
+/// content needs. What is left is what the row is for: the controls that change
+/// the page, leading and trailing, on one line that never wraps.
+struct ModuleControlBar<Leading: View, Trailing: View>: View {
+    @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing
 
-    init(title: String, subtitle: String? = nil, symbol: String,
+    init(@ViewBuilder leading: () -> Leading = { EmptyView() },
          @ViewBuilder trailing: () -> Trailing = { EmptyView() }) {
-        self.title = title
-        self.subtitle = subtitle
-        self.symbol = symbol
+        self.leading = leading()
         self.trailing = trailing()
     }
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Text(title)
-                .font(ConsoleFont.cardTitle)
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .accessibilityAddTraits(.isHeader)
-            if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
-                Text(subtitle)
-                    .font(ConsoleFont.caption)
-                    .foregroundStyle(SurfaceInk.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .layoutPriority(-1)
-            }
-            Spacer(minLength: 4)
+        HStack(alignment: .center, spacing: 12) {
+            leading
+            Spacer(minLength: 8)
             trailing
-                .controlSize(.small)
         }
+        .frame(minHeight: 24)
         .accessibilityElement(children: .contain)
     }
 }

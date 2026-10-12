@@ -40,8 +40,14 @@ enum ConsoleCommand {
     static let toggleTool = Notification.Name("com.fleetconsole.console.toggleTool")
     static let toggleInspector = Notification.Name("com.fleetconsole.console.toggleInspector")
     static let toggleSidebar = Notification.Name("com.fleetconsole.console.toggleSidebar")
+    /// Runs a command line in the window's terminal panel. Carries
+    /// `userInfoCommand`, `userInfoDirectory` and `userInfoSubject`.
+    static let runInTerminal = Notification.Name("com.fleetconsole.console.runInTerminal")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
+    static let userInfoCommand = "command"
+    static let userInfoDirectory = "directory"
+    static let userInfoSubject = "subject"
 }
 
 @Observable
@@ -64,8 +70,10 @@ final class ConsoleModel {
     /// events each decide what fields it matches.
     var search = ""
 
-    /// Concealed until requested, like the tab drawer in the Termin9 shell.
-    var sidebarRevealed = false
+    /// Open by default: the sidebar is the window's navigation and carries the
+    /// app's identity card, so a window that opened without it opened without
+    /// both. ⌃⌘S and the toolbar toggle still tuck it away.
+    var sidebarRevealed = true
 
     func toggleSidebar() { sidebarRevealed.toggle() }
 

@@ -5,13 +5,15 @@ import Testing
 
 @Suite(.serialized)
 struct SurfaceDensityTests {
-    @MainActor @Test("Page headers are one quiet row, not a second toolbar")
-    func quietPageHeader() {
-        let view = NSHostingView(rootView: ModuleHeader(title: "Storage", subtitle: "Macintosh HD", symbol: "internaldrive") {
-            Button("Scan Now") {}
+    @MainActor @Test("A module's control row is one quiet line, not a second toolbar")
+    func quietControlRow() {
+        let view = NSHostingView(rootView: ModuleControlBar {
+            Picker("Scope", selection: .constant(0)) { Text("All").tag(0) }
+        } trailing: {
+            Button("Reload") {}
         }.frame(width: 700))
         let size = view.fittingSize
-        print("Module header intrinsic height: \(size.height)")
+        print("Module control row intrinsic height: \(size.height)")
         #expect(size.height <= 26)
         #expect(size.width == 700)
     }

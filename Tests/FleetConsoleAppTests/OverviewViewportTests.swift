@@ -172,13 +172,16 @@ struct OverviewViewportTests {
                     #expect(rect.minX >= 0)
                     #expect(rect.maxX <= root.bounds.width)
                     if root.isFlipped {
-                        #expect(rect.maxY <= root.bounds.height - DashboardContentGeometry.footerHeight)
+                        #expect(rect.maxY <= root.bounds.height)
                     } else {
-                        #expect(rect.minY >= DashboardContentGeometry.footerHeight)
+                        #expect(rect.minY >= 0)
                     }
                 }
-                let visible = labels(in: root)
-                #expect(visible.contains { $0.contains("Top \(name == "compact" ? 3 : 5) by resident memory") })
+                // The cap is stated by the rows themselves now, not by a caption.
+                let processRows = Set(nodes(in: root)
+                    .compactMap { value("accessibilityIdentifier", from: $0) as? String }
+                    .filter { $0.hasPrefix("overview.process.") })
+                #expect(processRows.count == (name == "compact" ? 3 : 5))
                 try capture(window, name: "overview-\(name)-\(dark ? "dark" : "light")")
             }
         }

@@ -83,6 +83,19 @@ final class ConsoleWindowController {
                 [console] _ in
                 MainActor.assumeIsolated { console.goHome() }
             })
+        // A hand-off to the designated agent arrives from the popover with no
+        // window up, so it is observed here for the same reason as the two above.
+        navigationObservers.append(
+            centre.addObserver(forName: ConsoleCommand.runInTerminal, object: nil, queue: .main) {
+                [tools] note in
+                guard let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String else { return }
+                let directory = (note.userInfo?[ConsoleCommand.userInfoDirectory] as? String) ?? NSHomeDirectory()
+                let subject = (note.userInfo?[ConsoleCommand.userInfoSubject] as? String) ?? "Terminal"
+                MainActor.assumeIsolated {
+                    tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory),
+                                                       subject: subject))
+                }
+            })
     }
 
     func show(activate: Bool = true) {

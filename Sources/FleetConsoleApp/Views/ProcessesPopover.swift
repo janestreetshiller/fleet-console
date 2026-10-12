@@ -103,6 +103,7 @@ struct ProcessesContent: View {
             ForEach(rows) { row in
                 ProcessPopoverRow(
                     row: row,
+                    role: ProcessRole.describe(row, model: model),
                     weight: weight,
                     block: inventory.terminationBlock(for: row, enabled: terminationEnabled),
                     inspect: { inspect(row) },
@@ -142,6 +143,8 @@ struct ProcessesContent: View {
 /// while the number changes, and the two verbs.
 private struct ProcessPopoverRow: View {
     let row: ProcessRow
+    /// What the process is, in words — see `ProcessRole`.
+    let role: String?
     let weight: ProcessWeight
     let block: ProcessInventory.TerminationBlock?
     let inspect: () -> Void
@@ -208,7 +211,7 @@ private struct ProcessPopoverRow: View {
         .onHover { hovering = $0 }
         .rowBackground(hovering: hovering)
         .padding(.horizontal, FleetMetrics.rowHighlightMargin)
-        .help(row.commandLine)
+        .help("\(identity) — \(row.commandLine)")
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
         .accessibilityActions {
@@ -234,7 +237,11 @@ private struct ProcessPopoverRow: View {
         }
     }
 
-    private var subtitle: String {
+    /// What it is first; the pid and owner are in the tooltip and the
+    /// inspector, which is where you go once you know you care.
+    private var subtitle: String { role ?? identity }
+
+    private var identity: String {
         var parts = ["pid \(row.pid)"]
         if !row.isOwnedByCurrentUser { parts.append(row.user) }
         if !row.ports.isEmpty { parts.append(Fmt.ports(row.ports)) }
@@ -284,5 +291,37 @@ enum ProcessWeight: Hashable {
                 return lhs.residentBytes == rhs.residentBytes ? lhs.pid < rhs.pid : lhs.residentBytes > rhs.residentBytes
             }
         }.prefix(max(0, limit)))
+    }
+}
+
+// MARK: - Role
+
+/// A process described by what it is to you, from the evidence the app already
+/// holds: a service the controller launched (with the purpose its agent gave),
+/// an agent session, an app, a server on a port, or part of macOS. Nil when
+/// none of those is known, rather than a guess.
+enum ProcessRole {
+    @MainActor
+    static func describe(_ row: ProcessRow, model: AppModel) -> String? {
+        if let service = model.activeServices.first(where: { $0.record.pid == row.pid })?.record {
+            return "Managed · \(service.purpose)"
+        }
+        if let session = model.sessions.first(where: { $0.pid == row.pid }) {
+            return "\(session.tool) agent session" + (session.project.map { " · \(URL(fileURLWithPath: $0).lastPathComponent)" } ?? "")
+        }
+        return describe(commandLine: row.commandLine, ports: row.ports, user: row.user)
+    }
+
+    static func describe(commandLine: String, ports: [Int], user: String) -> String? {
+        if let range = commandLine.range(of: ".app/Contents/") {
+            let app = URL(fileURLWithPath: String(commandLine[..<range.lowerBound])).lastPathComponent
+            return ports.isEmpty ? "App · \(app)" : "App · \(app) · \(Fmt.ports(ports))"
+        }
+        if !ports.isEmpty { return "Server · \(Fmt.ports(ports))" }
+        let systemPrefixes = ["/System/", "/usr/libexec/", "/usr/sbin/", "/sbin/"]
+        if user == "root" || user.hasPrefix("_") || systemPrefixes.contains(where: commandLine.hasPrefix) {
+            return "macOS system process"
+        }
+        return nil
     }
 }

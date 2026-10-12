@@ -345,11 +345,7 @@ struct PlistsModule: View {
         // than as part of it.
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .top) {
-            ModuleHeader(
-                title: "Launch Services",
-                subtitle: headerSubtitle,
-                symbol: ConsoleModule.plists.symbol
-            ) {
+            ModuleControlBar(trailing: {
                 if scanner.isScanning {
                     ProgressView().controlSize(.small)
                 } else {
@@ -359,9 +355,9 @@ struct PlistsModule: View {
                     }
                     .buttonStyle(.borderless)
                 }
-            }
+            })
             .padding(.horizontal, ConsoleMetrics.gutter)
-            .padding(.vertical, 10)
+            .padding(.vertical, 6)
             .background(.bar)
             .hairline()
         }
@@ -372,18 +368,6 @@ struct PlistsModule: View {
         }
     }
 
-    private var headerSubtitle: String {
-        if scanner.isScanning { return "reading launch directories…" }
-        let total = scanner.entries.count
-        let loaded = scanner.entries.filter {
-            if case .loaded = $0.loadState { return true }
-            return false
-        }.count
-        if let at = scanner.scannedAt {
-            return "\(total) entries · \(loaded) loaded · \(ConsoleFmt.timestamp(at))"
-        }
-        return "\(total) entries · \(loaded) loaded"
-    }
 }
 
 // MARK: - Row

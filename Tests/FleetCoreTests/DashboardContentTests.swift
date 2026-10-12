@@ -13,9 +13,11 @@ struct DashboardContentTests {
         }
     }
 
-    @Test func windowFloorReservesTheNewBottomStrip() {
-        #expect(ConsoleLayout.minimumContentHeight >= ConsoleLayout.titlebarReserve
+    /// The window has no footer strip any more; the floor pays for the
+    /// titlebar, the module's control row and one card, and nothing else.
+    @Test func windowFloorReservesNoFooterStrip() {
+        #expect(ConsoleLayout.minimumContentHeight == ConsoleLayout.titlebarReserve
                 + ConsoleLayout.moduleHeaderHeight + ConsoleLayout.cardHeight
-                + ConsoleLayout.moduleBottomPadding + 44)
+                + ConsoleLayout.moduleBottomPadding)
     }
 }

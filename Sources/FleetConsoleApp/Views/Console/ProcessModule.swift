@@ -180,11 +180,7 @@ struct ProcessModule: View {
     }
 
     private var header: some View {
-        ModuleHeader(
-            title: "Processes",
-            subtitle: headerSubtitle,
-            symbol: ConsoleModule.processes.symbol
-        ) {
+        ModuleControlBar {
             Picker("Scope", selection: $console.processScope) {
                 ForEach(ConsoleModel.ProcessScope.allCases) { scope in
                     // Premium scopes are labelled, not locked away: a paywalled
@@ -203,22 +199,6 @@ struct ProcessModule: View {
             .frame(maxWidth: 180)
             .accessibilityLabel("Process filter")
         }
-    }
-
-    private var headerSubtitle: String {
-        let total = model.processes.rows.count
-        let shown = filtered.count
-        var base = shown == total ? "\(total) processes" : "\(shown) of \(total)"
-        // State the fallback from the filter above, where the reader can see
-        // it — a scope that widened itself without saying so is a silent lie.
-        if console.processScope.isPremium,
-           !model.license.isUnlocked(.advancedHeatmapFilters) {
-            base += " · \(console.processScope.rawValue) is premium"
-        }
-        if let captured = model.processes.capturedAt {
-            return base + " · sampled " + ConsoleFmt.timestamp(captured)
-        }
-        return base
     }
 
     private func cpuTone(_ row: ProcessRow) -> StatusTone {

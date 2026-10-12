@@ -32,25 +32,9 @@ struct FleetPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Equal-width anchors keep the tab group on the pane's centerline,
-            // including while refresh is in flight or a section is disabled.
-            HStack(spacing: 6) {
-                IconButton(symbol: "gearshape", help: "Edit FleetConsole configuration") {
-                    model.openConfigFile()
-                }
-                Picker("Section", selection: $tab) {
-                    ForEach(enabledTabs) { Text($0.menuTitle).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.regular)
-                .accessibilityLabel("Popover section")
-                .frame(maxWidth: .infinity)
-                refreshButton
-            }
-            .padding(.horizontal, FleetMetrics.gutter)
-            .padding(.vertical, 8)
-            Divider()
+            // No rule under the header: the identity, the tabs and the body are
+            // one surface, separated by space rather than by lines.
+            header
 
             Group {
                 switch tab {
@@ -58,16 +42,10 @@ struct FleetPopover: View {
                 case .services: ServicesContent(model: model, openDashboard: openDashboard)
                 case .agents: AgentsContent(model: model, openDashboard: openDashboard, registration: registration)
                 case .processes: ProcessesContent(model: model, openDashboard: openDashboard)
-                case .connections:
-                    VStack(spacing: 0) {
-                        ConnectionsPopover(model: model, openDashboard: openDashboard, embedded: true)
-                        Divider()
-                        NetworkAdminFooter(model: model)
-                    }
+                case .connections: NetworkGlance(model: model)
                 }
             }
             .frame(maxHeight: FleetMetrics.popoverBodyHeight)
-            PopoverFooter(model: model, openDashboard: openDashboard)
         }
         .frame(width: FleetMetrics.popoverWidth)
         .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
@@ -86,6 +64,61 @@ struct FleetPopover: View {
         guard let requested = model.requestedSection else { return }
         tab = enabledTabs.contains(requested) ? requested : .quickView
         model.requestedSection = nil
+    }
+
+    /// Everything the popover used to split between a top bar and a bottom
+    /// ribbon, in one header: who and how the fleet is, the way out to the
+    /// dashboard, and the section tabs. Nothing is pinned under the content, so
+    /// the content ends where it ends.
+    private var header: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 4) {
+                OurosIdentityRow(title: "FleetConsole", detail: model.fleetStatusLine,
+                                 tone: model.fleetTint) { FleetBadgeMark(size: $0) }
+                Spacer(minLength: 8)
+                Button(action: openDashboard) {
+                    Label("Dashboard", systemImage: "square.grid.2x2")
+                        .font(FleetFont.body.weight(.medium))
+                        .foregroundStyle(SurfaceInk.secondary)
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 6)
+                .help("Open Dashboard (⌘0)")
+                refreshButton
+                linksMenu
+            }
+            // Equal-width segments on the pane's centerline, the full width of
+            // the header, so the tabs line up with the content under them.
+            Picker("Section", selection: $tab) {
+                ForEach(enabledTabs) { Text($0.menuTitle).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .accessibilityLabel("Popover section")
+            .frame(maxWidth: .infinity)
+        }
+        .padding(.horizontal, FleetMetrics.gutter)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var linksMenu: some View {
+        Menu {
+            Button("Edit Configuration…") { model.openConfigFile() }
+            Divider()
+            Button("Ouros Website") { model.openURL("https://ouros.md") }
+            Button("Source & Support") { model.openURL("https://github.com/janestreetshiller/fleet-console") }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(FleetFont.body.weight(.medium))
+                .foregroundStyle(SurfaceInk.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
+        .help("Configuration and links")
+        .accessibilityLabel("Configuration and links")
     }
 
     @ViewBuilder private var refreshButton: some View {

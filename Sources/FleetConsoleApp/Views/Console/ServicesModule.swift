@@ -81,14 +81,6 @@ struct ServicesModule: View {
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .top) {
-            ModuleHeader(title: "Services", subtitle: "\(model.activeServices.count) active",
-                         symbol: ConsoleModule.services.symbol)
-                .padding(.horizontal, ConsoleMetrics.gutter)
-                .padding(.vertical, 10)
-                .background(.bar)
-                .hairline()
-        }
         .onChange(of: query) { _, query in
             if !query.isEmpty && !unmanaged.isEmpty { showUnmanaged = true }
         }

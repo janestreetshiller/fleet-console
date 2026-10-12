@@ -105,7 +105,8 @@ struct AgentsRegistrationViewTests {
         let visible = try text(in: window)
         #expect(visible.contains("8 agent IDs"))
         #expect(visible.contains("4 detected"))
-        #expect(visible.contains("7 more"))
+        // The roster is a one-line count on the tab; every entry is behind Show all.
+        #expect(visible.contains("Show all 12"))
         #expect(!visible.contains("99%"))
         #expect(!visible.contains("999 MB"))
         try capture(window, name: "bounded-agents-\(dark ? "dark" : "light")")

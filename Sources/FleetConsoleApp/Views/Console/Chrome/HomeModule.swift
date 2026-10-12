@@ -21,6 +21,7 @@ import FleetCore
 struct HomeModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
+    var fixer: FixAgentSettings = .shared
 
     private var query: String { console.search.trimmingCharacters(in: .whitespaces) }
 
@@ -34,47 +35,16 @@ struct HomeModule: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                homeMasthead
-
-                QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
-                    priorityCard
-                    modulesCard
-                }
+            // No masthead. The attention list is what home puts first, and the
+            // sidebar's identity card already says who and how the fleet is.
+            QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
+                priorityCard
+                modulesCard
             }
             .padding(ConsoleMetrics.gutter)
         }
         .scrollContentBackground(.hidden)
-    }
-
-    /// Home's header — the same `ModuleHeader` every other surface wears.
-    ///
-    /// It was previously a centred serif italic largetitle, on the argument that
-    /// home is "the one place the window is allowed to have a voice". That was
-    /// the wrong call twice. A serif italic appears nowhere else in the app and
-    /// in no macOS system surface, so it read as a different application's
-    /// screen wedged into this one; and centring it broke the leading-edge
-    /// alignment that the sidebar, the toolbar and every card underneath share,
-    /// which is the line your eye actually tracks down the window. A landing
-    /// page earns attention by what it puts first — the attention list does that
-    /// — not by setting its own name in display type.
-    private var homeMasthead: some View {
-        ModuleHeader(title: "Home", subtitle: subtitle, symbol: "house")
-    }
-
-    /// One line that says whether there is anything to do, in the same
-    /// precedence order the menu-bar glyph uses — so the window and the status
-    /// item cannot tell two different stories about what matters most.
-    private var subtitle: String {
-        guard model.connected else { return "controller offline" }
-        if model.awaitingReplyCount > 0 {
-            return "\(model.awaitingReplyCount) awaiting your answer"
-        }
-        if model.criticalCount > 0 {
-            return "\(model.criticalCount) critical · \(model.warningCount) warning"
-        }
-        if model.warningCount > 0 { return "\(model.warningCount) warning" }
-        return "\(model.runningServices.count) services running · nothing needs a decision"
+        .actionErrorAlert(model: model)
     }
 
     // MARK: - Priority
@@ -89,6 +59,12 @@ struct HomeModule: View {
                 if model.connected, !model.attention.isEmpty {
                     ConsoleBadge(text: "\(model.attention.count)",
                                  tone: model.criticalCount > 0 ? .bad : .warn)
+                    if let designated = fixer.designated {
+                        Button("Send to \(designated.title)") { send(attention) }
+                            .controlSize(.small)
+                            .help("Write a report of these problems and start \(designated.title) on it in the terminal.")
+                            .accessibilityIdentifier("home.fixer.send")
+                    }
                 }
             }
 
@@ -139,11 +115,21 @@ struct HomeModule: View {
                                     since: item.since) {
                             console.reveal(item, model: model)
                         }
+                        .contextMenu {
+                            if let designated = fixer.designated {
+                                Button("Send to \(designated.title)") { send([item]) }
+                            }
+                        }
                     }
                 }
             }
         }
         .elevatedCard()
+    }
+
+    /// The window is already open, so the hand-off needs no dashboard to open.
+    private func send(_ items: [AttentionItem]) {
+        if let problem = model.sendToFixer(items, openDashboard: {}) { model.actionError = problem }
     }
 
     // MARK: - Drill-down

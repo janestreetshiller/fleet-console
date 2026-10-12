@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import FleetCore
 
-/// One menu-bar item: status glyph, popover, dropdown menu.
+/// One menu-bar item: live meters, popover, dropdown menu.
 ///
 /// FleetConsole puts up exactly one of these. The class stayed generic through
 /// the collapse from five items to two to one — it knows how to render a summary
@@ -12,20 +12,16 @@ import FleetCore
 @MainActor
 final class MenuBarItemController: NSObject {
     struct Summary: Equatable {
-        var glyph: Glyph
-        var text: String
-        /// nil renders as a template image, which follows the menu-bar tint.
+        /// The live readings, drawn as fixed-width meters so a value changing
+        /// never shifts its neighbours along the menu bar.
+        var meters: [MenuBarMeter]
+        /// Attention after the meters — "!2" or "Offline" — and empty when
+        /// there is nothing to act on.
+        var alert: String
+        /// Colours the alert. Nil while there is none.
         var tint: StatusTone?
         var tooltip: String
         var accessibilityLabel: String
-    }
-
-    /// What the item wears on the left. The fleet item shows the wordmark while
-    /// everything is fine and a state symbol when it is not, so having a brand in
-    /// the menu bar never costs a signal.
-    enum Glyph: Equatable {
-        case symbol(String)
-        case wordmark
     }
 
     private let statusItem: NSStatusItem
@@ -80,28 +76,25 @@ final class MenuBarItemController: NSObject {
         let summary = summaryProvider()
         guard summary != lastRendered else { return }
         lastRendered = summary
+        Self.render(summary, on: button)
+    }
 
-        switch summary.glyph {
-        case .wordmark:
-            button.image = FleetWordmark.image(accessibilityDescription: summary.accessibilityLabel)
-        case .symbol(let name):
-            var configuration = NSImage.SymbolConfiguration(pointSize: 12.5, weight: .medium)
-            if let tint = summary.tint {
-                // Colour only when something is wrong; a permanently coloured icon is
-                // one more thing you learn to stop seeing.
-                let colour: NSColor = tint == .bad ? .systemRed : .systemOrange
-                configuration = configuration.applying(.init(paletteColors: [colour]))
-            }
-            let image = NSImage(systemSymbolName: name, accessibilityDescription: summary.accessibilityLabel)
-            image?.isTemplate = summary.tint == nil
-            button.image = image?.withSymbolConfiguration(configuration)
-        }
-
+    /// Puts a summary on a button. The status item and the surface sheet's
+    /// menu-bar capture both draw through here, so the sheet shows the item the
+    /// menu bar shows.
+    static func render(_ summary: Summary, on button: NSButton) {
+        button.image = MenuBarMeters.image(summary.meters)
+        // Colour only when something is wrong; a permanently coloured item is
+        // one more thing you learn to stop seeing.
+        let alertColour: NSColor = summary.tint == .bad ? .systemRed : .systemOrange
         button.attributedTitle = NSAttributedString(
-            string: summary.text.isEmpty ? "" : " \(summary.text)",
-            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)])
+            string: summary.alert.isEmpty ? "" : " \(summary.alert)",
+            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .semibold),
+                         .foregroundColor: alertColour])
         button.toolTip = summary.tooltip
-        button.setAccessibilityLabel("\(summary.accessibilityLabel). \(summary.text)")
+        let readings = summary.meters.map { "\($0.label) \($0.value)" }.joined(separator: ", ")
+        button.setAccessibilityLabel("\(summary.accessibilityLabel). \(readings)"
+                                     + (summary.alert.isEmpty ? "" : ". \(summary.alert)"))
     }
 
     @objc private func clicked(_ sender: NSStatusBarButton) {
@@ -139,81 +132,65 @@ final class MenuBarItemController: NSObject {
     }
 }
 
-// MARK: - Wordmark
+// MARK: - Meters
 
-/// The FleetConsole mark: a geometric F with one arc of the fleet mesh.
+/// One reading in the menu bar: a short label set over its value.
+struct MenuBarMeter: Equatable {
+    var label: String
+    var value: String
+}
+
+/// CPU, RAM and disk as three stacked label-over-value meters.
 ///
-/// Drawn rather than shipped as an image asset so it stays crisp on any display
-/// and behaves exactly like an SF Symbol does — a template image that follows
-/// the menu bar through light, dark and the accent-tinted variants, with no
-/// @2x/@3x set to keep in sync.
-///
-/// `Scripts/appicon/Icon.swift` draws the app icon from these same proportions,
-/// so the Finder icon and this glyph are one letter rather than two drawings of
-/// one. Change the geometry here and re-run `Scripts/make-icon.sh`.
+/// Drawn as one template image, so the readings follow the menu bar through
+/// light, dark and tinted variants exactly as an SF Symbol does. Every column is
+/// as wide as its widest possible value ("100%"), so the item keeps one width
+/// and each number keeps one position however the readings move.
 @MainActor
-enum FleetWordmark {
-    private static var cached: NSImage?
+enum MenuBarMeters {
+    /// Fits the 22pt menu bar and the 24pt notched one with the same baseline.
+    static let height: CGFloat = 20
+    static let columnSpacing: CGFloat = 7
 
-    static func image(accessibilityDescription: String) -> NSImage {
-        if let cached {
-            cached.accessibilityDescription = accessibilityDescription
-            return cached
-        }
-        let made = render()
-        made.accessibilityDescription = accessibilityDescription
-        cached = made
-        return made
+    private static let labelAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 7, weight: .semibold),
+        .kern: 0.4,
+        // Template images keep alpha and drop colour: this is the secondary ink.
+        .foregroundColor: NSColor.black.withAlphaComponent(0.6),
+    ]
+    private static let valueAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedDigitSystemFont(ofSize: 10.5, weight: .semibold),
+        .foregroundColor: NSColor.black,
+    ]
+
+    static func columnWidth(for meters: [MenuBarMeter]) -> CGFloat {
+        let widest = meters.map { ($0.label as NSString).size(withAttributes: labelAttributes).width }
+            + [("100%" as NSString).size(withAttributes: valueAttributes).width]
+        return ceil(widest.max() ?? 0)
     }
 
-    private static func render() -> NSImage {
-        // A compact geometric F: a single, repeatable silhouette at 16pt rather
-        // than a script glyph whose swashes dissolve in the menu bar. One arc of
-        // the app icon's fleet mesh hangs off it, struck from the same point the
-        // icon strikes its arcs from — the foot of the stem.
-        //
-        // Only one arc, and the arms stay straight. Bending the arms into arcs
-        // closes the letter into something that reads as an R, and the mesh on
-        // its own — concentric arcs from a corner — is the Wi-Fi glyph, which in
-        // a menu bar is sitting three icons away from this one.
-        //
-        // No mesh arc. `Scripts/appicon/Icon.swift` draws this same letter, and
-        // its `Detail.forCanvas` drops the mesh entirely at 16 and 32pt — "the
-        // letter alone. Arcs at this size are one grey pixel wide and read as
-        // dirt on the plate." This glyph is 16pt and was striking an arc anyway,
-        // at radius 12 across 34° of sweep: too little curvature at that radius
-        // to read as an arc, so it rendered as a straight diagonal hanging off
-        // the top arm — an F with a slash through it rather than a mark. The two
-        // drawings now agree at the size they share.
-        //
-        // 15pt square, not 16 wide: the 16th point existed only to clear that
-        // arc's outer end. The letter runs x 2.2…12.6 and y 1.2…13.8, so a 15pt
-        // box leaves it centred.
-        //
-        // Drawn through `NSImage(size:flipped:drawingHandler:)` rather than
-        // `lockFocus()`. Both produce an `NSImage`, but `lockFocus` rasterizes
-        // once, at whatever backing scale happened to be current on the first
-        // call, and this image is then cached for the life of the process — so
-        // the "stays crisp on any display" this mark was drawn rather than
-        // shipped for was not actually true: a menu bar dragged from a Retina
-        // display to a 1x one, or an app launched before the external display
-        // woke, kept the stale raster. The drawing handler is re-invoked per
-        // scale by AppKit, which is the property that was wanted.
-        let size = NSSize(width: 15, height: 15)
-        let image = NSImage(size: size, flipped: false) { _ in
-            NSColor.black.setFill()
-            let bar: CGFloat = 2.4
-            let radius = bar / 2
-            NSBezierPath(roundedRect: NSRect(x: 2.2, y: 1.2, width: bar, height: 12.6),
-                         xRadius: radius, yRadius: radius).fill()
-            NSBezierPath(roundedRect: NSRect(x: 3.4, y: 11.4, width: 9.2, height: bar),
-                         xRadius: radius, yRadius: radius).fill()
-            NSBezierPath(roundedRect: NSRect(x: 3.4, y: 6.4, width: 6.7, height: bar),
-                         xRadius: radius, yRadius: radius).fill()
+    static func image(_ meters: [MenuBarMeter]) -> NSImage {
+        let column = columnWidth(for: meters)
+        let count = CGFloat(max(1, meters.count))
+        let size = NSSize(width: column * count + columnSpacing * (count - 1), height: height)
+        // Drawn through the handler rather than `lockFocus()`, so AppKit
+        // re-rasterizes per backing scale instead of keeping the first one.
+        let image = NSImage(size: size, flipped: true) { _ in
+            for (index, meter) in meters.enumerated() {
+                let x = CGFloat(index) * (column + columnSpacing)
+                draw(meter.label, attributes: labelAttributes, centeredIn: x, width: column, top: 0.5)
+                draw(meter.value, attributes: valueAttributes, centeredIn: x, width: column, top: 7.5)
+            }
             return true
         }
         image.isTemplate = true
         return image
     }
 
+    private static func draw(_ text: String, attributes: [NSAttributedString.Key: Any],
+                             centeredIn x: CGFloat, width: CGFloat, top: CGFloat) {
+        let string = text as NSString
+        let measured = string.size(withAttributes: attributes)
+        string.draw(at: NSPoint(x: x + (width - measured.width) / 2, y: top), withAttributes: attributes)
+    }
 }

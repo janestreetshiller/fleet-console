@@ -26,19 +26,6 @@ struct StorageModule: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                ModuleHeader(
-                    title: "Storage",
-                    subtitle: headerSubtitle,
-                    symbol: ConsoleModule.storage.symbol
-                ) {
-                    if breakdown.breakdown.scanning || scanner.scan.scanning {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Button("Scan Now") { scanAll() }
-                            .keyboardShortcut("s", modifiers: [.command, .shift])
-                    }
-                }
-
                 QuantizedCardGrid(minimumCellWidth: 440, maximumColumns: 2) {
                     breakdownCard
                     if !breakdown.breakdown.diskMap.isEmpty { diskMapCard }
@@ -76,14 +63,6 @@ struct StorageModule: View {
         }
     }
 
-    private var headerSubtitle: String {
-        if let root = breakdown.volumes.first(where: \.isRoot) {
-            return "\(root.name) — \(ConsoleFmt.utilPercent(root.usedShare)) of "
-                + ConsoleFmt.bytes(root.totalBytes) + " used"
-        }
-        return model.system.storage.volumeName
-    }
-
     private func scanAll() {
         // No refreshVolumes() first: it publishes asynchronously through the
         // main actor, so it could not land before scan() read the capacity.
@@ -104,6 +83,13 @@ struct StorageModule: View {
                     Text("scanned \(Fmt.relative(scanned))")
                         .font(ConsoleFont.caption)
                         .foregroundStyle(SurfaceInk.secondary)
+                }
+                if breakdown.breakdown.scanning || scanner.scan.scanning {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button("Scan Now") { scanAll() }
+                        .controlSize(.small)
+                        .keyboardShortcut("s", modifiers: [.command, .shift])
                 }
             }
 

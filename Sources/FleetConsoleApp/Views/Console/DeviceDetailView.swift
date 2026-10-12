@@ -24,22 +24,11 @@ struct DeviceDetailView: View {
     var body: some View {
         ScrollView {
             if let record {
-                VStack(alignment: .leading, spacing: 16) {
-                    ModuleHeader(
-                        title: record.name,
-                        subtitle: record.model.isEmpty ? nil : record.model,
-                        symbol: "desktopcomputer"
-                    ) {
-                        StatusPip(tone: record.health.tone, size: 9,
-                                  pulsing: record.health == .reachable)
-                    }
-
-                    QuantizedCardGrid(minimumCellWidth: 320, maximumColumns: 2) {
-                        healthCard(record)
-                        if let capabilities { capabilityCard(capabilities) }
-                        if !record.remoteServices.isEmpty { servicesCard(record) }
-                        if let error = record.remoteError { errorCard(error) }
-                    }
+                QuantizedCardGrid(minimumCellWidth: 320, maximumColumns: 2) {
+                    healthCard(record)
+                    if let capabilities { capabilityCard(capabilities) }
+                    if !record.remoteServices.isEmpty { servicesCard(record) }
+                    if let error = record.remoteError { errorCard(error) }
                 }
                 .padding(ConsoleMetrics.gutter)
             } else {
@@ -60,8 +49,24 @@ struct DeviceDetailView: View {
 
     private func healthCard(_ record: DeviceRecord) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Reachability Evidence")
-                .font(ConsoleFont.cardTitle)
+            // The device is named by the card that proves it is there, not by
+            // a page heading above it.
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(record.name)
+                    .font(ConsoleFont.cardTitle)
+                    .lineLimit(1)
+                if !record.model.isEmpty {
+                    Text(record.model)
+                        .font(ConsoleFont.caption)
+                        .foregroundStyle(SurfaceInk.secondary)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Text(record.health.label)
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(record.health.tone.ink)
+                    .fixedSize()
+            }
 
             EvidenceLine(
                 label: "ICMP ping",
