@@ -1,13 +1,15 @@
 # FleetConsole
 
-See what your Mac is doing and keep track of the background work your agents start.
-FleetConsole combines a native macOS menu-bar monitor, a local controller, and the
-`fleetctl` command-line tool. Requires macOS 14 or later.
+FleetConsole puts CPU and memory dials one click from your Mac's menu bar, with a
+full dashboard for a closer look. Check the load in **Quick View**, then follow it
+through timed charts, processes and service logs in the **Dashboard**. A local
+controller and `fleetctl` keep track of the work your coding agents start.
+Requires macOS 14 or later.
 
-FleetConsole source is MIT licensed. Local monitoring and controller tools require
-no account or payment. Multi-device access is $10/month through Ouros.
-Connect your Ouros account from the Devices screen, complete secure checkout,
-and refresh your subscription to link additional computers.
+The source is MIT licensed, and local monitoring and service control are free.
+Optional multi-device access costs $10 USD/month through Ouros. Connect your Ouros
+account in Devices, refresh the subscription options, and complete secure checkout;
+refresh your subscription to link additional computers.
 SwiftTerm retains its own MIT notices.
 
 CPU and memory lead the Overview with taller plots. Choose CPU or Memory to focus
@@ -18,9 +20,12 @@ individual spikes are preserved. Disk, GPU, network and sensors expand below.
 ## One place to look
 
 One menu-bar cluster shows CPU and memory use, connection state, and an attention
-count when needed. Click it for **Services**, **Agents**, **Processes**, and
-**Network**. Right-click or Control-click for the dashboard, named destinations,
-configuration, and logs.
+count when needed. Its dropdown starts on **Quick View** and remembers your last
+tab. Quick View shows CPU and memory dials, live network rates, service counts and
+an **Open Dashboard** button. The existing **Services**, **Agents**, **Processes**
+and **Network** tabs remain available. Right-click or Control-click for **Quick
+View**, the dashboard, named destinations, configuration and logs. Both views
+share the same resource probes and sampling cadence.
 
 The dashboard opens to **Overview**: CPU, GPU, memory, disk, network history, and
 large process consumers. A native sidebar leads to **Processes**, **Storage**,
@@ -55,9 +60,11 @@ fleetctl events "Local API"
 fleetctl stop "Local API"
 ```
 
-The app can pause, resume, renew, and stop controller-launched services. Unrenewed
-leases clean up their process groups even when the agent has gone away. The
-controller verifies process identity before signalling it and records the action.
+The app can pause, resume, renew, and stop controller-launched services. Running
+services with unrenewed leases have their process groups cleaned up even when the
+agent has gone away. Paused services retain their process groups and resources;
+expiry cleanup resumes when they do. The controller verifies process identity
+before signalling a process and records the action.
 
 Processes started elsewhere remain unmanaged. `fleetctl claim` records ownership
 and a lease for an existing process but grants no signalling authority: the
@@ -134,7 +141,7 @@ socket. Network probes inspect connections and routing; they do not change them.
 **Edit Configuration** in the dropdown opens `config.json`. It controls visible
 sections, polling intervals, known computers, expected listeners, and optional
 process termination. Agent spend is off by default because its price table needs
-verification. See [CLI reference](docs/CLI.md), [agent contract](docs/AGENTS.md), and
+verification. See [CLI reference](docs/CLI.md), [source preview and agent workflow](docs/SOURCE-PREVIEW.md), and
 [threat model](docs/THREAT-MODEL.md).
 
 ## Verification and contribution

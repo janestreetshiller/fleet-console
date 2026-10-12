@@ -17,11 +17,17 @@ case "$OUTPUT_DIR" in
     /*) ;;
     *) OUTPUT_DIR="$ROOT/$OUTPUT_DIR" ;;
 esac
-APP="$OUTPUT_DIR/FleetConsole.app"
-PROFILE="${FLEETCONSOLE_NOTARY_PROFILE:-FleetConsole}"
-ARCHIVE="$OUTPUT_DIR/FleetConsole-notarize.zip"
+exec python3 "$ROOT/Scripts/release-staging.py" notarize "$OUTPUT_DIR" "$ROOT"
 
-[ -d "$APP" ] || { echo "✗ $APP does not exist — run Scripts/build-app.sh release first"; exit 1; }
+# PINNED NOTARY WORKER
+# The helper reads this section; it is unreachable via script CLI arguments.
+# All artifact operations use '.', never the replaceable supplied pathname.
+set -euo pipefail
+APP="."
+PROFILE="${FLEETCONSOLE_NOTARY_PROFILE:-FleetConsole}"
+ARCHIVE="$1"        # inherited open archive file, not an output pathname
+SCRATCH_FD="$2"     # inherited private directory identity
+ARCHIVE_NAME="$3"
 
 # Refuse to submit an ad-hoc build: notarization requires a Developer ID signature
 # with the hardened runtime, and failing here is clearer than failing at Apple.
@@ -74,13 +80,18 @@ EOF
 fi
 
 echo "▸ archiving…"
-rm -f "$ARCHIVE"
 # ditto, not zip: it preserves the bundle's symlinks and extended attributes,
 # which a plain zip silently mangles.
 /usr/bin/ditto -c -k --keepParent "$APP" "$ARCHIVE"
 
 echo "▸ submitting to Apple (this usually takes a few minutes)…"
-xcrun notarytool submit "$ARCHIVE" "${AUTH[@]}" --wait
+# Switch the submission child by directory identity; its relative ZIP name
+# survives repository, ancestor and private-scratch renames/replacements.
+python3 -c 'import os, sys
+os.fchdir(int(sys.argv[1]))
+os.execv("/bin/bash", ["/bin/bash", "-c", "xcrun notarytool submit \"$@\" --wait",
+                     "fleet-notary-submit", *sys.argv[2:]])
+' "$SCRATCH_FD" "$ARCHIVE_NAME" "${AUTH[@]}"
 
 echo "▸ stapling the ticket…"
 xcrun stapler staple "$APP"
@@ -89,6 +100,6 @@ echo "▸ verifying…"
 xcrun stapler validate "$APP"
 spctl -a -vvv -t exec "$APP"
 
-rm -f "$ARCHIVE"
+# The helper cleans the archive through its pinned private directory.
 echo
 echo "✓ notarized and stapled — $APP will now open on any Mac"

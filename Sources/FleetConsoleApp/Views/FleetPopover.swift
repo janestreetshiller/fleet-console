@@ -7,6 +7,7 @@ import FleetCore
 /// status-item dropdown routes to a section by name, so `AppModel` has to be
 /// able to name one without importing the popover's internals.
 enum FleetSection: String, CaseIterable, Identifiable {
+    case quickView = "Quick View"
     case services = "Services"
     case agents = "Agents"
     case processes = "Processes"
@@ -20,6 +21,7 @@ enum FleetSection: String, CaseIterable, Identifiable {
     @MainActor
     func isEnabled(_ settings: Settings) -> Bool {
         switch self {
+        case .quickView: return true
         case .services: return settings.sections.services
         case .agents: return settings.sections.agents
         case .processes: return settings.sections.processes
@@ -50,7 +52,7 @@ struct FleetPopover: View {
 
     typealias Tab = FleetSection
 
-    @State private var tab: Tab = .services
+    @State private var tab: Tab = .quickView
 
     var body: some View {
         VStack(spacing: 0) {
@@ -79,6 +81,8 @@ struct FleetPopover: View {
                 // one fixed size for the life of the popover.
                 HStack(spacing: 2) {
                     switch tab {
+                    case .quickView:
+                        Spacer(minLength: 0)
                     case .connections:
                         IconButton(symbol: "gearshape", help: "Open Network settings") {
                             model.network.openSettings(.network)
@@ -104,26 +108,30 @@ struct FleetPopover: View {
             .padding(.vertical, 8)
             Divider()
 
-            HStack(alignment: .top, spacing: 16) {
-                metric("CPU", value: model.system.cpu.sampled
-                       ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")
-                metric("Memory", value: model.system.memory.totalBytes > 0
-                       ? ConsoleFmt.bytes(model.system.memory.usedBytes) : "—")
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Network").font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
-                    Text("↓ \(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec))")
-                    Text("↑ \(ConsoleFmt.byteRate(model.system.network.uploadBytesPerSec))")
+            if tab != .quickView {
+                HStack(alignment: .top, spacing: 16) {
+                    metric("CPU", value: model.system.cpu.sampled
+                           ? ConsoleFmt.utilPercent(model.system.cpu.usage) : "—")
+                    metric("Memory", value: model.system.memory.totalBytes > 0
+                           ? ConsoleFmt.bytes(model.system.memory.usedBytes) : "—")
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("Network").font(FleetFont.caption).foregroundStyle(SurfaceInk.secondary)
+                        Text("↓ \(ConsoleFmt.byteRate(model.system.network.downloadBytesPerSec))")
+                        Text("↑ \(ConsoleFmt.byteRate(model.system.network.uploadBytesPerSec))")
+                    }
+                    .font(FleetFont.body)
+                    .monospacedDigit()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
                 }
-                .font(FleetFont.body)
-                .monospacedDigit()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+                .padding(.horizontal, FleetMetrics.gutter)
+                .padding(.vertical, 14)
+                Divider()
             }
-            .padding(.horizontal, FleetMetrics.gutter)
-            .padding(.vertical, 14)
-            Divider()
 
             switch tab {
+            case .quickView:
+                QuickView(model: model)
             case .services:
                 ServicesContent(model: model, openDashboard: openDashboard)
             case .agents:
@@ -148,12 +156,8 @@ struct FleetPopover: View {
         // not a page.
         .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
         .onAppear {
-            // An explicit request from the dropdown wins; it is the one case
-            // where the user named the destination. Otherwise open on whichever
-            // half actually needs you.
-            if !consumeRequestedSection(), model.awaitingReplyCount > 0 {
-                tab = .agents
-            }
+            // A named destination wins; the ordinary first opening is Quick View.
+            _ = consumeRequestedSection()
         }
         // ...and again on the property itself, because an NSPopover's hosting
         // controller is built once and reused. Whether `onAppear` runs a second
@@ -164,16 +168,10 @@ struct FleetPopover: View {
         }
     }
 
-    /// The sections config leaves switched on, in declaration order.
-    ///
-    /// Never empty: switching every section off would leave a picker with no
-    /// segments and a popover with nothing under it, so Services survives as the
-    /// floor. A configuration that turns the whole app off is a configuration
-    /// error, and the honest response is to keep one surface rather than to
-    /// render a void.
+    /// Configured operational sections follow the always-available Quick View.
     private var enabledTabs: [Tab] {
         let enabled = Tab.allCases.filter { $0.isEnabled(model.settings) }
-        return enabled.isEmpty ? [.services] : enabled
+        return enabled.isEmpty ? [.quickView] : enabled
     }
 
     private func metric(_ title: String, value: String) -> some View {
@@ -231,6 +229,8 @@ struct FleetPopover: View {
 
     private func badgeLabel(for tab: Tab) -> String {
         switch tab {
+        case .quickView:
+            return tab.menuTitle
         case .services:
             return "Services"
         case .agents:

@@ -18,7 +18,7 @@ public struct TailscaleStatus: Sendable {
         public var rxBytes: Int64
         public var txBytes: Int64
 
-        /// "metal-mini.tail8a000f.ts.net." → "metal-mini"
+        /// Synthetic example: "demo-node.example.ts.net." → "demo-node"
         public var shortName: String {
             dnsName.split(separator: ".").first.map(String.init) ?? hostName
         }

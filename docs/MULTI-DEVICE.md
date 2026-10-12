@@ -3,7 +3,10 @@
 Local monitoring is free. Multi-device access costs $10 USD per month through
 Ouros, with one subscription and no per-device surcharge or included AI credit.
 
-Connect your Ouros account in Devices. The app opens the provider's existing
+Connect your Ouros account in Devices. Opening Devices while signed out stays
+local; Connect and Refresh explicitly contact `ouros.md`. A connected account
+refreshes its subscription when Devices opens or the app becomes active.
+The app opens the provider's existing
 browser approval flow and stores the resulting account session in macOS Keychain.
 Approve only the code displayed by FleetConsole. Secure checkout uses the
 server-owned monthly USD price. Opening checkout does not unlock the feature;

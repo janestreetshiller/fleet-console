@@ -19,7 +19,7 @@ final class TaskComposerModel {
     var ownerAgent = "operator"
     var purpose = ""
     var command = ""
-    var cwd = "/Users/main"
+    var cwd = FileManager.default.homeDirectoryForCurrentUser.path
     var leaseMinutes = 120
     var port: String = ""
     var healthURL = ""
@@ -67,7 +67,7 @@ final class TaskComposerModel {
             ownerAgent: ownerAgent.trimmingCharacters(in: .whitespaces).isEmpty ? "operator" : ownerAgent,
             purpose: purpose.trimmingCharacters(in: .whitespaces).isEmpty ? "user task" : purpose,
             command: parts,
-            cwd: cwd.isEmpty ? "/Users/main" : cwd,
+            cwd: cwd.isEmpty ? FileManager.default.homeDirectoryForCurrentUser.path : cwd,
             env: [:],
             declaredPorts: ports,
             leaseTTLSec: Double(leaseMinutes * 60),
@@ -175,7 +175,7 @@ struct TaskComposerView: View {
             HStack(spacing: 10) {
                 VStack(alignment: .leading, spacing: 6) {
                     fieldLabel("Working directory")
-                    TextField("/Users/main", text: $model.cwd)
+                    TextField("Working directory", text: $model.cwd)
                         .textFieldStyle(.roundedBorder).font(FleetFont.body)
                 }
                 VStack(alignment: .leading, spacing: 6) {

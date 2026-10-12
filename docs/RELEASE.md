@@ -45,6 +45,10 @@ Use macOS 14 or later, a Swift 6 toolchain with the macOS SDK, Rust 1.80 or late
 for script in Scripts/*.sh; do bash -n "$script"; done
 python3 Scripts/test-release-policy.py
 PYTHONOPTIMIZE=1 python3 Scripts/test-release-policy.py
+python3 Scripts/test-notary-staging.py
+PYTHONOPTIMIZE=1 python3 Scripts/test-notary-staging.py
+python3 Scripts/test-source-privacy.py
+PYTHONOPTIMIZE=1 python3 Scripts/test-source-privacy.py
 swift build -c release --disable-index-store -Xswiftc -disable-cmo
 swift test --disable-index-store
 cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
@@ -53,6 +57,22 @@ cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 The [CI workflow](../.github/workflows/ci.yml) runs these checks on macOS. Require a successful run before publication; it does not package, sign, notarize, install, publish, or start a daemon. Run live Rust conformance only against a controller you are authorized to observe.
 
 The script regressions use labelled test data and mock build/signing tools in `TMPDIR`; they do not produce a native app or valid signatures. They exercise the production staging and benchmark gates, including Applications aliases, existing/running targets, signing failures, and invalid receipts/budgets with Python optimization enabled. Set `TMPDIR` to an existing scratch directory before running them.
+
+For a focused live Quick View check, build the renderer with the existing
+release flags and invoke its observational verifier:
+
+```bash
+swift build -c release --disable-index-store -Xswiftc -disable-cmo \
+  -Xswiftc -DFLEET_SURFACE_RENDERER
+bin="$(swift build -c release --disable-index-store -Xswiftc -disable-cmo \
+  -Xswiftc -DFLEET_SURFACE_RENDERER --show-bin-path)"
+quick="$(mktemp -d "${TMPDIR:-$HOME/Library/Caches}/fleet-quick-view.XXXXXX")"
+"$bin/FleetConsoleApp" --verify-live "$quick" 60 --verify-quick-view
+```
+
+This checks the shipping popover in an offscreen native window with live data,
+records app and reaped-collector CPU separately, and captures both appearances.
+Rebuild ordinary production products before packaging.
 
 Keep the `-disable-cmo` workaround until a tested toolchain no longer needs it. Keep the dependency lockfiles. For runtime changes, record before/after workload measurements rather than inferring speed from a release build.
 
@@ -98,7 +118,7 @@ codesign --verify --strict --verbose=2 "$app/Contents/Resources/bin/fleetctl"
 codesign --verify --deep --strict --verbose=2 "$app"
 ```
 
-`Scripts/notarize.sh` uses the same `FLEETCONSOLE_OUTPUT_DIR` as the build script and forwards the selected API-key or keychain-profile authentication to submission. For an existing authorized `notary_profile`, the staged wrapper is:
+`Scripts/notarize.sh` uses the same `FLEETCONSOLE_OUTPUT_DIR` as the build script and forwards the selected API-key or keychain-profile authentication to submission. It rejects Applications aliases and symlink bundles, opens the staged bundle by filesystem identity, and keeps staple and validation operations relative to that pinned directory. Archive writes target an inherited open file descriptor; submission uses the ZIP name relative to the opened private scratch directory. Creation and cleanup retain those identities across repository, ancestor and scratch-directory replacement. Cleanup preserves replacement entries and removes the owned archive. For an existing authorized `notary_profile`, the staged wrapper is:
 
 ```bash
 FLEETCONSOLE_OUTPUT_DIR="$stage" FLEETCONSOLE_NOTARY_PROFILE="$notary_profile" \

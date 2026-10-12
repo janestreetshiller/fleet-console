@@ -130,11 +130,8 @@ enum SurfaceRenderer {
 
     private static func render(into out: URL) {
         let model = AppModel()
-        // AppModel's init opens a subscription to the live controller.
-        // `DaemonClient.stop()` only clears a flag — its thread is parked in a
-        // blocking `readLine()` and any snapshot already dispatched to the main
-        // queue still arrives. So stopping it is not enough on its own: the
-        // fixture is reasserted after every settle, in `hold(_:_:)` below.
+        // The renderer disables the controller subscription; local probes still
+        // run through AppModel. Fixture identity never comes from those probes.
         DaemonClient.shared.stop()
         let fixture = Fixtures.snapshot()
 
@@ -148,14 +145,10 @@ enum SurfaceRenderer {
         // constructing a `NetworkSegment` directly, so what the sheet proves is
         // the chain a real `config.json` takes.
         //
-        // The real config wins when it has any, which is the one place this
-        // sheet prefers live data to a fixture: a machine that has declared its
-        // segments should see *its* segments matched against *its* interfaces,
-        // and a fixture would quietly replace the thing being reviewed. The
-        // fixture is the fallback, so an unconfigured machine still renders the
-        // vocabulary instead of an empty section.
-        let declared = model.settings.config.networkSegments
-        VLANRegistry.shared.adopt(declared.isEmpty ? Fixtures.segments : declared)
+        // Always use synthetic declarations, never the operator's configured
+        // network names, subnets or gateways. Live network inspection belongs
+        // to the running app, not to the public fixture sheet.
+        VLANRegistry.shared.adopt(Fixtures.segments)
 
         for appearance in Appearance.allCases {
             NSApp.appearance = NSAppearance(named: appearance.name)
@@ -195,7 +188,7 @@ enum SurfaceRenderer {
         composer.ownerAgent = "claude"
         composer.purpose = "local api for triage"
         composer.command = "python3 -m http.server"
-        composer.cwd = "/Users/main"
+        composer.cwd = Fixtures.homePath
         composer.leaseMinutes = 120
         composer.port = "8787"
 
@@ -228,9 +221,8 @@ enum SurfaceRenderer {
         withTransaction(transaction, body)
     }
 
-    /// Turn the run loop so SwiftUI lays out, then reassert the fixture over
-    /// whatever the live controller may have pushed, then turn it again so the
-    /// reassertion is what gets drawn.
+    /// Turn the run loop so SwiftUI lays out, then reassert the synthetic
+    /// snapshot and turn it again so the fixture is what gets drawn.
     private static func hold(_ model: AppModel, _ fixture: Snapshot, turns: Int = 30) {
         settle(turns: max(turns, 30))
         mutate { model.apply(fixture) }
@@ -482,17 +474,18 @@ enum SurfaceRenderer {
 
 @MainActor
 enum Fixtures {
-    /// Segments as `config.json` would declare them.
-    ///
-    /// The CIDRs are the ones this machine is actually attached to, so the sheet
-    /// shows the match landing on a real interface rather than on a row invented
-    /// to receive it. `10.10.40.0/24` arrives untagged — it is behind a firewall
-    /// doing the segmentation, and the switch strips the tag before the frame
-    /// reaches the NIC — which is the whole reason the subnet fallback exists.
+    // Stable display-only identity. These paths are never opened by the fixture.
+    static let userName = "demo"
+    static let homePath = "/Users/demo"
+    private static let serviceLogsPath = "\(homePath)/Library/Logs/FleetConsole/services"
+    private static let socketPath = "\(homePath)/Library/Application Support/FleetConsole/fleetd.sock"
+
+    /// Synthetic config declarations using RFC 5737 documentation subnets.
+    /// They need not match the rendering machine's live interfaces.
     static let segments: [FleetConfig.SegmentConfig] = [
-        .init(tag: 40, name: "Guest", cidr: "10.10.40.0/24", gateway: "10.10.40.1",
+        .init(tag: 40, name: "Demo Guest", cidr: "192.0.2.0/24", gateway: "192.0.2.1",
               purpose: "isolated wireless"),
-        .init(name: "Home LAN", cidr: "192.168.1.0/24", gateway: "192.168.1.1",
+        .init(name: "Demo LAN", cidr: "198.51.100.0/24", gateway: "198.51.100.1",
               purpose: "trusted wired"),
     ]
 
@@ -511,7 +504,7 @@ enum Fixtures {
             daemon: DaemonInfo(version: "1.0.0", pid: 14066, startedAt: ago(9_240),
                                lastTickAt: ago(2), lastReconcileAt: ago(31),
                                tickIntervalSec: 5,
-                               socketPath: FleetPaths.socket.path),
+                               socketPath: socketPath),
             services: services(),
             unmanaged: unmanaged(),
             devices: devices(),
@@ -529,7 +522,7 @@ enum Fixtures {
                 id: healthyServiceID, friendlyName: "api", ownerAgent: "claude",
                 purpose: "local API for triage",
                 command: ["python3", "-m", "hermes.api"],
-                cwd: "\(NSHomeDirectory())/Workspace/hermes",
+                cwd: "\(homePath)/Workspace/hermes",
                 pid: 48122, pgid: 48122, startSignature: "1a2b3c",
                 declaredPorts: [8787], startedAt: ago(7_400),
                 leaseExpiresAt: Date().addingTimeInterval(4_180), leaseTTLSec: 7_200,
@@ -542,8 +535,8 @@ enum Fixtures {
                                    healthLatencyMs: 12, checkedAt: ago(3)),
                 resources: ResourceSample(cpuPct: 4.2, memMB: 186, processCount: 1,
                                           sampledAt: ago(3)),
-                stdoutPath: "\(FleetPaths.serviceLogs.path)/api.out",
-                stderrPath: "\(FleetPaths.serviceLogs.path)/api.err"),
+                stdoutPath: "\(serviceLogsPath)/api.out",
+                stderrPath: "\(serviceLogsPath)/api.err"),
 
             // Running (unverified): alive, listening, but no check configured —
             // the best state a service without a health check can reach.
@@ -551,7 +544,7 @@ enum Fixtures {
                 id: "svc-web", friendlyName: "web", ownerAgent: "claude",
                 purpose: "vite dev server for the console UI",
                 command: ["npm", "run", "dev"],
-                cwd: "\(NSHomeDirectory())/Workspace/fleet-web",
+                cwd: "\(homePath)/Workspace/fleet-web",
                 pid: 51903, pgid: 51903, startSignature: "4d5e6f",
                 declaredPorts: [5173], startedAt: ago(2_150),
                 leaseExpiresAt: Date().addingTimeInterval(1_450), leaseTTLSec: 3_600,
@@ -566,7 +559,7 @@ enum Fixtures {
                 id: "svc-embed", friendlyName: "embed", ownerAgent: "orcs",
                 purpose: "embedding worker for local search",
                 command: ["python3", "-m", "orcs.embed", "--batch", "64"],
-                cwd: "\(NSHomeDirectory())/Workspace/orcs",
+                cwd: "\(homePath)/Workspace/orcs",
                 pid: 52741, pgid: 52741, startSignature: "7g8h9i",
                 declaredPorts: [], startedAt: ago(5_600),
                 leaseExpiresAt: Date().addingTimeInterval(2_400), leaseTTLSec: 7_200,
@@ -586,7 +579,7 @@ enum Fixtures {
                 id: "svc-tunnel", friendlyName: "tunnel", ownerAgent: "codex",
                 purpose: "ssh tunnel to the staging box",
                 command: ["ssh", "-N", "-L", "6432:localhost:5432", "staging"],
-                cwd: NSHomeDirectory(),
+                cwd: homePath,
                 pid: 53880, pgid: 53880, startSignature: "j1k2l3",
                 declaredPorts: [6432], startedAt: ago(1_780),
                 leaseExpiresAt: Date().addingTimeInterval(94), leaseTTLSec: 1_800,
@@ -601,7 +594,7 @@ enum Fixtures {
                 id: "svc-search", friendlyName: "search", ownerAgent: "claude",
                 purpose: "meilisearch index for notes",
                 command: ["meilisearch", "--db-path", ".meili"],
-                cwd: "\(NSHomeDirectory())/Workspace/notes",
+                cwd: "\(homePath)/Workspace/notes",
                 pid: 54219, pgid: 54219, startSignature: "m4n5o6",
                 declaredPorts: [7700], startedAt: ago(880),
                 leaseExpiresAt: Date().addingTimeInterval(2_700), leaseTTLSec: 3_600,
@@ -622,7 +615,7 @@ enum Fixtures {
                 id: crashedServiceID, friendlyName: "indexer", ownerAgent: "orcs",
                 purpose: "nightly re-index of the workspace",
                 command: ["cargo", "run", "--release", "--bin", "indexer"],
-                cwd: "\(NSHomeDirectory())/Workspace/indexer",
+                cwd: "\(homePath)/Workspace/indexer",
                 pid: nil, startSignature: "p7q8r9",
                 declaredPorts: [], startedAt: ago(12_400),
                 leaseExpiresAt: ago(600), leaseTTLSec: 7_200,
@@ -641,7 +634,7 @@ enum Fixtures {
                 id: "svc-claimed", friendlyName: "llama-server", ownerAgent: "operator",
                 purpose: "claimed from the unmanaged list",
                 command: ["llama-server", "--port", "8080"],
-                cwd: "\(NSHomeDirectory())/Workspace/models",
+                cwd: "\(homePath)/Workspace/models",
                 pid: 92416, pgid: 92416, startSignature: "s1t2u3",
                 declaredPorts: [8080, 8081, 8082], startedAt: ago(93_600),
                 leaseExpiresAt: ago(70_200), leaseTTLSec: 7_200,
@@ -664,20 +657,20 @@ enum Fixtures {
         [
             UnmanagedProcess(
                 id: unmanagedID, pid: 44460, command: "Python",
-                commandLine: "python3 -m http.server 8765 --directory /Users/main/Workspace/scratch",
-                user: NSUserName(), ports: [8765],
+                commandLine: "python3 -m http.server 8765 --directory \(homePath)/Workspace/scratch",
+                user: userName, ports: [8765],
                 firstSeen: ago(66_000), lastSeen: ago(4),
                 reason: .listenerNotInRegistry),
             UnmanagedProcess(
                 id: "93129:s1t2", pid: 93129, command: "platform-server",
                 commandLine: "target/debug/platform-server --port 8788",
-                user: NSUserName(), ports: [8788],
+                user: userName, ports: [8788],
                 firstSeen: ago(41_000), lastSeen: ago(4),
                 reason: .devServerShape),
             UnmanagedProcess(
                 id: "83029:u3v4", pid: 83029, command: "node",
-                commandLine: "node /Users/main/Workspace/old-app/node_modules/.bin/vite --port 5174",
-                user: NSUserName(), ports: [5174],
+                commandLine: "node \(homePath)/Workspace/old-app/node_modules/.bin/vite --port 5174",
+                user: userName, ports: [5174],
                 firstSeen: ago(9_800), lastSeen: ago(4),
                 reason: .escapedProcessGroup,
                 formerServiceID: "svc-old-web"),
@@ -685,21 +678,21 @@ enum Fixtures {
     }
 
     private static func devices() -> [DeviceRecord] {
-        var this = DeviceRecord(id: "self", name: Host.current().localizedName ?? "This Mac",
+        var this = DeviceRecord(id: "self", name: "Demo Mac",
                                 model: "Mac", localHost: "127.0.0.1")
         this.evidence = DeviceEvidence(icmpOK: true, icmpRTTms: 0.1, tcpOK: true)
         this.lastReachableAt = ago(2)
 
-        var peer = DeviceRecord(id: peerDeviceID, name: "studio", model: "Mac Studio",
-                                localHost: "studio.local", tailscaleHost: "studio.tail",
-                                tailscaleIP: "100.84.12.9", localIP: "192.168.1.42",
+        var peer = DeviceRecord(id: peerDeviceID, name: "demo-studio", model: "Mac Studio",
+                                localHost: "studio.example.invalid", tailscaleHost: "studio.tail.example.invalid",
+                                tailscaleIP: "203.0.113.42", localIP: "198.51.100.42",
                                 probePort: 22)
         peer.evidence = DeviceEvidence(icmpOK: true, icmpRTTms: 3.8, tcpOK: true)
         peer.lastReachableAt = ago(6)
         peer.metrics = HostMetrics(cpuPct: 22.5, memUsedGB: 18.2, memTotalGB: 64)
 
-        var offline = DeviceRecord(id: "laptop", name: "air", model: "MacBook Air",
-                                   localHost: "air.local", tailscaleHost: "air.tail",
+        var offline = DeviceRecord(id: "laptop", name: "demo-air", model: "MacBook Air",
+                                   localHost: "air.example.invalid", tailscaleHost: "air.tail.example.invalid",
                                    probePort: 22)
         offline.evidence = DeviceEvidence(icmpOK: false, tcpOK: false)
         offline.lastReachableAt = ago(28_800)

@@ -3,8 +3,12 @@
 A local-first operations console for one person. Menu-bar app + a launchd-managed
 controller daemon that owns every agent-started background process on this Mac.
 
-**Machine of record:** `metal-mini` (Mac mini M4, Tailscale 100.98.105.78).
+**Deployment target:** the operator's own Mac, with optional configured peers.
 Everything runs as the logged-in user. No root, no admin helper, no network listeners.
+
+Public source fixtures use synthetic identities and documentation-only addresses;
+they do not identify a maintainer's machine or tailnet. Surface rendering still
+uses local telemetry probes, so inspect generated captures before publishing them.
 
 ---
 
@@ -197,18 +201,17 @@ No confirmation is required for read-only actions (logs, reveal, refresh, open f
 Shown exactly once, persisted in `UserDefaults`. One borderless panel: a
 one-sentence pitch, a live `RetroGauge` sweeping 0 → 78% → 12% (the instrument
 a new user has not met yet, demonstrating itself), and three numbered steps.
-Skippable from the first frame (Skip button, Escape). The *option to suppress
-it* is premium (`skipWelcomeAnimation`); the onboarding is part of what a
-trial evaluates. A context-menu item replays it for support calls.
+Skippable from the first frame (Skip button, Escape). The option to suppress
+it (`skipWelcomeAnimation`) is unlocked in the MIT source build. A context-menu
+item replays it for support calls.
 
-### 2.6 Trial and licence
+### 2.6 Source licence and feature access
 
-A 14-day trial starts at first launch and unlocks everything; when it ends,
-three features gate — SMC sensors, the welcome-skip, and the heatmap's
-advanced filters. Keys are `FLT1-<date>.<base32 HMAC-SHA256>`, validated
-offline. Trial status lives in the popover footer; entering a key is a button
-there, not a sheet you have to find. This is scaffolding (see
-`FleetCore/License.swift`): the honest version of the gate, not a storefront.
+The source is MIT-licensed (see `LICENSE`). Features are permanently unlocked in
+the source build, including SMC sensors, welcome-skip, advanced heatmap filters
+and reconciliation. No activation, purchase or trial is required. Historical
+trial and offline `FLT1` key APIs remain for compatibility; they do not restrict
+feature access. `FleetCore/License.swift` defines the current access policy.
 
 ---
 

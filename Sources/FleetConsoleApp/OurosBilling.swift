@@ -77,9 +77,20 @@ final class OurosBilling {
     private(set) var userCode: String?
     private(set) var verificationURL: URL?
     var message: String?
-    @ObservationIgnored private var credential = OurosKeychain.read()
+    @ObservationIgnored private var credential: OurosCredential?
+    @ObservationIgnored private let sessionConfiguration: URLSessionConfiguration
+    @ObservationIgnored private let useKeychain: Bool
+    @ObservationIgnored private let openBrowser: (URL) -> Void
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
     @ObservationIgnored private var checkoutKey: String?
+
+    init(useKeychain: Bool = true, sessionConfiguration: URLSessionConfiguration = .ephemeral,
+         openBrowser: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+        credential = useKeychain ? OurosKeychain.read() : nil
+        self.useKeychain = useKeychain
+        self.sessionConfiguration = sessionConfiguration
+        self.openBrowser = openBrowser
+    }
 
     var signedIn: Bool { credential.map { $0.expires > Date() } ?? false }
     var active: Bool {
@@ -103,7 +114,9 @@ final class OurosBilling {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         if let operationKey { request.setValue(operationKey, forHTTPHeaderField: "Idempotency-Key") }
-        let configuration = URLSessionConfiguration.ephemeral
+        guard let configuration = sessionConfiguration.copy() as? URLSessionConfiguration else {
+            throw Failure.invalidResponse
+        }
         configuration.httpCookieStorage = nil; configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: OurosNoRedirects(), delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
@@ -118,13 +131,13 @@ final class OurosBilling {
         return try JSONDecoder().decode(T.self, from: data)
     }
 
-    func refresh() async {
-        guard !busy else { return }
+    /// Automatic refresh follows an account connection; unsigned-in requests
+    /// require an explicit billing action such as Refresh.
+    func refresh(userInitiated: Bool = false) async {
+        guard !busy, userInitiated || signedIn else { return }
         busy = true; defer { busy = false }
         do {
-            struct Catalog: Decodable { let configured: Bool; let offers: [OurosOffer] }
-            let catalog: Catalog = try await request("/hvy/v1/fleet-console/offers", authenticated: false)
-            available = catalog.configured && catalog.offers.contains(where: \.matchesMultiDevice)
+            try await loadOffers()
             if signedIn {
                 membership = try await request("/hvy/v1/fleet-console/entitlement")
                 if active { checkoutKey = nil }
@@ -133,8 +146,14 @@ final class OurosBilling {
         } catch { handle(error) }
     }
 
-    func connect() {
-        guard !busy else { return }
+    private func loadOffers() async throws {
+        struct Catalog: Decodable { let configured: Bool; let offers: [OurosOffer] }
+        let catalog: Catalog = try await request("/hvy/v1/fleet-console/offers", authenticated: false)
+        available = catalog.configured && catalog.offers.contains(where: \.matchesMultiDevice)
+    }
+
+    @discardableResult func connect() -> Task<Void, Never>? {
+        guard !busy else { return nil }
         connectionTask?.cancel()
         connectionTask = Task {
             busy = true
@@ -153,7 +172,7 @@ final class OurosBilling {
                       url.host == "ouros.md", url.path == "/auth/device/verify",
                       url.user == nil, url.password == nil else { throw Failure.invalidResponse }
                 userCode = grant.user_code; verificationURL = url; message = nil
-                NSWorkspace.shared.open(url)
+                openBrowser(url)
                 let deadline = Date().addingTimeInterval(Double(grant.expires_in))
                 var interval = grant.interval
                 while Date() < deadline {
@@ -168,9 +187,12 @@ final class OurosBilling {
                               token.access_token.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else { throw Failure.invalidResponse }
                         let value = OurosCredential(token: token.access_token,
                                                     expires: Date().addingTimeInterval(Double(token.expires_in)))
-                        try OurosKeychain.save(value); credential = value
+                        if useKeychain { try OurosKeychain.save(value) }
+                        credential = value
                         membership = try await request("/hvy/v1/fleet-console/entitlement")
-                        message = nil; return
+                        try await loadOffers()
+                        message = available ? nil : "Ouros billing is unavailable. Try again."
+                        return
                     } catch Failure.server("authorization_pending") { continue }
                     catch Failure.server("slow_down") { interval = min(60, interval + 5) }
                 }
@@ -178,6 +200,7 @@ final class OurosBilling {
             } catch is CancellationError { message = nil }
             catch { handle(error) }
         }
+        return connectionTask
     }
 
     func cancelConnection() { connectionTask?.cancel(); connectionTask = nil }
@@ -224,12 +247,14 @@ final class OurosBilling {
             let _: Result = try await request("/auth/logout", method: "POST", body: [:])
             message = nil
         } catch { message = "Account disconnected from this Mac. Ouros could not confirm server sign-out." }
-        credential = nil; membership = nil; checkoutKey = nil; OurosKeychain.clear()
+        credential = nil; membership = nil; checkoutKey = nil
+        if useKeychain { OurosKeychain.clear() }
     }
 
     private func handle(_ error: Error) {
         if case Failure.signIn = error {
-            membership = nil; credential = nil; OurosKeychain.clear()
+            membership = nil; credential = nil
+            if useKeychain { OurosKeychain.clear() }
             message = "Connect your Ouros account to continue."
         } else if case Failure.server("access_denied") = error { message = "Account connection was denied. Connect again when you are ready." }
         else if case Failure.server("expired_token") = error { message = "Connection expired. Connect to Ouros again." }

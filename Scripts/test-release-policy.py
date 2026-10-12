@@ -51,7 +51,7 @@ class ScriptFixture(unittest.TestCase):
         mock = self.tools / "mock-tool.py"
         shutil.copyfile(SCRIPTS / "release-policy-mock-tool.py", mock)
         mock.chmod(0o755)
-        for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl"):
+        for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto"):
             (self.tools / name).symlink_to(mock)
         (self.tools / "python3").symlink_to(sys.executable)
         scripts = self.root / "Scripts"
@@ -90,7 +90,7 @@ class ScriptFixture(unittest.TestCase):
         bash_env.write_text("\n".join(
             f'{prefix}/{name}() {{ "$FLEET_TEST_ROOT/mock-tools/{name}" "$@"; }}'
             for prefix in ("/usr/bin", "/usr/sbin", "/bin")
-            for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl")
+            for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto")
         ) + "\n")
         self.env = os.environ.copy()
         self.env.update({
@@ -455,16 +455,32 @@ class NotarizationTests(ScriptFixture):
                                          FLEETCONSOLE_NOTARY_PROFILE="TEST_DATA_PROFILE")
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                 calls = self.calls()[before:]
-                submit = next(call["args"] for call in calls
-                              if call["tool"] == "xcrun" and call["args"][:2] == ["notarytool", "submit"])
-                self.assertEqual(Path(submit[2]).parent, output)
+                submission = next(call for call in calls
+                                  if call["tool"] == "xcrun" and call["args"][:2] == ["notarytool", "submit"])
+                submit = submission["args"]
+                self.assertFalse(Path(submit[2]).is_absolute())
+                archive = Path(submission["cwd"]) / submit[2]
+                self.assertEqual(archive.name, "FleetConsole-notarize.zip")
+                self.assertEqual(archive.parent.parent, self.root)
+                self.assertTrue(archive.parent.name.startswith(".fleet-notary-"))
+                self.assertFalse(archive.parent.exists(), "Private archive scratch must be cleaned")
                 self.assertEqual(submit[submit.index("--keychain-profile") + 1], "TEST_DATA_PROFILE")
-                app = output / "FleetConsole.app"
+                app = (output / "FleetConsole.app").resolve()
                 for call in calls:
+                    target = None
                     if call["tool"] in ("codesign", "spctl"):
-                        self.assertEqual(Path(call["args"][-1]), app)
+                        target = Path(call["args"][-1])
                     if call["tool"] == "xcrun" and call["args"][0] == "stapler":
-                        self.assertEqual(Path(call["args"][2]), app)
+                        target = Path(call["args"][2])
+                    if target is not None:
+                        self.assertEqual((Path(call["cwd"]) / target).resolve(), app)
+                        self.assertEqual(Path(call["cwd"]).resolve(), app,
+                                         "Each artifact operation must remain pinned to the exact app")
+                    if call["tool"] == "ditto":
+                        self.assertEqual((Path(call["cwd"]) / call["args"][-2]).resolve(), app)
+                        self.assertTrue(call["args"][-1].startswith("/dev/fd/"))
+                        self.assertEqual(call["archive_identity"], submission["archive_identity"])
+                self.assertEqual(sum(call["tool"] == "ditto" for call in calls), 1)
                 self.assertFalse((self.root / "build").exists())
 
     def test_signature_diagnostics_are_consumed_before_acceptance(self):

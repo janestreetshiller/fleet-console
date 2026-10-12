@@ -97,7 +97,7 @@ struct DeviceManagementView: View {
                             NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
                         }
                         .help("Open your Ouros billing and AI credits account")
-                        Button("Refresh") { Task { await model.ourosBilling.refresh() } }
+                        Button("Refresh") { Task { await model.ourosBilling.refresh(userInitiated: true) } }
                         if model.ourosBilling.signedIn {
                             Button("Disconnect") { Task { await model.ourosBilling.disconnect() } }
                         }
@@ -131,14 +131,14 @@ struct DeviceManagementView: View {
             .padding(ConsoleMetrics.gutter)
         }
         .frame(width: 560, height: 650)
-        .task { await model.ourosBilling.refresh() }
+        .task { await model.ourosBilling.refresh(userInitiated: false) }
         .sheet(isPresented: Binding(
             get: { model.ourosBilling.userCode != nil },
             set: { if !$0 { model.ourosBilling.cancelConnection() } })) {
                 OurosConnectionView(billing: model.ourosBilling)
             }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
-            Task { await model.ourosBilling.refresh() }
+            Task { await model.ourosBilling.refresh(userInitiated: false) }
         }
         .alert("Unlink \(pendingRemoval?.name ?? "device")?", isPresented: Binding(
             get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } })) {

@@ -157,6 +157,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func contextMenu() -> NSMenu {
         let menu = NSMenu()
 
+        let quickView = NSMenuItem(title: FleetSection.quickView.menuTitle,
+                                   action: #selector(showQuickView), keyEquivalent: "")
+        quickView.target = self
+        quickView.image = NSImage(systemSymbolName: "gauge.with.dots.needle.67percent", accessibilityDescription: nil)
+        menu.addItem(quickView)
+
         let dashboard = NSMenuItem(title: "Open Dashboard",
                                    action: #selector(showDashboard), keyEquivalent: "0")
         dashboard.keyEquivalentModifierMask = [.command]
@@ -215,10 +221,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
-    /// Network is a popover section, not a console module, so it opens the
-    /// popover rather than the window. Naming the section on the model and then
-    /// showing the popover keeps the two paths — clicking the item and choosing
-    /// this — landing on one surface instead of two.
+    /// Named Quick View and Network actions select their popover section before
+    /// opening it; dashboard commands keep their existing window route.
+    @objc private func showQuickView() {
+        model.requestedSection = .quickView
+        fleetItem?.showPopover()
+    }
+
     @objc private func showNetwork() {
         model.requestedSection = .connections
         fleetItem?.showPopover()

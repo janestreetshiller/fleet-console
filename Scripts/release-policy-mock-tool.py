@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""TEST DATA ONLY: isolated build/signing tools, never native tool invocations."""
+"""TEST DATA ONLY: mocked signing/build tools; the archive spy runs native ditto."""
 import json
 import os
 from pathlib import Path
 import sys
+import subprocess
 
 root = Path(os.environ["FLEET_TEST_ROOT"]).resolve()
 if not (root / "TEST-DATA-ONLY").is_file():
@@ -24,8 +25,13 @@ if boundary is not None and boundary == swap_at:
         saved.parent.mkdir()
         source.rename(saved)
         source.symlink_to(protected, target_is_directory=True)
+entry = {"tool": name, "args": args, "cwd": str(Path.cwd())}
+if name == "ditto" or (name == "xcrun" and args[:2] == ["notarytool", "submit"]):
+    info = (os.fstat(int(args[-1].rsplit("/", 1)[1])) if name == "ditto"
+            else Path(args[2]).stat())
+    entry["archive_identity"] = [info.st_dev, info.st_ino]
 with (root / "mock-calls.jsonl").open("a") as log:
-    log.write(json.dumps({"tool": name, "args": args, "cwd": str(Path.cwd())}) + "\n")
+    log.write(json.dumps(entry) + "\n")
 
 if name == "swift":
     if not args or args[0] != "build":
@@ -39,6 +45,14 @@ if name == "swift":
             target.mkdir(parents=True)
             (target / "keep.txt").write_text("TEST DATA: concurrent staging owner\n")
         print(root / "bin")
+elif name == "ditto":
+    if not Path(args[-2]).resolve().is_relative_to(root):
+        raise SystemExit("Cannot archive outside the TEST DATA fixture")
+    destination = args[-1]
+    if not destination.startswith("/dev/fd/"):
+        raise SystemExit("Archive destination must be the inherited descriptor")
+    descriptor = int(destination.rsplit("/", 1)[1])
+    raise SystemExit(subprocess.run(["/usr/bin/ditto", *args], pass_fds=(descriptor,), check=False).returncode)
 elif name == "xcrun":
     if ":".join(args[:2]) == os.environ.get("FLEET_TEST_NOTARY_FAILURE"):
         print("TEST DATA: simulated notarization failure", file=sys.stderr)

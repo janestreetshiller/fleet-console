@@ -14,7 +14,7 @@ enum LiveVerification {
             return false
         }
         guard index + 1 < arguments.count else {
-            fputs("Usage: --verify-live <output-directory> [seconds] [--verify-daemon-socket <path>]\n", stderr)
+            fputs("Usage: --verify-live <output-directory> [seconds:10...3600] [--verify-quick-view] [--verify-daemon-socket <path>]\n", stderr)
             exit(2)
         }
         if let socketIndex = arguments.firstIndex(of: "--verify-daemon-socket") {
@@ -25,11 +25,8 @@ enum LiveVerification {
                 exit(2)
             }
         }
-        let hasDuration = index + 2 < arguments.count
-            && arguments[index + 2] != "--verify-daemon-socket"
-        let seconds = hasDuration ? Double(arguments[index + 2]) ?? .nan : 20
-        guard seconds.isFinite, seconds >= 10, seconds <= 3_600 else {
-            fputs("Verification duration must be between 10 and 3600 seconds.\n", stderr)
+        guard let seconds = LiveVerificationArguments.duration(arguments) else {
+            fputs("Usage: --verify-live <output-directory> [seconds:10...3600] [--verify-quick-view] [--verify-daemon-socket <path>]\n", stderr)
             exit(2)
         }
         let output = URL(fileURLWithPath: arguments[index + 1], isDirectory: true)
@@ -38,6 +35,9 @@ enum LiveVerification {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         app.finishLaunching()
+        if arguments.contains("--verify-quick-view") {
+            return verifyQuickView(output: output, seconds: seconds)
+        }
         let model = AppModel()
         let controller = ConsoleWindowController(model: model)
         let initialOverviewPassed = !controller.console.atHome && controller.console.module == .overview
@@ -177,6 +177,76 @@ enum LiveVerification {
         return true
     }
 
+    private static func verifyQuickView(output: URL, seconds: Double) -> Bool {
+        let model = AppModel()
+        let hosting = NSHostingView(rootView: FleetPopover(model: model, openDashboard: {}))
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: FleetMetrics.popoverWidth, height: 320),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.contentView = hosting
+        window.backgroundColor = .windowBackgroundColor
+        window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+        window.orderFront(nil)
+        spin(6)
+        window.setContentSize(NSSize(width: FleetMetrics.popoverWidth, height: max(250, hosting.fittingSize.height)))
+        spin(0.2)
+        let startCPU = cpuSeconds()
+        let startChildrenCPU = cpuSeconds(RUSAGE_CHILDREN)
+        let start = ProcessInfo.processInfo.systemUptime
+        spin(seconds)
+        let elapsed = ProcessInfo.processInfo.systemUptime - start
+        let processCPU = (cpuSeconds() - startCPU) / elapsed * 100
+        let childrenCPU = (cpuSeconds(RUSAGE_CHILDREN) - startChildrenCPU) / elapsed * 100
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        let network = model.system.network
+        let power = model.system.power
+        let age = model.lastSnapshotReceivedUptime.map { ProcessInfo.processInfo.systemUptime - $0 }
+        let readOnly = DaemonClient.shared.requestPolicy == .observational
+            && DaemonClient.shared.submittedObservationalOperations.allSatisfy { name in
+                RPCOp(rawValue: name).map { RPCRequestPolicy.observational.allows($0) } == true
+            }
+        let daemonPassed = LiveDaemonReadiness.snapshot(connected: model.connected, hasDaemon: model.daemon != nil, ageSeconds: age)
+        let metrics = QuickViewMetrics(cpu: model.system.cpu, memory: model.system.memory)
+        let passed = metrics.cpu.value != nil && metrics.memory.value != nil && readOnly
+            && !model.processes.rows.isEmpty
+            && TelemetryReadiness.network(probeSucceeded: network.probeSucceeded,
+                hasActiveLink: !network.interfaceNames.isEmpty, download: network.downloadBytesPerSec,
+                upload: network.uploadBytesPerSec, historySamples: model.system.networkDownloadHistory.count)
+            && TelemetryReadiness.power(probeSucceeded: power.probeSucceeded, hasBattery: power.hasBattery,
+                                       charge: power.chargeFraction)
+            && daemonPassed
+        for (label, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            NSApp.appearance = NSAppearance(named: appearance)
+            window.appearance = NSAppearance(named: appearance)
+            spin(0.2)
+            capture(window, to: output.appendingPathComponent("quick-view-\(label).png"))
+        }
+        #if DEBUG
+        let configuration = "debug"
+        #else
+        let configuration = "release"
+        #endif
+        let receipt: [String: Any] = [
+            "view": "quick-view", "method": "shipping SwiftUI popover in an offscreen native window, live probes",
+            "configuration": configuration, "valid": passed, "benchmarkSeconds": elapsed,
+            "processCPUPercent": processCPU, "collectorCPUPercent": childrenCPU,
+            "appPlusCollectorsCPUPercent": processCPU + childrenCPU,
+            "processPeakResidentBytes": usage.ru_maxrss,
+            "cpuBrand": model.system.topology.brand, "logicalCores": model.system.topology.logicalCores,
+            "readOnlyPassed": readOnly, "daemonSnapshotPassed": daemonPassed,
+            "captures": ["quick-view-light.png", "quick-view-dark.png"]
+        ]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
+            try data.write(to: output.appendingPathComponent("receipt.json"))
+            print(String(decoding: data, as: UTF8.self))
+        } catch { fputs("Quick View receipt failed: \(error)\n", stderr); exit(1) }
+        window.orderOut(nil)
+        DaemonClient.shared.stop()
+        guard passed else { exit(1) }
+        return true
+    }
+
     private static func spin(_ seconds: TimeInterval) {
         let end = Date().addingTimeInterval(seconds)
         while Date() < end {
@@ -184,9 +254,9 @@ enum LiveVerification {
         }
     }
 
-    private static func cpuSeconds() -> Double {
+    private static func cpuSeconds(_ who: Int32 = RUSAGE_SELF) -> Double {
         var usage = rusage()
-        getrusage(RUSAGE_SELF, &usage)
+        getrusage(who, &usage)
         return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec)
             + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
     }

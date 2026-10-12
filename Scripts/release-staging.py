@@ -158,16 +158,114 @@ def assemble(output_dir, root, bin_dir, configuration):
             os.close(bundle_fd)
 
 
+@contextmanager
+def notary_bundle(output_dir, *, protected_dirs=None):
+    """Open an existing, non-symlink artifact beneath checked ancestor identities."""
+    if protected_dirs is None:
+        protected_dirs = (Path("/Applications"), Path.home() / "Applications")
+    paths, identities = _protected_locations(protected_dirs)
+    output = _canonical_directory(output_dir)
+    if any(output == path or path in output.parents for path in paths):
+        raise StagingError("stage outside Applications; notarization must not mutate an installed app")
+    with _output_directory(output, identities, False) as output_fd:
+        if output_fd is None:
+            raise StagingError("notarization output directory does not exist")
+        expected = os.stat(BUNDLE_NAME, dir_fd=output_fd, follow_symlinks=False)
+        if not stat.S_ISDIR(expected.st_mode):
+            raise StagingError("notarization bundle must be a real directory, not a symlink")
+        fd = os.open(BUNDLE_NAME, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=output_fd)
+        try:
+            opened = os.fstat(fd)
+            if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+                raise StagingError("notarization bundle identity changed while opening")
+            if (opened.st_dev, opened.st_ino) in identities:
+                raise StagingError("stage outside Applications")
+            yield fd
+        finally:
+            os.close(fd)
+
+
+@contextmanager
+def _notary_archive(root_fd):
+    """Keep scratch creation, archive writes and cleanup on held identities."""
+    import tempfile
+    scratch = tempfile.mkdtemp(prefix=".fleet-notary-", dir=".")
+    expected = os.stat(scratch, dir_fd=root_fd, follow_symlinks=False)
+    private_fd = archive_fd = None
+    name = "FleetConsole-notarize.zip"
+    try:
+        private_fd = os.open(scratch, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=root_fd)
+        opened = os.fstat(private_fd)
+        if (opened.st_dev, opened.st_ino) != (expected.st_dev, expected.st_ino):
+            raise StagingError("archive scratch identity changed while opening")
+        archive_fd = os.open(name, os.O_CREAT | os.O_EXCL | os.O_RDWR | os.O_NOFOLLOW,
+                             0o600, dir_fd=private_fd)
+        yield private_fd, archive_fd, name
+    finally:
+        if archive_fd is not None:
+            try:
+                info = os.fstat(archive_fd)
+                current = os.stat(name, dir_fd=private_fd, follow_symlinks=False)
+                if (info.st_dev, info.st_ino) == (current.st_dev, current.st_ino):
+                    os.unlink(name, dir_fd=private_fd)
+            except FileNotFoundError:
+                pass
+            finally:
+                os.close(archive_fd)
+        if private_fd is not None:
+            os.close(private_fd)
+        try:
+            current = os.stat(scratch, dir_fd=root_fd, follow_symlinks=False)
+            if (current.st_dev, current.st_ino) == (expected.st_dev, expected.st_ino):
+                os.rmdir(scratch, dir_fd=root_fd)
+        except FileNotFoundError:
+            pass
+
+
+def notarize(output_dir, root):
+    """Hold bundle, scratch and archive identities through the shell pipeline."""
+    root = Path(root).resolve(strict=True)
+    env = os.environ.copy()
+    if env.get("FLEETCONSOLE_ASC_KEY"):
+        env["FLEETCONSOLE_ASC_KEY"] = os.path.abspath(env["FLEETCONSOLE_ASC_KEY"])
+    script = root / "Scripts/notarize.sh"
+    worker = script.read_text().split("# PINNED NOTARY WORKER\n", 1)[1]
+    with notary_bundle(output_dir) as bundle_fd:
+        previous_cwd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            # Private archive scratch is independent of the mutable output path.
+            # Keep its root pinned for creation/cleanup too; a renamed stage
+            # cannot redirect archive writes or remove a pre-existing archive.
+            _, identities = _protected_locations((Path("/Applications"), Path.home() / "Applications"))
+            with _output_directory(root, identities, False) as scratch_fd:
+                if scratch_fd is None:
+                    raise StagingError("archive scratch root is unavailable")
+                os.fchdir(scratch_fd)
+                with _notary_archive(scratch_fd) as (private_fd, archive_fd, name):
+                    os.fchdir(bundle_fd)
+                    return subprocess.run([
+                        "/bin/bash", "-c", worker, str(script),
+                        f"/dev/fd/{archive_fd}", str(private_fd), name,
+                    ], env=env, pass_fds=(private_fd, archive_fd), check=False).returncode
+        finally:
+            os.fchdir(previous_cwd)
+            os.close(previous_cwd)
+
+
 def main():
     checking = len(sys.argv) == 3 and sys.argv[1] == "check"
     assembling = len(sys.argv) == 6 and sys.argv[1] == "assemble"
-    if not checking and not assembling:
+    notarizing = len(sys.argv) == 4 and sys.argv[1] == "notarize"
+    if not checking and not assembling and not notarizing:
         print("Usage: release-staging.py check ABSOLUTE_OUTPUT_DIR\n"
-              "       release-staging.py assemble ABSOLUTE_OUTPUT_DIR ROOT BIN debug|release", file=sys.stderr)
+              "       release-staging.py assemble ABSOLUTE_OUTPUT_DIR ROOT BIN debug|release\n"
+              "       release-staging.py notarize ABSOLUTE_OUTPUT_DIR ROOT", file=sys.stderr)
         return 2
     try:
         if assembling:
             return assemble(*sys.argv[2:])
+        if notarizing:
+            return notarize(*sys.argv[2:])
         print(stage_output(sys.argv[2]))
     except (OSError, ValueError, RuntimeError) as error:
         print(f"✗ unsafe or unavailable staging destination: {error}", file=sys.stderr)

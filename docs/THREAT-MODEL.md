@@ -190,8 +190,13 @@ The socket is the only control channel and it can launch processes.
   anywhere, and the inspector's log pane is read-only tail with no export button.
 - Terminal scrollback and assembled interpreter prompts are **not** covered by the
   guarantees above — they live in the app's memory, not in a `0600` file. See T7.
-- No analytics, no crash reporting, no auto-update, no outbound requests other than the
-  health checks and device probes you configure.
+- Outbound traffic includes configured health checks and device probes. Optional
+  Ouros account and subscription actions use HTTPS to `ouros.md`; browser checkout
+  and subscription management use Stripe. Opening Devices while signed out stays
+  local; an explicit billing action starts the offers or account request. Connected
+  accounts refresh their subscription when Devices opens or the app becomes active.
+  Account tokens stay in macOS Keychain and accompany authenticated Ouros requests.
+  Analytics, crash reporting and automatic update services are absent.
 
 ---
 

@@ -36,6 +36,10 @@ jobs:
         run: |
           python3 Scripts/test-release-policy.py
           PYTHONOPTIMIZE=1 python3 Scripts/test-release-policy.py
+          python3 Scripts/test-notary-staging.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-notary-staging.py
+          python3 Scripts/test-source-privacy.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-source-privacy.py
       - name: Build release with the existing CMO workaround
         run: swift build -c release --disable-index-store -Xswiftc -disable-cmo
       - name: Run Swift tests

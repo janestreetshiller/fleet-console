@@ -442,26 +442,8 @@ public struct FleetConfig: Codable, Sendable {
         "syncthing", "node_exporter", "sshd", "smbd", "cupsd", "mDNSResponder",
     ]
 
-    /// Seeded from what was actually found running on this machine, so the
-    /// inventory is useful on first launch instead of empty.
-    public static let defaultKnownServices: [KnownService] = [
-        KnownService(id: "hermes-dashboard", name: "Hermes dashboard",
-                     match: "hermes_cli.main dashboard", ports: [9119],
-                     url: "http://127.0.0.1:9119", symbol: "gauge.with.dots.needle.33percent"),
-        KnownService(id: "eyes1te", name: "eyes1te server",
-                     match: "eyes1te-server.py", ports: [8086],
-                     url: "http://127.0.0.1:8086", symbol: "eye"),
-        KnownService(id: "ssos", name: "SSOS serve",
-                     match: "ssos-serve", ports: [8787],
-                     url: "http://127.0.0.1:8787", symbol: "tray.full"),
-        KnownService(id: "routeflow", name: "Routeflow API",
-                     match: "porta_potty.app:app", ports: [8017],
-                     url: "http://127.0.0.1:8017", symbol: "arrow.triangle.branch"),
-        KnownService(id: "mlx-audio", name: "MLX audio",
-                     match: "mlx_audio", ports: [18100], symbol: "waveform"),
-        KnownService(id: "cua-driver", name: "CUA driver",
-                     match: "cua-driver", symbol: "cursorarrow.rays"),
-    ]
+    /// Inventory entries are explicit user configuration; fresh installs start empty.
+    public static let defaultKnownServices: [KnownService] = []
 
     public static let defaultDevServerPatterns: [String] = [
         "vite", "next dev", "next-server", "webpack", "ng serve", "react-scripts",
