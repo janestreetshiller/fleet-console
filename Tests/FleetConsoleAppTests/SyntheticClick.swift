@@ -15,7 +15,9 @@ import Testing
             context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
     }
     let release = PendingRelease(events[1])
-    let timer = Timer(timeInterval: 0.05, repeats: false) { _ in release.postIfUnsent() }
+    let timer = Timer(timeInterval: 0.05, repeats: false) { _ in
+        MainActor.assumeIsolated { release.postIfUnsent() }
+    }
     RunLoop.main.add(timer, forMode: .common)
     window.sendEvent(events[0])
     timer.invalidate()
@@ -23,8 +25,8 @@ import Testing
 }
 
 /// The release, sent exactly once: posted to a tracking loop, or dispatched
-/// after a press nothing tracked. Touched only on the main thread.
-private final class PendingRelease: @unchecked Sendable {
+/// after a press nothing tracked.
+@MainActor private final class PendingRelease {
     private let event: NSEvent
     private var sent = false
 
