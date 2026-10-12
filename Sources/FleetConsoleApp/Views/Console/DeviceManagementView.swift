@@ -93,6 +93,10 @@ struct DeviceManagementView: View {
                             Button("Subscribe — $10/month…") { Task { await model.ourosBilling.subscribe() } }
                                 .disabled(!model.ourosBilling.available)
                         }
+                        Button("Manage AI Credits…") {
+                            NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
+                        }
+                        .help("Open your Ouros billing and AI credits account")
                         Button("Refresh") { Task { await model.ourosBilling.refresh() } }
                         if model.ourosBilling.signedIn {
                             Button("Disconnect") { Task { await model.ourosBilling.disconnect() } }
@@ -103,10 +107,7 @@ struct DeviceManagementView: View {
                         Text(message).font(ConsoleFont.caption).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Button("Manage AI Credits…") {
-                        NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
-                    }
-                    .help("Open your Ouros billing and AI credits account")
+
                 }
             }
             .formStyle(.grouped)
