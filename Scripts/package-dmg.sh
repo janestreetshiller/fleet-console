@@ -37,7 +37,10 @@ STAGING="$OUTPUT_DIR/dmg-staging"
 
 # A DMG that ships an unsigned or unnotarized app is a support incident waiting
 # to happen. Refuse rather than package a build Gatekeeper will reject.
-if ! codesign -dv --verbose=2 "$APP" 2>&1 | grep -q "Developer ID Application"; then
+# (codesign -dv always exits nonzero; its evidence is on stderr. Capture first,
+# then grep — never pipe a nonzero producer straight into grep under pipefail.)
+signature="$(codesign -dv --verbose=2 "$APP" 2>&1 || true)"
+if ! printf '%s' "$signature" | grep -q "Developer ID Application"; then
     echo "✗ $APP is not Developer ID signed." >&2
     exit 1
 fi
