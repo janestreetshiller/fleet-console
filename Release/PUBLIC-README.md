@@ -2,7 +2,7 @@
 
 A free macOS menu-bar app for monitoring your Mac and keeping background agent work accountable.
 
-[Download FleetConsole](https://github.com/janestreetshiller/fleet-console-core/releases/latest)
+[Download FleetConsole](https://github.com/janestreetshiller/fleet-console/releases/latest)
 
 Requires macOS 14 or later. The downloadable build is for Apple Silicon (arm64).
 
@@ -14,7 +14,7 @@ Local monitoring and service management are free. Optional multi-device access c
 
 ## What's open source
 
-This repository publishes FleetCore, fleetd, fleetctl, their core tests and the Rust protocol/conformance workspace under [MIT](LICENSE). The native desktop UI source, hosted billing infrastructure, private development history and unreleased media are not included. The public Swift package builds independently without SwiftTerm or the private app target. MIT rights for this source do not depend on a subscription.
+This repository publishes FleetConsole's complete source — the native app, FleetCore, fleetd, fleetctl, their tests and the Rust protocol/conformance workspace — under [MIT](LICENSE). Hosted billing infrastructure and unreleased media are not included. MIT rights for this source do not depend on a subscription.
 
 ## Build the core and tools
 

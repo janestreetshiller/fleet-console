@@ -174,7 +174,7 @@ struct PopoverFooter: View {
             .buttonStyle(.plain)
             .accessibilityLabel("Visit the Ouros website")
             IconButton(symbol: "chevron.left.forwardslash.chevron.right", help: "FleetConsole source and support") {
-                model.openURL("https://github.com/janestreetshiller/fleet-console-core")
+                model.openURL("https://github.com/janestreetshiller/fleet-console")
             }
             Spacer(minLength: 8)
             Button(action: openDashboard) {

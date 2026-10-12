@@ -13,9 +13,9 @@ Use the current native app views, not a redrawn interface. The public export is 
 | 26–30 s | Editorial end card | FleetConsole · Free local tools · MIT core |
 
 The final information card and accompanying copy link to:
-https://github.com/janestreetshiller/fleet-console-core/releases/latest
+https://github.com/janestreetshiller/fleet-console/releases/latest
 
-Local monitoring and service management are free. Optional multi-device access costs $10 USD/month through Ouros (Ouros AI, LLC). The published MIT source covers FleetCore, fleetd, fleetctl and the Rust protocol; the native UI source remains private. Do not promise AI repairs, included inference credits or a donation checkout.
+Local monitoring and service management are free. Optional multi-device access costs $10 USD/month through Ouros (Ouros AI, LLC). The full source is published under MIT. Do not promise AI repairs, included inference credits or a donation checkout.
 
 ## Visual provenance
 

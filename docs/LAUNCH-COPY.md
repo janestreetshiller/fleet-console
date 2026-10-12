@@ -2,10 +2,10 @@
 
 ## Short post
 
-FleetConsole is a free macOS app for keeping an eye on your Mac and the background work your coding agents start. Quick View has CPU and memory dials, a disk-capacity map and upload/download bars. Open the dashboard for charts, processes and service logs. The controller, CLI and core are MIT licensed; optional multi-device access uses Ouros (operated by Ouros AI, LLC) at $10/month.
+FleetConsole is a free macOS app for keeping an eye on your Mac and the background work your coding agents start. Quick View has CPU and memory dials, a disk-capacity map and upload/download bars. Open the dashboard for charts, processes and service logs. The whole app is MIT licensed; optional multi-device access uses Ouros (operated by Ouros AI, LLC) at $10/month.
 
-Download: https://github.com/janestreetshiller/fleet-console-core/releases/latest
-Source: https://github.com/janestreetshiller/fleet-console-core
+Download: https://github.com/janestreetshiller/fleet-console/releases/latest
+Source: https://github.com/janestreetshiller/fleet-console
 
 ## Release announcement
 
@@ -15,9 +15,9 @@ Name and color-tag services so you can recognize them. Register agent IDs, see d
 
 Launch background work through `fleetctl` with an owner, purpose and lease. Renew what you still need; the controller cleans up unpaused services it launched when their leases expire. Paused services keep their processes and resources until resumed. Claiming an existing process adds visibility, not permission to stop it.
 
-Local monitoring and service management are free. FleetCore, fleetd, fleetctl and the Rust protocol are published under MIT. The native desktop UI source and private development history are not part of the public repository. Optional multi-device access costs $10 USD/month through Ouros (Ouros AI, LLC) and uses your existing SSH setup for remote metrics and read-only service inventory. AI credits and automatic repairs are not included.
+Local monitoring and service management are free. The complete source — core, controller, CLI, Rust protocol and native app — is published under MIT. Optional multi-device access costs $10 USD/month through Ouros (Ouros AI, LLC) and uses your existing SSH setup for remote metrics and read-only service inventory. AI credits and automatic repairs are not included.
 
-Download: https://github.com/janestreetshiller/fleet-console-core/releases/latest
+Download: https://github.com/janestreetshiller/fleet-console/releases/latest
 
 ## Publication notes
 

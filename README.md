@@ -6,10 +6,10 @@ through timed charts, processes and service logs in the **Dashboard**. A local
 controller and `fleetctl` keep track of the work your coding agents start.
 Requires macOS 14 or later.
 
-FleetCore, the controller, CLI and Rust protocol are published under MIT; the
-native UI source remains private. Local monitoring and service control are free.
-The public source and downloads live at
-https://github.com/janestreetshiller/fleet-console-core.
+The complete source — core, controller, CLI, Rust protocol and native app —
+is published under MIT. Local monitoring and service control are free.
+The source and downloads live at
+https://github.com/janestreetshiller/fleet-console.
 Optional multi-device access costs $10 USD/month through Ouros, operated by Ouros AI, LLC. Connect your Ouros
 account in Devices, refresh the subscription options, and complete secure checkout;
 refresh your subscription to link additional computers.
@@ -105,8 +105,9 @@ on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 
 The dashboard's **Tools** menu opens Terminal, Files, and Interpret. Terminal is
 your shell; commands entered there become supervised only when launched through
-`fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi). Interpret uses
-your existing `orcs` wrapper and local model. Missing tools show an explanation.
+`fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi). Interpret drives optional
+local-model inference through a CLI named `orcs` on your PATH; without it the
+panel explains what is missing.
 
 | Action | Shortcut |
 |---|---|

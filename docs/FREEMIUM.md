@@ -51,8 +51,7 @@ fleetctl license --secret <vendor secret> [--date 2026-10-05]
 Ouros bar on the user's behalf — shells out to this, prints a key, and the user
 pastes it into the app. The same locality argument as the rest of the product
 applies: Ouros already reaches this machine's Unix socket for the agent
-mailbox (`Ouroboros/apps/desktop/ouros/Sources/OurosBar/AgentMailClient.swift`),
-so the freemium wire adds no new listener, no telemetry, and no cloud. A
+mailbox, so the freemium wire adds no new listener, no telemetry, and no cloud. A
 mismatched mint still fails at the gate, because the app validates with its own
 copy of the secret.
 

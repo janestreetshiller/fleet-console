@@ -1,6 +1,6 @@
 # Contributing
 
-This repository contains the MIT-licensed FleetConsole core, daemon, CLI and Rust protocol. Submit focused fixes, tests and documentation through pull requests. The native desktop UI source is maintained separately.
+This repository contains the MIT-licensed FleetConsole source, including the native app, daemon, CLI and Rust protocol. Submit focused fixes, tests and documentation through pull requests.
 
 Use macOS 14 or later with Swift 6 and the macOS SDK. Run:
 
