@@ -30,9 +30,9 @@ let package = Package(
         .executableTarget(
             name: "FleetConsoleApp",
             dependencies: ["FleetCore", .product(name: "SwiftTerm", package: "SwiftTerm")],
-            // The engraved emblem: the app badge in the window and popover, and
-            // the source `Scripts/appicon/Icon.swift` draws the app icon from.
-            resources: [.copy("Brand/fleet-emblem.png")],
+            // The blackletter F: the mark in the window and popover, and the
+            // source `Scripts/appicon/Icon.swift` draws the app icon from.
+            resources: [.copy("Brand/fleet-letter.png")],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

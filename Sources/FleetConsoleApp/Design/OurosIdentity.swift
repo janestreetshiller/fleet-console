@@ -6,26 +6,31 @@ import AppKit
 // sidebar. Nothing here knows about FleetConsole — the mark and the words are
 // the caller's — so every Ouros app can wear the same three pieces.
 
-/// The product's mark on its app icon's plate, at the macOS icon's corner
-/// ratio, so the badge reads as the icon in the Dock shrunk to a row.
+/// The product's mark, on its icon plate or on nothing at all.
+///
+/// With no plate the mark is ink on whatever surface it sits on, which is how
+/// it appears inside the app: a tile of another colour in the popover header
+/// or the sidebar reads as a sticker on the surface rather than part of it.
+/// The plate is for places that show the app *as an icon*.
 struct OurosAppBadge<Mark: View>: View {
     var size: CGFloat = 28
-    /// The icon's plate colour. The badge is an icon, so it keeps its own
-    /// colours in light and dark rather than following the window's ink.
-    var plate: Color = FleetBrand.paper
-    /// Drawn at the side length it is handed, inside the plate's margin.
+    var plate: Color?
+    /// Handed the badge's side length; the mark sets its own margin.
     @ViewBuilder var mark: (CGFloat) -> Mark
 
     private static var rim: Color { Color.black.opacity(0.18) }
 
     var body: some View {
         let shape = RoundedRectangle(cornerRadius: size * 0.225, style: .continuous)
-        shape
-            .fill(plate)
-            .overlay { mark(size * 0.9) }
-            .overlay { shape.strokeBorder(Self.rim, lineWidth: 0.5) }
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        ZStack {
+            if let plate {
+                shape.fill(plate)
+                shape.strokeBorder(Self.rim, lineWidth: 0.5)
+            }
+            mark(size)
+        }
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 
@@ -91,41 +96,42 @@ struct OurosProfileCard<Mark: View, MenuItems: View>: View {
     }
 }
 
-/// FleetConsole's own mark for the badge: the engraved emblem, or the drawn F
-/// if the emblem could not be loaded.
+/// FleetConsole's mark: the blackletter F, drawn as a template so it takes the
+/// surface's own ink in light and dark — quiet beside the name, never a tile.
 struct FleetBadgeMark: View {
+    /// The badge's side length.
     let size: CGFloat
     var body: some View {
-        if let emblem = FleetBrand.emblem {
-            Image(nsImage: emblem)
+        if let letter = FleetBrand.letter {
+            Image(nsImage: letter)
+                .renderingMode(.template)
                 .resizable()
                 .interpolation(.high)
-                .frame(width: size, height: size)
+                .scaledToFit()
+                .frame(height: size * 0.92)
+                .foregroundStyle(SurfaceInk.secondary)
         } else {
-            FleetMark(size: size, construction: false, ink: FleetBrand.ink)
+            FleetMark(size: size * 0.8, construction: false, ink: SurfaceInk.secondary)
         }
     }
 }
 
-/// FleetConsole's brand assets: the engraved emblem and the paper it is
-/// printed on, shared by the badge and the app icon.
+/// FleetConsole's brand asset: the blackletter F, ink on a transparent ground.
 @MainActor
 enum FleetBrand {
-    static let paper = Color(.sRGB, red: 247 / 255, green: 241 / 255, blue: 229 / 255)
-    static let ink = Color(.sRGB, red: 22 / 255, green: 20 / 255, blue: 18 / 255)
-
     /// Looked up by hand rather than through SwiftPM's `Bundle.module`, whose
     /// generated accessor checks the .app's root — where a signed bundle cannot
     /// hold a resource bundle — and then a build-machine path, and traps when
     /// both miss. `assemble-app.sh` copies the bundle into Contents/Resources;
     /// in a development build it sits beside the executable.
-    static let emblem: NSImage? = {
-        let name = "FleetConsole_FleetConsoleApp.bundle"
+    static let letter: NSImage? = {
+        let bundleName = "FleetConsole_FleetConsoleApp.bundle"
         let roots = [Bundle.main.resourceURL, Bundle.main.executableURL?.deletingLastPathComponent()]
         for root in roots.compactMap({ $0 }) {
-            guard let bundle = Bundle(url: root.appendingPathComponent(name)),
-                  let url = bundle.url(forResource: "fleet-emblem", withExtension: "png"),
+            guard let bundle = Bundle(url: root.appendingPathComponent(bundleName)),
+                  let url = bundle.url(forResource: "fleet-letter", withExtension: "png"),
                   let image = NSImage(contentsOf: url) else { continue }
+            image.isTemplate = true
             return image
         }
         return nil

@@ -1061,8 +1061,10 @@ rather than showing a price nobody set.
 `Design/OurosIdentity.swift` holds the three pieces every Ouros app wears the
 same way, with the product's mark and words supplied by the caller:
 
-- **`OurosAppBadge`** — the mark on its icon plate at the macOS icon corner
-  ratio. It keeps its own colours in light and dark; it is an icon, not ink.
+- **`OurosAppBadge`** — the mark, optionally on an icon plate at the macOS icon
+  corner ratio. Inside the app it has no plate: the mark is ink on the surface
+  it sits on, because a tile of another colour in the popover header reads as a
+  sticker on the menu rather than part of it.
 - **`OurosIdentityRow`** — badge, product name, one live line.
 - **`OurosProfileCard`** — that row in a card with one ⋯ menu, closing the
   dashboard sidebar in its bottom-left corner. It replaced the window footer
@@ -1070,10 +1072,15 @@ same way, with the product's mark and words supplied by the caller:
   account and links live in its menu, and its line reads *Controller offline* in
   the bad tone only when that is true.
 
-FleetConsole's mark is the engraved emblem, `Sources/FleetConsoleApp/Brand/fleet-emblem.png`
-— ink on a transparent ground, loaded by `FleetBrand.emblem` and printed on the
-`FleetBrand.paper` plate. `Scripts/make-icon.sh` draws the app icon from the same
-file, so the Dock icon and the in-app badge are one picture.
+FleetConsole's mark is the blackletter F, `Sources/FleetConsoleApp/Brand/fleet-letter.png`
+— ink on a transparent ground, loaded by `FleetBrand.letter` as a template image
+and drawn in the secondary ink, so it follows light and dark like a symbol.
+`Scripts/make-icon.sh` prints the same F on a paper plate for the app icon, at
+every size, so the Dock icon and the in-app mark are one letter.
+
+The popover header carries no rule beneath it and its Dashboard action is a
+plain label, not a bordered button: the identity, the tabs and the body read as
+one surface, separated by space.
 
 ### Popover sections
 

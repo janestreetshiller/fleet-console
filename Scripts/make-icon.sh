@@ -4,8 +4,8 @@
 #   Scripts/make-icon.sh          # regenerate the .icns
 #   Scripts/make-icon.sh --sheet  # also write a contact sheet to build/design
 #
-# The plate is code and the emblem is Sources/FleetConsoleApp/Brand/fleet-emblem.png,
-# the same file the app's badge loads. Every size in the iconset is drawn at its
+# The plate is code and the F is Sources/FleetConsoleApp/Brand/fleet-letter.png,
+# the same file the app's mark loads. Every size in the iconset is drawn at its
 # own scale rather than downsampled from 1024. Re-run this after changing either.
 set -euo pipefail
 
@@ -16,7 +16,7 @@ trap 'rm -rf "$(dirname "$ICONSET")"' EXIT
 mkdir -p "$ICONSET" "$ROOT/Resources"
 
 echo "▸ rendering…"
-swift "$ROOT/Scripts/appicon/Icon.swift" "$ICONSET" "$ROOT/Sources/FleetConsoleApp/Brand/fleet-emblem.png"
+swift "$ROOT/Scripts/appicon/Icon.swift" "$ICONSET" "$ROOT/Sources/FleetConsoleApp/Brand/fleet-letter.png"
 
 echo "▸ packing…"
 iconutil -c icns "$ICONSET" -o "$ROOT/Resources/AppIcon.icns"

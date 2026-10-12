@@ -32,8 +32,9 @@ struct FleetPopover: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // No rule under the header: the identity, the tabs and the body are
+            // one surface, separated by space rather than by lines.
             header
-            Divider()
 
             Group {
                 switch tab {
@@ -77,10 +78,11 @@ struct FleetPopover: View {
                 Spacer(minLength: 8)
                 Button(action: openDashboard) {
                     Label("Dashboard", systemImage: "square.grid.2x2")
+                        .font(FleetFont.body.weight(.medium))
+                        .foregroundStyle(SurfaceInk.secondary)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .padding(.trailing, 4)
+                .buttonStyle(.plain)
+                .padding(.trailing, 6)
                 .help("Open Dashboard (⌘0)")
                 refreshButton
                 linksMenu

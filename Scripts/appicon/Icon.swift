@@ -1,20 +1,18 @@
 import AppKit
 import Foundation
 
-// FleetConsole's app icon: the engraved emblem printed on a sheet of paper.
+// FleetConsole's app icon: the blackletter F printed on a sheet of paper.
 //
-// The emblem is `Sources/FleetConsoleApp/Brand/fleet-emblem.png` — the same
-// file the window and the popover wear as their badge — so the Finder icon and
-// the in-app badge are one picture, not two drawings of one. It is ink on a
+// The F is `Sources/FleetConsoleApp/Brand/fleet-letter.png` — the same file the
+// window and the popover draw their mark from — so the Finder icon and the
+// in-app mark are one letter, not two drawings of one. It is ink on a
 // transparent ground, so the plate supplies the paper and the icon stays crisp
-// on any background the Dock or Finder puts behind it.
-//
-// Every size is drawn at its own scale rather than downsampled from 1024. At
-// 16pt the flourishes are texture around the F, which is what holds the shape.
+// on any background the Dock or Finder puts behind it. Every size is drawn at
+// its own scale rather than downsampled from 1024.
 
 guard CommandLine.arguments.count > 2,
-      let emblem = NSImage(contentsOfFile: CommandLine.arguments[2]) else {
-    FileHandle.standardError.write("usage: Icon.swift <iconset dir> <fleet-emblem.png>\n".data(using: .utf8)!)
+      let letter = NSImage(contentsOfFile: CommandLine.arguments[2]) else {
+    FileHandle.standardError.write("usage: Icon.swift <iconset dir> <fleet-letter.png>\n".data(using: .utf8)!)
     exit(1)
 }
 
@@ -95,8 +93,9 @@ func drawIcon(canvas: CGRect) {
         gradient([paperTop, paperBottom], in: rect, angle: -90)
     }
 
-    let side = rect.width * 0.88
-    emblem.draw(in: CGRect(x: rect.midX - side / 2, y: rect.midY - side / 2, width: side, height: side),
+    let height = rect.height * 0.72
+    let width = height * letter.size.width / letter.size.height
+    letter.draw(in: CGRect(x: rect.midX - width / 2, y: rect.midY - height / 2, width: width, height: height),
                 from: .zero, operation: .sourceOver, fraction: 1)
 
     clipped(to: plate) {
