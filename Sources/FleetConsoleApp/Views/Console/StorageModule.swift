@@ -39,17 +39,15 @@ struct StorageModule: View {
                     }
                 }
 
-                breakdownCard
-
-                if !breakdown.breakdown.diskMap.isEmpty {
-                    diskMapCard
+                QuantizedCardGrid(minimumCellWidth: 440, maximumColumns: 2) {
+                    breakdownCard
+                    if !breakdown.breakdown.diskMap.isEmpty { diskMapCard }
                 }
 
-                if !breakdown.volumes.isEmpty {
-                    volumesSection
+                QuantizedCardGrid(minimumCellWidth: 440, maximumColumns: 2) {
+                    if !breakdown.volumes.isEmpty { volumesSection }
+                    reclaimSection
                 }
-
-                reclaimSection
             }
             .padding(ConsoleMetrics.gutter)
         }

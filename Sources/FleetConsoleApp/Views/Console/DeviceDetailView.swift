@@ -34,10 +34,12 @@ struct DeviceDetailView: View {
                                   pulsing: record.health == .reachable)
                     }
 
-                    healthCard(record)
-                    if let capabilities { capabilityCard(capabilities) }
-                    if !record.remoteServices.isEmpty { servicesCard(record) }
-                    if let error = record.remoteError { errorCard(error) }
+                    QuantizedCardGrid(minimumCellWidth: 320, maximumColumns: 2) {
+                        healthCard(record)
+                        if let capabilities { capabilityCard(capabilities) }
+                        if !record.remoteServices.isEmpty { servicesCard(record) }
+                        if let error = record.remoteError { errorCard(error) }
+                    }
                 }
                 .padding(ConsoleMetrics.gutter)
             } else {

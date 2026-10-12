@@ -33,8 +33,11 @@ struct OverviewModule: View {
                 } else {
                     HStack(spacing: 16) { focusPicker; Spacer(minLength: 8); timePicker }
                 }
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .top), count: layout.primaryColumns),
-                          spacing: OverviewViewportGeometry.gap) {
+                QuantizedCardGrid(
+                    minimumCellWidth: (layout.contentWidth - CGFloat(layout.primaryColumns - 1) * OverviewViewportGeometry.gap) / CGFloat(layout.primaryColumns),
+                    maximumColumns: layout.primaryColumns,
+                    horizontalSpacing: OverviewViewportGeometry.gap,
+                    verticalSpacing: OverviewViewportGeometry.gap) {
                     if focus != .memory { cpuCard(plotHeight: layout.plotHeight) }
                     if focus != .cpu { memoryCard(plotHeight: layout.plotHeight) }
                 }
@@ -64,8 +67,7 @@ struct OverviewModule: View {
             }
             timePicker
             ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())],
-                          spacing: ConsoleMetrics.cardGap) {
+                QuantizedCardGrid(minimumCellWidth: 320, maximumColumns: 2) {
                     diskCard
                     if system.gpu.available {
                         gpuCard
@@ -668,46 +670,25 @@ struct ModuleHeader<Trailing: View>: View {
         self.trailing = trailing()
     }
 
-    /// The plate number this module carries — "MODULE 03 / 06" — taken from the
-    /// picker's own order rather than typed, so a seventh module renumbers the
-    /// set instead of leaving five headers lying about how many there are.
-    /// Surfaces that are not modules (Home, a remote device's detail) have no
-    /// number and say so by having none.
-    private var eyebrow: String? {
-        guard let module = ConsoleModule(rawValue: title) else { return nil }
-        return String(format: "MODULE %02d / %02d",
-                      module.shortcutIndex, ConsoleModule.allCases.count)
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Image(systemName: symbol)
-                    .font(ConsoleFont.cardTitle)
-                    .foregroundStyle(.secondary)
-                    .symbolRenderingMode(.hierarchical)
-                // Sentence case at the module ramp's own size. The stamped
-                // all-caps line this replaces was set in a bundled typewriter
-                // face at a fixed 17pt — the one piece of text in the app that
-                // ignored Dynamic Type, in the one position where a module
-                // announces what you are looking at.
-                Text(title)
-                    .font(ConsoleFont.moduleTitle)
-                    .foregroundStyle(.primary)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title)
+                .font(ConsoleFont.cardTitle)
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .accessibilityAddTraits(.isHeader)
+            if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
+                Text(subtitle)
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                if let subtitle, subtitle.caseInsensitiveCompare(title) != .orderedSame {
-                    Text(subtitle)
-                        .font(ConsoleFont.mono(.caption))
-                        .foregroundStyle(SurfaceInk.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .layoutPriority(-1)
-                }
-                Spacer(minLength: 4)
-                trailing
+                    .truncationMode(.tail)
+                    .layoutPriority(-1)
             }
-            Divider().padding(.top, 8)
+            Spacer(minLength: 4)
+            trailing
+                .controlSize(.small)
         }
         .accessibilityElement(children: .contain)
     }

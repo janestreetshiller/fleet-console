@@ -66,8 +66,7 @@ struct FleetPopover: View {
                     }
                 }
             }
-            .frame(height: FleetMetrics.popoverBodyHeight)
-            .clipped()
+            .frame(maxHeight: FleetMetrics.popoverBodyHeight)
             PopoverFooter(model: model, openDashboard: openDashboard)
         }
         .frame(width: FleetMetrics.popoverWidth)

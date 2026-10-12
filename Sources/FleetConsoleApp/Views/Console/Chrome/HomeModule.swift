@@ -37,8 +37,10 @@ struct HomeModule: View {
             VStack(alignment: .leading, spacing: 16) {
                 homeMasthead
 
-                priorityCard
-                modulesCard
+                QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
+                    priorityCard
+                    modulesCard
+                }
             }
             .padding(ConsoleMetrics.gutter)
         }

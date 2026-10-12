@@ -342,7 +342,7 @@ enum SurfaceRenderer {
 
         hold(model, fixture)
         let fitted = hosting.fittingSize
-        window.setContentSize(NSSize(width: popoverWidth, height: max(fitted.height, 320)))
+        window.setContentSize(NSSize(width: popoverWidth, height: fitted.height))
         hold(model, fixture)
 
         // The window, not the hosting view — same as the console path. A view

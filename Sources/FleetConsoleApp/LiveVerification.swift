@@ -222,8 +222,7 @@ enum LiveVerification {
             && daemonPassed
         var captures: [String] = []
         var sizes: [[String: Any]] = []
-        var uniform = true
-        let initialSize = window.contentLayoutRect.size
+        var bounded = true
         for section in FleetSection.allCases {
             model.requestedSection = section
             let name = section.menuTitle.lowercased().replacingOccurrences(of: " ", with: "-")
@@ -232,8 +231,11 @@ enum LiveVerification {
                 window.appearance = NSAppearance(named: appearance)
                 spin(0.2)
                 let size = hosting.fittingSize
-                uniform = uniform && abs(size.width - FleetMetrics.popoverWidth) < 0.5
-                    && abs(size.height - initialSize.height) < 0.5
+                bounded = bounded && abs(size.width - FleetMetrics.popoverWidth) < 0.5
+                    && size.height > DashboardContentGeometry.footerHeight
+                    && size.height <= FleetMetrics.popoverBodyHeight + 100
+                window.setContentSize(size)
+                spin(0.1)
                 let filename = "\(name)-\(label).png"
                 capture(window, to: output.appendingPathComponent(filename))
                 captures.append(filename)
@@ -241,7 +243,7 @@ enum LiveVerification {
                               "width": size.width, "height": size.height])
             }
         }
-        let passed = telemetryPassed && uniform
+        let passed = telemetryPassed && bounded
         #if DEBUG
         let configuration = "debug"
         #else
@@ -255,7 +257,7 @@ enum LiveVerification {
             "processPeakResidentBytes": usage.ru_maxrss,
             "cpuBrand": model.system.topology.brand, "logicalCores": model.system.topology.logicalCores,
             "readOnlyPassed": readOnly, "daemonSnapshotPassed": daemonPassed,
-            "uniformPopoverPassed": uniform, "captureSizes": sizes, "captures": captures
+            "boundedPopoverPassed": bounded, "captureSizes": sizes, "captures": captures
         ]
         do {
             let data = try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])

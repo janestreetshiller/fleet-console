@@ -102,7 +102,7 @@ enum FleetMetrics {
     /// lines need a reserved column or their labels step in and out by a point.
     static let verdictColumn: CGFloat = 8
     static let popoverWidth: CGFloat = 480
-    /// Every tab shares a viewport so switching never moves the footer.
+    /// Natural-height tabs share a ceiling; long lists scroll within the body.
     static let popoverBodyHeight: CGFloat = 300
     /// One `IconButton`'s hit target. Named because three places need to agree
     /// on it: the button draws it, the action slot below is two of them wide,

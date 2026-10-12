@@ -16,13 +16,13 @@ struct ProcessesContent: View {
     private var inventory: ProcessInventory { model.processes }
     private var terminationEnabled: Bool { model.settings.features.allowProcessTermination }
 
-    private static let topCount = 10
+    private static let topCount = 5
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 8) {
-                    Text("\(inventory.rows.count) processes")
+                    Text("Top \(min(Self.topCount, inventory.rows.count)) of \(inventory.rows.count)")
                         .font(FleetFont.caption).foregroundStyle(.secondary)
                         .help(census)
                     Spacer(minLength: 8)
@@ -39,10 +39,20 @@ struct ProcessesContent: View {
                 .padding(.vertical, 8)
                 list(weight.ranked(inventory.rows, limit: Self.topCount), weight: weight)
 
-                Spacer(minLength: 6)
+                Button("View all processes") {
+                    openDashboard()
+                    NotificationCenter.default.post(name: ConsoleCommand.selectModule, object: nil,
+                        userInfo: [ConsoleCommand.userInfoModule: ConsoleModule.processes.rawValue])
+                }
+                .buttonStyle(.plain)
+                .font(FleetFont.caption)
+                .foregroundStyle(.tint)
+                .accessibilityIdentifier("processes.viewAll")
+                .padding(.horizontal, FleetMetrics.gutter)
+                .padding(.vertical, 8)
             }
         }
-        .frame(maxHeight: FleetMetrics.sectionMaxHeight)
+        .fixedSize(horizontal: false, vertical: true)
         .alert(item: $pendingTermination) { row in
             Alert(title: Text("End “\(row.displayName)”?"),
                   message: Text("SIGTERM will be sent to pid \(row.pid). "
