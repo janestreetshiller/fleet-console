@@ -5,8 +5,9 @@ FleetConsole combines a native macOS menu-bar monitor, a local controller, and t
 `fleetctl` command-line tool. Requires macOS 14 or later.
 
 FleetConsole source is MIT licensed. Local monitoring and controller tools require
-no account or payment. The planned multi-device add-on is $10/month through Ouros;
-linking is available in this review build while provider billing is prepared.
+no account or payment. Multi-device access is $10/month through Ouros.
+Connect your Ouros account from the Devices screen, complete secure checkout,
+and refresh your subscription to link additional computers.
 SwiftTerm retains its own MIT notices.
 
 CPU and memory lead the Overview with taller plots. Choose CPU or Memory to focus
@@ -109,7 +110,8 @@ your existing `orcs` wrapper and local model. Missing tools show an explanation.
 
 ## Linked devices and AI credits
 
-Choose **Link a Device…** in the sidebar. Enter its name and hostname or IP;
+Choose **Link a Device…** in the sidebar. Connect your Ouros account and subscribe
+to multi-device access, then enter the device name and hostname or IP;
 optionally enter an SSH username and opt into reading its FleetConsole service
 inventory. The controller probes reachability and reads metrics through your
 existing SSH configuration. Remote processes are read-only. Unlinking removes
@@ -118,7 +120,8 @@ only the configuration entry. First-run setup creates no example peers.
 The device screen links to Ouros billing for prepaid AI credits. FleetConsole
 credit-funded inference, supervised repair agents and an MCP server are planned;
 this build does not spend credits or perform AI repairs. The $10/month FleetConsole
-offer and entitlement still need provider activation. See the
+subscription has a separate entitlement from Ouros Pro and does not include
+AI credits. Cancellation and payment status come from Ouros billing. See the
 [multi-device integration contract](docs/MULTI-DEVICE.md).
 
 ## Local data and configuration

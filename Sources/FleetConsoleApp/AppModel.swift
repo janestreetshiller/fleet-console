@@ -58,6 +58,7 @@ final class AppModel {
     /// it (`system` reads its answer every sample), so property order is also
     /// the dependency order. See FleetCore/License.swift.
     let license = LicenseManager()
+    let ourosBilling = OurosBilling()
     let system: SystemMonitor
     let storage = StorageScanner()
     let breakdown = StorageBreakdown()

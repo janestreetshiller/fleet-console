@@ -81,9 +81,28 @@ struct DeviceManagementView: View {
                         Spacer()
                         Text("$10/month").foregroundStyle(.secondary)
                     }
-                    Text("Local monitoring is free. Subscription billing is coming soon.")
+                    Text(model.ourosBilling.active ? "Multi-device is active on your Ouros account." : "Local monitoring is free.")
                         .font(ConsoleFont.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        if !model.ourosBilling.signedIn {
+                            Button("Connect Ouros Account…") { model.ourosBilling.connect() }
+                        } else if model.ourosBilling.active {
+                            Button("Manage Subscription…") { Task { await model.ourosBilling.manage() } }
+                        } else {
+                            Button("Subscribe — $10/month…") { Task { await model.ourosBilling.subscribe() } }
+                                .disabled(!model.ourosBilling.available)
+                        }
+                        Button("Refresh") { Task { await model.ourosBilling.refresh() } }
+                        if model.ourosBilling.signedIn {
+                            Button("Disconnect") { Task { await model.ourosBilling.disconnect() } }
+                        }
+                    }
+                    .disabled(model.ourosBilling.busy)
+                    if let message = model.ourosBilling.message {
+                        Text(message).font(ConsoleFont.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     Button("Manage AI Credits…") {
                         NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
                     }
@@ -96,6 +115,7 @@ struct DeviceManagementView: View {
                 if busy { ProgressView().controlSize(.small) }
                 Text(busy ? "Updating devices…"
                      : !model.connected ? "Connect the local controller to link a device."
+                     : !model.ourosBilling.active ? "Subscribe to link additional devices."
                      : savedName.map { "\($0) linked." } ?? (name.isEmpty && address.isEmpty
                          ? "Enter a name and address to get started."
                          : validationError ?? "Ready to link this device."))
@@ -103,13 +123,22 @@ struct DeviceManagementView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Button(busy ? "Saving…" : "Link Device") { link() }
-                    .disabled(busy || !model.connected || validationError != nil
+                    .disabled(busy || !model.connected || !model.ourosBilling.active || validationError != nil
                               || !DaemonClient.shared.requestPolicy.allows(.reloadConfig))
                     .keyboardShortcut(.defaultAction)
             }
             .padding(ConsoleMetrics.gutter)
         }
         .frame(width: 560, height: 650)
+        .task { await model.ourosBilling.refresh() }
+        .sheet(isPresented: Binding(
+            get: { model.ourosBilling.userCode != nil },
+            set: { if !$0 { model.ourosBilling.cancelConnection() } })) {
+                OurosConnectionView(billing: model.ourosBilling)
+            }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await model.ourosBilling.refresh() }
+        }
         .alert("Unlink \(pendingRemoval?.name ?? "device")?", isPresented: Binding(
             get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } })) {
                 Button("Cancel", role: .cancel) { pendingRemoval = nil }
@@ -158,5 +187,27 @@ struct DeviceManagementView: View {
                 error = "Saved, but the controller could not reload: \(failure.localizedDescription). Choose Retry Controller Reload."
             }
         }
+    }
+}
+
+private struct OurosConnectionView: View {
+    @Bindable var billing: OurosBilling
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Connect your Ouros account").font(ConsoleFont.moduleTitle)
+            Text("Approve the matching code in your browser. Keep FleetConsole open while you connect.")
+                .fixedSize(horizontal: false, vertical: true)
+            Text(billing.userCode ?? "").font(.title2.monospaced())
+                .textSelection(.enabled).accessibilityLabel("Connection code")
+            HStack {
+                Button("Cancel") { billing.cancelConnection() }.keyboardShortcut(.cancelAction)
+                Spacer()
+                Button("Continue in Ouros…") {
+                    if let url = billing.verificationURL { NSWorkspace.shared.open(url) }
+                }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(ConsoleMetrics.gutter)
+        .frame(width: 420)
     }
 }

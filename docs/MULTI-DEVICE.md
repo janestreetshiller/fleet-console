@@ -1,45 +1,31 @@
 # Multi-device and Ouros
 
-Owner direction, October 11, 2026: local monitoring stays free. The multi-device
-add-on is $10 USD per month through Ouros. This is one multi-device subscription;
-no per-device surcharge, device-count limit or included AI credit is asserted.
+Local monitoring is free. Multi-device access costs $10 USD per month through
+Ouros, with one subscription and no per-device surcharge or included AI credit.
 
-The current review build supports real device linking and unlinking. Both update
-only the devices array in the local configuration, preserve unknown fields, and
-activate through the existing `reloadConfig` RPC. Linking does not establish
-reachability: ICMP, TCP and SSH results remain separate evidence. Remote services
-are read-only. Existing SSH configuration supplies credentials; the UI never
-stores passwords. First-run setup lists only the actual local computer.
+Connect your Ouros account in Devices. The app opens the provider's existing
+browser approval flow and stores the resulting account session in macOS Keychain.
+Approve only the code displayed by FleetConsole. Secure checkout uses the
+server-owned monthly USD price. Opening checkout does not unlock the feature;
+refreshing the subscription reads its paid entitlement. A canceled subscription
+continues through its paid period, while expired, unpaid and past-due states do
+not enable new device links. Disconnect removes this Mac's stored account session.
 
-The device screen opens the existing Ouros Billing page, where prepaid AI credits
-are managed. Its $10/month FleetConsole offer and entitlement are not active.
-The inspected Ouros catalog currently exposes its $19/month Pro offer and optional
-one-time credit packs; it contains no FleetConsole product. FleetConsole must not
-sell that Pro offer as its own multi-device subscription.
+The FleetConsole subscription is separate from Ouros Pro. It does not replace a
+Pro subscription, reset usage, grant credit, or change the existing credit catalog.
+The provider checks canonical Stripe customer, subscription, price, invoice and
+period data. Checkout operations are persisted in the existing private account
+event store and reused across lost responses. Unknown outcomes are not silently
+recreated after provider idempotency retention. Existing signed webhook checks
+remain in place; FleetConsole events cannot overwrite the Pro subscription record.
 
-## Provider activation contract
+Device linking changes only the local configuration's devices array, preserving
+unrelated and unknown fields. The controller activates changes through its
+existing reload operation. Link completion and reachability remain separate:
+ICMP, TCP and SSH are checked independently. Optional inventory reads use existing
+SSH configuration; passwords are never stored. Remote process control remains
+read-only. Unlinking removes only that computer's configuration entry.
 
-The provider needs a FleetConsole offer for a recurring USD subscription of
-1000 cents per month, with a separate product entitlement. A suggested internal
-identifier is `fleet-console-multi-device`; it is not a registered provider SKU.
-Checkout must come from the server's authenticated billing catalog, using the
-existing idempotency and signed fulfillment paths. The app must accept an
-account-bound provider entitlement, cancellation and expiration rather than
-revive the legacy source-embedded HMAC key. No local key or receipt currently
-claims an active subscription. Linking remains a preview until this integration
-is activated.
-
-## AI credits and supervised jobs
-
-Existing Ouros prepaid credits are separate from subscriptions. No monthly credit
-allowance is promised. FleetConsole has a local Interpret tool today, using the
-existing `orcs` wrapper; it does not debit Ouros credits. Credit-funded inference,
-trained repair agents, deployable agents and a FleetConsole MCP remain planned.
-A production job path needs authenticated balance checks, an explicit spending
-limit, idempotent execution and settlement, recorded results, and a human-approved
-repair scope. Metered execution must stop at zero credit. Process ownership,
-leases, PID identity checks and the controller's signal boundary continue to
-apply to agent jobs.
-
-The provider catalog and job routes were inspected read-only. No provider product,
-purchase, customer entitlement, account balance or deployment was changed.
+The device screen also opens Ouros billing for AI credits. Credit-funded inference,
+supervised repair jobs, deployable agents and FleetConsole MCP remain future work.
+No subscription credit allowance or automatic computer repair is promised.

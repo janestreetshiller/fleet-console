@@ -51,7 +51,7 @@ struct FleetSidebarView: View {
                 Button { managingDevices = true } label: {
                     Label("Link a Device…", systemImage: "plus.circle")
                 }
-                .help("Multi-device add-on: $10/month through Ouros; linking is available in this preview")
+                .help("Multi-device access: $10/month through Ouros")
                 }
         }
         .listStyle(.sidebar)
