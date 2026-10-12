@@ -232,7 +232,7 @@ enum LiveVerification {
                 spin(0.2)
                 let size = hosting.fittingSize
                 bounded = bounded && abs(size.width - FleetMetrics.popoverWidth) < 0.5
-                    && size.height > DashboardContentGeometry.footerHeight
+                    && size.height > 0
                     && size.height <= FleetMetrics.popoverBodyHeight + 100
                 window.setContentSize(size)
                 spin(0.1)

@@ -44,10 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       openDashboard: { [weak self] in self?.showDashboard() }),
             summary: { [model] in
                 MenuBarItemController.Summary(
-                    // One geometric monogram at every state. The count carries
-                    // urgency without changing the app's silhouette.
-                    glyph: .wordmark,
-                    text: model.fleetText,
+                    // The readings are the item: one fixed silhouette at every
+                    // state, with urgency carried by the alert beside it.
+                    meters: model.fleetMeters,
+                    alert: model.fleetAlert,
                     tint: model.fleetTint,
                     tooltip: model.fleetTooltip,
                     accessibilityLabel: "FleetConsole fleet — "
@@ -113,8 +113,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// not read here, so countdowns never cause a menu-bar redraw.
     private func observeModel() {
         withObservationTracking {
-            _ = model.fleetGlyph
-            _ = model.fleetText
+            _ = model.fleetMeters
+            _ = model.fleetAlert
             _ = model.fleetTint
             _ = model.fleetTooltip
         } onChange: { [weak self] in

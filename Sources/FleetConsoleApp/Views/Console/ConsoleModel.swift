@@ -64,8 +64,10 @@ final class ConsoleModel {
     /// events each decide what fields it matches.
     var search = ""
 
-    /// Concealed until requested, like the tab drawer in the Termin9 shell.
-    var sidebarRevealed = false
+    /// Open by default: the sidebar is the window's navigation and carries the
+    /// app's identity card, so a window that opened without it opened without
+    /// both. ⌃⌘S and the toolbar toggle still tuck it away.
+    var sidebarRevealed = true
 
     func toggleSidebar() { sidebarRevealed.toggle() }
 

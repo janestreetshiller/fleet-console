@@ -82,6 +82,7 @@ jitter — including the menu-bar count.
 | `tagCorner` | 3 | tags and micro capsules |
 | `barCorner` | 2 | one core column, and any bar that narrow |
 | `popoverWidth` | 480 | the popover, at every section |
+| `popoverBodyHeight` | 300 | the clamp on the popover's body under its header |
 | `sectionMaxHeight` | 540 | the scroll clamp on a section's body |
 
 `EntityIcon`'s internals are ratios of its own `size`, not fixed points, so a
@@ -113,7 +114,7 @@ the slot at `iconButtonSize × 2 + 2` whether or not anything is in it. The verb
 still only appear on hover; the room does not.
 
 **`sectionMaxHeight` is one number for four sections.** They share a popover —
-the same picker above them, the same footer below — so a section that clamps
+the same header and picker above them, and nothing below — so a section that clamps
 higher than its neighbour drags the popover's bottom edge with it on every tab
 switch. It was four literals at two values (540 on Services, Agents and
 Processes; 560 on Connections), which is the 9/9.5pt pair one layer up. Nobody
@@ -589,11 +590,15 @@ lives in `ConsoleModel`.
 ⌘-digit and no entry in `ConsoleModule`, because the digits are an index into that
 enum and a surface that is not in it must not consume one. ⇧⌘H reaches it.
 
-It wears the same `ModuleHeader` as every other surface. It briefly did not: the
-title was a centred serif italic largetitle. A serif italic appears nowhere else
-in the app and in no macOS surface, so it read as another application's screen
-pasted in — and centring it broke the leading-edge alignment the sidebar, the
-toolbar and every card underneath share. Its second card is labelled **Modules**, not
+No surface carries a page header. The sidebar's selection already names the
+page, and a title row restating it — `ModuleHeader`, with a subtitle beside it —
+was a second toolbar charged to the content's height: on Overview it was most of
+why a 1560-wide window drew its traces 82pt tall. A module whose page has
+controls opens with a `ModuleControlBar` holding only those controls (Overview's
+chart focus and time range, Processes' scope, Launch Services' reload); a module
+without controls opens on its content. Storage's *Scan Now* sits on the
+breakdown card it re-measures, and a remote device is named by its reachability
+card. Its second card is labelled **Modules**, not
 "Go deeper": the rows under it are exactly `ConsoleModule.allCases`, the same six
 names the picker and the View menu use, and a section label names its contents
 rather than instructing the reader.
@@ -985,7 +990,9 @@ capability has.
 <!-- menu-bar-items: fleet -->
 
 `MenuBarItemController` owns the status item, the popover and the dropdown menu,
-and renders a `Summary` (glyph, text, tint, tooltip, accessibility label). A
+and renders a `Summary` (meters, alert, tint, tooltip, accessibility label)
+through `MenuBarItemController.render`, which the surface sheet's
+`menubar-*.png` captures draw through too. A
 surface supplies content and a summary closure; it knows nothing about
 `NSStatusItem`.
 
@@ -994,7 +1001,7 @@ pair that turned out to be one subject:
 
 | Item | Glyph | Count shown | Tint |
 |---|---|---|---|
-| **Fleet** | `FleetWordmark` — the geometric F, a template image | CPU and RAM, plus an attention count or Offline | red critical / orange warning or waiting |
+| **Fleet** | `MenuBarMeters` — CPU · RAM · DISK, label over value, one template image | an attention count or Offline after the meters, nothing otherwise | the alert only: red critical / orange warning or waiting |
 
 Servers and Agents went first: an agent *owns* services, so they were one subject
 split across two icons. Connections followed. They are now the three sections of
@@ -1015,8 +1022,11 @@ and compares that set against the list in the comment, in **both** directions.
 Adding an item the docs do not name fails; leaving an item named here after it is
 gone fails too, which is the half a one-way check would have missed.
 
-The glyph is **fixed**, the same *symbol = identity, tint = status* rule as every
-row. The first version morphed it with state — checkmark → question mark →
+The silhouette is **fixed**: three meter columns, each as wide as its widest
+possible value ("100%"), so the item keeps one width and every number keeps one
+position however the readings move. That is the same *symbol = identity, tint =
+status* rule as every row, and the reason a drawn wordmark was retired: the
+readings are the identity now. The first version morphed it with state — checkmark → question mark →
 warning triangle. That destroyed the one thing a menu-bar icon must have: a
 constant shape you can find without reading. It was also actively misleading,
 since `questionmark.circle` reads as a Help menu, and the count it showed was
@@ -1028,13 +1038,40 @@ more thing you learn to stop seeing. Counts use monospaced digits so the item do
 not jitter, and it sets an `autosaveName` so its position survives a relaunch.
 The tooltip carries the detail: ownership, next lease expiry, who is waiting.
 
+### Identity: badge, row and profile card
+
+`Design/OurosIdentity.swift` holds the three pieces every Ouros app wears the
+same way, with the product's mark and words supplied by the caller:
+
+- **`OurosAppBadge`** — the mark on its icon plate at the macOS icon corner
+  ratio. It keeps its own colours in light and dark; it is an icon, not ink.
+- **`OurosIdentityRow`** — badge, product name, one live line.
+- **`OurosProfileCard`** — that row in a card with one ⋯ menu, closing the
+  dashboard sidebar in its bottom-left corner. It replaced the window footer
+  strip (status pip, *Controller connected*, Ouros link, source link): the
+  account and links live in its menu, and its line reads *Controller offline* in
+  the bad tone only when that is true.
+
+FleetConsole's mark is the engraved emblem, `Sources/FleetConsoleApp/Brand/fleet-emblem.png`
+— ink on a transparent ground, loaded by `FleetBrand.emblem` and printed on the
+`FleetBrand.paper` plate. `Scripts/make-icon.sh` draws the app icon from the same
+file, so the Dock icon and the in-app badge are one picture.
+
 ### Popover sections
 
-<!-- popover-sections: Services, Agents, Processes, Connections -->
+<!-- popover-sections: Quick View, Services, Agents, Processes, Connections -->
 
-`FleetSection` — **Services · Agents · Processes · Connections** (labelled
-*Network*, via `menuTitle`). One segmented picker, one body each, and each tab
-carries its own count where a count is something you would act on.
+`FleetSection` — **Quick View · Services · Agents · Processes · Connections**
+(labelled *Network*, via `menuTitle`). One segmented picker, one body each, and
+each tab carries its own count where a count is something you would act on.
+
+The popover has a header and no footer. The header's first row is the app's
+identity — `OurosIdentityRow`: badge, name, and `AppModel.fleetStatusLine` in the
+tone's ink when something is wrong — then *Dashboard*, refresh, and one ⋯ menu
+for configuration and links. The second row is the section picker at the full
+width of the content under it. The status pip, the Ouros link and the source
+link that used to sit in a ribbon under every tab are the identity line and the
+⋯ menu now; nothing is pinned below the content, so a tab ends where it ends.
 
 Processes does not carry one. "Processes 641" is the size of the process table:
 the same number on every Mac at every moment, and nothing you would do anything
@@ -1103,7 +1140,7 @@ a module is added, which is the failure `allCases` and `shortcutIndex` exist to
 prevent.
 
 One command also had three labels: this menu said *Open Dashboard…*, the View
-menu said *Show Console*, and the popover footer's button said *Open Dashboard*.
+menu said *Show Console*, and the popover's Dashboard button said *Open Dashboard*.
 Three names read as three destinations to anyone who has not opened all three.
 It is **Open Dashboard** everywhere now, which is what `README.md` documents.
 `FleetSection.menuTitle` does the same job for the popover's third section, which

@@ -130,7 +130,7 @@ struct EmptyLine: View {
     }
 }
 
-/// Shared popover chrome: the header strip and the footer.
+/// Shared popover chrome: the header strip.
 struct PopoverHeader<Trailing: View>: View {
     let title: String
     let symbol: String
@@ -148,55 +148,5 @@ struct PopoverHeader<Trailing: View>: View {
         }
         .padding(.horizontal, FleetMetrics.gutter)
         .padding(.vertical, 8)
-    }
-}
-
-struct PopoverFooter: View {
-    @Bindable var model: AppModel
-    var trailingLabel: String = "Dashboard"
-    var openDashboard: () -> Void
-
-    var body: some View {
-        FleetFooterRibbon {
-        HStack(spacing: 12) {
-            StatusPip(tone: model.connected ? .good : .bad, size: 7)
-                .accessibilityLabel(model.connected ? "Controller connected" : "Controller offline")
-                .help(model.connected ? "Controller connected" : "Controller not running")
-            Button { model.openURL("https://ouros.md") } label: {
-                HStack(spacing: 4) {
-                    Text("Ouros")
-                    Image(systemName: "arrow.up.right").font(FleetFont.marker)
-                }
-                .font(FleetFont.subtitle)
-                .foregroundStyle(.secondary)
-                .padding(.vertical, 7)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Visit the Ouros website")
-            IconButton(symbol: "chevron.left.forwardslash.chevron.right", help: "FleetConsole source and support") {
-                model.openURL("https://github.com/janestreetshiller/fleet-console")
-            }
-            Spacer(minLength: 8)
-            Button(action: openDashboard) {
-                HStack(spacing: 8) {
-                    Image(systemName: "square.grid.2x2")
-                    Text(trailingLabel)
-                    Image(systemName: "arrow.right").font(FleetFont.micro)
-                }
-                .font(FleetFont.body.weight(.medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(FleetColor.surfaceWash, in: RoundedRectangle(cornerRadius: FleetMetrics.tileCorner))
-                .overlay {
-                    RoundedRectangle(cornerRadius: FleetMetrics.tileCorner)
-                        .strokeBorder(ConsoleColor.hairlineStrong, lineWidth: 1)
-                }
-                .contentShape(RoundedRectangle(cornerRadius: FleetMetrics.tileCorner))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Open Dashboard")
-            .help("Open Dashboard (⌘0)")
-        }
-        }
     }
 }

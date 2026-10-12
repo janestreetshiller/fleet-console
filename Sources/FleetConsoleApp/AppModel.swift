@@ -221,19 +221,34 @@ final class AppModel {
     // actually read. Deleted rather than kept as a seam — the popover is the
     // seam, and a second item would start from it.
 
-    var fleetGlyph: String { "square.stack.3d.up.fill" }
+    /// CPU, RAM and disk, in that order, as the menu bar draws them. A reading
+    /// that has not been taken yet is a dash, never a confident zero.
+    var fleetMeters: [MenuBarMeter] {
+        [MenuBarMeter(label: "CPU",
+                      value: system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"),
+         MenuBarMeter(label: "RAM",
+                      value: system.memory.totalBytes > 0 ? ConsoleFmt.utilPercent(system.memory.usedShare) : "—"),
+         MenuBarMeter(label: "DISK",
+                      value: system.storage.totalBytes > 0 ? ConsoleFmt.utilPercent(system.storage.usedShare) : "—")]
+    }
 
-    /// The one number worth acting on: someone waiting on you, then anything
-    /// wrong, then how many services are actually running.
-    var fleetText: String {
-        let cpu = system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"
-        let memory = system.memory.totalBytes > 0
-            ? ConsoleFmt.utilPercent(system.memory.usedShare) : "—"
-        var text = "CPU \(cpu)  RAM \(memory)"
-        if !connected { text += "  Offline" }
-        else if awaitingReplyCount > 0 { text += "  !\(awaitingReplyCount)" }
-        else if criticalCount + warningCount > 0 { text += "  !\(criticalCount + warningCount)" }
-        return text
+    /// The one thing worth acting on, after the meters: someone waiting on you,
+    /// then anything wrong. Empty when there is nothing to do.
+    var fleetAlert: String {
+        if !connected { return "Offline" }
+        if awaitingReplyCount > 0 { return "!\(awaitingReplyCount)" }
+        if criticalCount + warningCount > 0 { return "!\(criticalCount + warningCount)" }
+        return ""
+    }
+
+    /// The same precedence as one sentence, for the identity rows in the
+    /// popover header and the dashboard sidebar.
+    var fleetStatusLine: String {
+        guard connected else { return "Controller offline" }
+        if awaitingReplyCount > 0 { return "\(awaitingReplyCount) awaiting your answer" }
+        if criticalCount > 0 { return "\(criticalCount) critical · \(warningCount) warning" }
+        if warningCount > 0 { return "\(warningCount) warning" }
+        return "\(runningServices.count) services running"
     }
 
     var fleetTint: StatusTone? {

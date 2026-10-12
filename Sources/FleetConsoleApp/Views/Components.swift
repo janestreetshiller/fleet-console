@@ -427,34 +427,54 @@ struct CoreGrid: View {
     let topology: CPUTopology
 
     var body: some View {
-        HStack(alignment: .bottom, spacing: 10) {
+        // Each cluster is as wide as its cores and no wider, set side by side
+        // from the leading edge. Clusters used to divide the card's width
+        // between them, which parked P halfway across the card with nothing
+        // between it and E. The wrapping grid is only the fallback for a core
+        // count that cannot fit one row.
+        ViewThatFits(in: .horizontal) {
+            clusters(wrapping: false)
+            clusters(wrapping: true)
+        }
+    }
+
+    private func clusters(wrapping: Bool) -> some View {
+        HStack(alignment: .bottom, spacing: 16) {
             if topology.hasClusters,
                let efficiency = topology.efficiencyRange,
                let performance = topology.performanceRange,
                performance.upperBound <= values.count {
-                cluster(label: "E", indices: Array(efficiency))
-                cluster(label: "P", indices: Array(performance))
+                cluster(label: "E", indices: Array(efficiency), wrapping: wrapping)
+                cluster(label: "P", indices: Array(performance), wrapping: wrapping)
             } else {
-                cluster(label: "Cores", indices: Array(values.indices))
+                cluster(label: "Cores", indices: Array(values.indices), wrapping: wrapping)
             }
             Spacer(minLength: 0)
         }
     }
 
-    private func cluster(label: String, indices: [Int]) -> some View {
+    @ViewBuilder
+    private func cluster(label: String, indices: [Int], wrapping: Bool) -> some View {
         VStack(alignment: .leading, spacing: 3) {
-            QuantizedCardGrid(usesLargestIntrinsicWidth: true,
-                              horizontalSpacing: 3, verticalSpacing: 3, quantum: 1) {
-                ForEach(indices, id: \.self) { index in
-                    bar(value: values[index], core: index)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            if wrapping {
+                QuantizedCardGrid(usesLargestIntrinsicWidth: true,
+                                  horizontalSpacing: 3, verticalSpacing: 3, quantum: 1) {
+                    ForEach(indices, id: \.self) { index in
+                        bar(value: values[index], core: index)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    }
                 }
+            } else {
+                HStack(alignment: .bottom, spacing: 3) {
+                    ForEach(indices, id: \.self) { index in bar(value: values[index], core: index) }
+                }
+                .fixedSize()
             }
             Text(label)
                 .font(FleetFont.micro)
                 .foregroundStyle(SurfaceInk.secondary)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: wrapping ? .infinity : nil, alignment: .leading)
     }
 
     private func bar(value: Double, core: Int) -> some View {
