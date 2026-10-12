@@ -110,7 +110,7 @@ was asking you to hold; sections over four datasets is navigation.
 │ NEEDS ATTENTION                                   2 │
 │ ▣ search failed its health check 6 times       12m  │
 │ SERVICES                        6 managed · 5 unman.│
-│ ▣ api    claude · hermes            :8787   2h 3m > │
+│ ▣ api    claude · local            :8787   2h 3m > │
 │ ▣ web    claude · fleet-web         :5173     35m > │
 │ + 9 more…                                           │
 ├─────────────────────────────────────────────────────┤
@@ -186,7 +186,7 @@ Stop and Restart are the only destructive actions in the UI, and both require a 
 that states the exact consequence and the evidence it is acting on:
 
 ```
-Stop “hermes-api”?
+Stop “api-service”?
 PID 41823 (process group 41823), listening on :8787.
 Started 2h11m ago by agent “claude” — purpose: “local API for inbox triage”.
 SIGTERM, then SIGKILL after 10s if it does not exit.
@@ -223,10 +223,10 @@ Agents **must not** spawn persistent processes. They call:
 
 ```bash
 fleetctl launch \
-  --name "hermes-api" --owner "claude" --purpose "local API for inbox triage" \
-  --cwd ~/Workspace/hermes --port 8787 --lease 2h --max-runtime 8h \
+  --name "api-service" --owner "claude" --purpose "local API for inbox triage" \
+  --cwd ~/Workspace/api --port 8787 --lease 2h --max-runtime 8h \
   --health-http http://127.0.0.1:8787/healthz --cpu-warn 80 --mem-warn 1024 \
-  -- python3 -m hermes.api --port 8787
+  -- python3 -m local.api --port 8787
 ```
 
 `fleetctl` returns the **managed service record** as JSON (id, pid, ports, lease expiry).

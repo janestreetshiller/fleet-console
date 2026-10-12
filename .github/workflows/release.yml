@@ -1,0 +1,75 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, sign, notarize and publish
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      FLEETCONSOLE_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      FLEETCONSOLE_NOTARY_PROFILE: fleetconsole-notary
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run the Swift test suite
+        run: swift test --disable-index-store -Xswiftc -disable-cmo
+
+      - name: Import Developer ID signing certificate
+        if: env.FLEETCONSOLE_IDENTITY != ''
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          p12-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+
+      - name: Store notary credentials
+        if: env.FLEETCONSOLE_IDENTITY != ''
+        run: |
+          xcrun notarytool store-credentials fleetconsole-notary \
+            --key "$APPLE_NOTARY_KEY" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID"
+        env:
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+
+      - name: Production build (signed when secrets exist, ad-hoc otherwise)
+        run: |
+          if [ -n "$FLEETCONSOLE_IDENTITY" ]; then
+            FLEETCONSOLE_OUTPUT_DIR="$PWD/stage" Scripts/build-app.sh release
+          else
+            echo "::notice::Developer ID secrets not present; building ad-hoc (FLEETCONSOLE_IDENTITY=-)"
+            FLEETCONSOLE_IDENTITY=- FLEETCONSOLE_OUTPUT_DIR="$PWD/stage" Scripts/build-app.sh release
+          fi
+
+      - name: Notarize and staple the app
+        if: env.FLEETCONSOLE_IDENTITY != ''
+        run: Scripts/notarize.sh
+
+      - name: Package the DMG
+        if: env.FLEETCONSOLE_IDENTITY != ''
+        run: Scripts/package-dmg.sh "$PWD/stage"
+
+      - name: Archive the app for direct download
+        if: env.FLEETCONSOLE_IDENTITY != ''
+        working-directory: stage
+        run: |
+          ditto -c -k --keepParent FleetConsole.app FleetConsole-macos-arm64.zip
+          shasum -a 256 FleetConsole-macos-arm64.zip > FleetConsole-macos-arm64.zip.sha256
+
+      - name: Publish artifacts to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            stage/FleetConsole.dmg
+            stage/FleetConsole.dmg.sha256
+            stage/FleetConsole-macos-arm64.zip
+            stage/FleetConsole-macos-arm64.zip.sha256
+          generate_release_notes: true

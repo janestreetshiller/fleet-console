@@ -1,11 +1,10 @@
 import SwiftUI
 
-// The chrome tool rail — the seam shared by the three panels that hang off the
-// console window's chrome: a terminal, a Yazi file surface, and a local-model
-// interpreter.
+// The chrome tool rail — the seam shared by the panels that hang off the
+// console window's chrome: a terminal and a Yazi file surface.
 //
 // This file exists for one reason. The panels live in a spring-loaded sidebar
-// field, and two of the three are backed by a PTY running a full-screen TUI. A
+// field, and both are backed by a PTY running a full-screen TUI. A
 // panel whose width animates would hand that TUI a new column count on every
 // frame of the spring, and Yazi would redraw through the whole animation — the
 // tearing this design is explicitly meant to avoid. So geometry is never
@@ -15,13 +14,12 @@ import SwiftUI
 
 // MARK: - Identity
 
-/// The three chrome tools. One case per toggle in the window chrome; the rail
+/// The chrome tools. One case per toggle in the window chrome; the rail
 /// draws itself from `allCases`, so adding a tool here is the only edit needed
 /// to give it a toggle.
 enum ConsoleTool: String, CaseIterable, Identifiable, Sendable {
     case terminal
     case files
-    case interpreter
 
     var id: String { rawValue }
 
@@ -29,18 +27,14 @@ enum ConsoleTool: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .terminal: return "Terminal"
         case .files: return "Files"
-        case .interpreter: return "Interpret"
         }
     }
 
-    /// Chrome toggle glyph. Deliberately plain SF Symbols — the interpreter gets
-    /// `stethoscope` rather than a sparkle because what it runs is
-    /// `orcs debug`, evidence-first diagnosis, not a chat assistant.
+    /// Chrome toggle glyph. Deliberately plain SF Symbols.
     var symbol: String {
         switch self {
         case .terminal: return "terminal"
         case .files: return "folder"
-        case .interpreter: return "stethoscope"
         }
     }
 
@@ -52,17 +46,13 @@ enum ConsoleTool: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .terminal: return "t"
         case .files: return "f"
-        case .interpreter: return "d"
         }
     }
 
-    /// Whether this tool drives a pseudo-terminal. The interpreter does not — it
-    /// shells out once per request and renders text — so it is exempt from the
-    /// grid discipline below and may resize freely.
+    /// Whether this tool drives a pseudo-terminal.
     var isPTYBacked: Bool {
         switch self {
         case .terminal, .files: return true
-        case .interpreter: return false
         }
     }
 }
@@ -185,13 +175,12 @@ final class ToolResizeCoalescer {
 
 /// What a tool should open against. Assembled by the chrome from the console's
 /// current selection so that opening the file surface on a selected service
-/// lands in that service's working directory rather than `$HOME`, and the
-/// interpreter is told what the operator is actually looking at.
+/// lands in that service's working directory rather than `$HOME`.
 struct ToolContext: Equatable, Sendable {
     /// Working directory for a PTY-backed tool.
     var workingDirectory: URL
-    /// Human-readable description of the current selection, for the interpreter's
-    /// prompt and for the panel's header.
+    /// Human-readable description of the current selection, for the panel's
+    /// header.
     var subject: String
     /// The selected service's id, when a service is selected.
     var serviceID: String?
@@ -230,14 +219,12 @@ protocol ToolSurface: AnyObject {
     func resize(to grid: TerminalGrid)
 
     /// Toggle-off. Whether this tears down the child process or leaves it warm
-    /// is the surface's decision — a shell with scrollback is worth keeping, a
-    /// finished interpreter request is not.
+    /// is the surface's decision — a shell with scrollback is worth keeping.
     func deactivate()
 
-    /// The panel's content. Type-erased on purpose: the host embeds three
-    /// unrelated surfaces (two `NSViewRepresentable` PTY wrappers and one plain
-    /// SwiftUI view) behind one rail, and the rail should not be generic over
-    /// which one is showing.
+    /// The panel's content. Type-erased on purpose: the host embeds the
+    /// `NSViewRepresentable` PTY wrappers behind one rail, and the rail should
+    /// not be generic over which one is showing.
     func makeView() -> AnyView
 }
 
@@ -253,7 +240,6 @@ final class ToolSurfaceRegistry {
         switch tool {
         case .terminal: made = TerminalPanel()
         case .files: made = FilesPanel()
-        case .interpreter: made = InterpreterPanel()
         }
         surfaces[tool] = made
         return made

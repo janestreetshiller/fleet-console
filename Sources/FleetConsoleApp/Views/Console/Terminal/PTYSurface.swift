@@ -20,7 +20,7 @@ import SwiftUI
 // MARK: - Published cell metrics
 
 /// Additive to `ToolSurface` rather than folded into it: the seam file is shared
-/// with the rail and the interpreter, and only the two pty-backed panels have a
+/// with the rail, and only the two pty-backed panels have a
 /// cell to publish. The host reaches for this with `as?` when it needs to turn a
 /// panel's pixel size into a grid.
 @MainActor

@@ -33,7 +33,7 @@ clear `broadcastInFlight`, leaving the daemon believing a broadcast was still in
 flight and never sending another. Binding once at the top makes the block
 all-or-nothing.
 
-**`OrcsInvocation`'s termination handler** — the same double-load shape, plus
+**The removed tool panel's invocation termination handler** — the same double-load shape, plus
 `process.terminationStatus` being read from the queue block rather than from the
 handler that owns the process. Both fixed by binding once and reading the status
 eagerly.
@@ -44,7 +44,7 @@ unconditional; only the registry write is guarded.
 ## Where an annotation was the honest answer
 
 This migration added seven `@unchecked Sendable` annotations (three others —
-`HostSampler`, `ProcessReaper`, `OrcsInvocation` — predate it). In each case the
+`HostSampler`, `ProcessReaper`, the tool invocation handler — predate it). In each case the
 safety argument is written at the declaration rather than assumed:
 
 - **`SocketConnection`** — two *different* disciplines, which is why it needed

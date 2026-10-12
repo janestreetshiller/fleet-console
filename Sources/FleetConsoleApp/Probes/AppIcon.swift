@@ -11,7 +11,7 @@ import SwiftUI
 //
 //   1. **The process is the app.** `NSRunningApplication(processIdentifier:)`
 //      answers for anything registered with the window server, and its `icon` is
-//      that app's own artwork. This covers Claude.app, ChatGPT.app, Hermes.app,
+//      that app's own artwork. This covers Claude.app, ChatGPT.app,
 //      Music.app and every other bundled process in the maps — most of the large
 //      tiles on the process map, as it happens.
 //
@@ -56,7 +56,7 @@ enum AppIcon {
     /// looked up through `bundleIdentifier(forTool:)` rather than by subscript.
     /// It used to be keyed on display names — `"Claude Code"`, `"Codex"`,
     /// `"Gemini CLI"` — and every caller subscripted it with `session.tool`,
-    /// which is `codex`, `claude`, `orcs`. Not one lookup could ever match, so
+    /// which is `codex`, `claude`, and friends. Not one lookup could ever match, so
     /// every agent everywhere fell through to the generic symbol tile and the
     /// whole `AppGlyph` path was dead on arrival. Two of the four keys were not
     /// even the shape of a tool name: nothing is ever called "Gemini CLI" by

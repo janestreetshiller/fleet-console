@@ -220,7 +220,7 @@ the agent share a uid, and this was always an accountability boundary.
 
 - **No elevation, of any kind.** Runs as the logged-in user. No setuid path, no
   `SMJobBless` helper, no authorization prompt, no root. Identical uid to everything else.
-- **No new listener.** A PTY is not a socket. The interpreter spawns `orcs` as a one-shot
+- **No new listener.** A PTY is not a socket. A tool panel spawns its child as a one-shot
   child process and never starts a server, binds a port, or manages a model lifecycle, so
   T5's "no network socket, ever" is unchanged and remains true.
 - **Yazi is a fixed argv with no shell interposed.** A missing binary renders an

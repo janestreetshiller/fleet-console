@@ -194,7 +194,7 @@ final class ChromeTools {
     }
 
     /// True when the settled grid cannot honestly draw a full-screen TUI. Only
-    /// PTY-backed tools ever settle a grid, so the interpreter never trips this.
+    /// PTY-backed tools ever settle a grid.
     var isTooNarrow: Bool {
         guard let grid = settledGrid else { return false }
         return !grid.fitsMinimum

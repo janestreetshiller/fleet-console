@@ -426,8 +426,7 @@ enum SurfaceRenderer {
         // frame drawn and the emulator body **blank**. `cacheDisplay` walks the
         // AppKit drawing path, and SwiftTerm renders the grid through its own
         // Metal layer, which that path cannot see — the same reason the package
-        // compiles a .metal shader at build time. Interpret, which is ordinary
-        // SwiftUI, captures in full.
+        // compiles a .metal shader at build time.
         //
         // Capturing the emulator would mean CGWindowListCreateImage, which needs
         // Screen Recording consent and would put a permission prompt in the
@@ -514,7 +513,7 @@ enum Fixtures {
               purpose: "trusted wired"),
     ]
 
-    static let healthyServiceID = "svc-hermes-api"
+    static let healthyServiceID = "svc-api"
     static let crashedServiceID = "svc-indexer"
     static let unmanagedID = "44460:a1b2"
     static let peerDeviceID = "peer"
@@ -546,8 +545,8 @@ enum Fixtures {
             ServiceRecord(
                 id: healthyServiceID, friendlyName: "api", ownerAgent: "claude",
                 purpose: "local API for triage",
-                command: ["python3", "-m", "hermes.api"],
-                cwd: "\(homePath)/Workspace/hermes",
+                command: ["python3", "-m", "local.api"],
+                cwd: "\(homePath)/Workspace/api",
                 pid: 48122, pgid: 48122, startSignature: "1a2b3c",
                 declaredPorts: [8787], startedAt: ago(7_400),
                 leaseExpiresAt: Date().addingTimeInterval(4_180), leaseTTLSec: 7_200,
@@ -581,10 +580,10 @@ enum Fixtures {
 
             // Degraded: passing its check, breaching a budget.
             ServiceRecord(
-                id: "svc-embed", friendlyName: "embed", ownerAgent: "orcs",
+                id: "svc-embed", friendlyName: "embed", ownerAgent: "local",
                 purpose: "embedding worker for local search",
-                command: ["python3", "-m", "orcs.embed", "--batch", "64"],
-                cwd: "\(homePath)/Workspace/orcs",
+                command: ["python3", "-m", "embed.worker", "--batch", "64"],
+                cwd: "\(homePath)/Workspace/embed",
                 pid: 52741, pgid: 52741, startSignature: "7g8h9i",
                 declaredPorts: [], startedAt: ago(5_600),
                 leaseExpiresAt: Date().addingTimeInterval(2_400), leaseTTLSec: 7_200,
@@ -637,7 +636,7 @@ enum Fixtures {
             // Crashed: exited without being asked to. Terminal, so it drops out
             // of `activeServices` and only shows where history is shown.
             ServiceRecord(
-                id: crashedServiceID, friendlyName: "indexer", ownerAgent: "orcs",
+                id: crashedServiceID, friendlyName: "indexer", ownerAgent: "local",
                 purpose: "nightly re-index of the workspace",
                 command: ["cargo", "run", "--release", "--bin", "indexer"],
                 cwd: "\(homePath)/Workspace/indexer",

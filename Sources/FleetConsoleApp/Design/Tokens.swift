@@ -82,7 +82,7 @@ enum ConsoleMetrics {
     /// Common peer footprints round up from their largest content measurement.
     static let gridQuantum: CGFloat = 8
     static let popoverMetricMinWidth: CGFloat = 89
-    static let interpreterPresetMaxHeight: CGFloat = 233
+    static let interpreterPresetMaxHeight: CGFloat = 233 // retained metric; the interpreter panel is gone
     /// Inset a panel's content from its own edges — the welcome's header and
     /// footer bars. Smaller than a card's interior, because a panel edge is
     /// already a boundary and needs less air than content inside it.

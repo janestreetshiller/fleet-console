@@ -103,11 +103,9 @@ on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 
 ## Tools and keyboard access
 
-The dashboard's **Tools** menu opens Terminal, Files, and Interpret. Terminal is
+The dashboard's **Tools** menu opens Terminal and Files. Terminal is
 your shell; commands entered there become supervised only when launched through
-`fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi). Interpret drives optional
-local-model inference through a CLI named `orcs` on your PATH; without it the
-panel explains what is missing.
+`fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi).
 
 | Action | Shortcut |
 |---|---|
@@ -117,7 +115,7 @@ panel explains what is missing.
 | Needs Attention | ⇧⌘H |
 | Search / Refresh | ⌘K / ⌘R |
 | Toggle inspector | ⌥⌘I |
-| Terminal / Files / Interpret | ⇧⌘T / ⇧⌘F / ⇧⌘D |
+| Terminal / Files | ⇧⌘T / ⇧⌘F |
 
 ## Linked devices and AI credits
 
