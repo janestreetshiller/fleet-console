@@ -26,9 +26,11 @@ measurements. Review public captures from the deterministic renderer individuall
 
 Read [the README](../README.md), run the Swift and Rust checks, and stage an app
 with a fresh output directory. Local monitoring and controller tools are free;
-optional multi-device access uses Ouros. Local app builds use ad-hoc signatures.
-A shared macOS download follows the Developer ID and Apple ticket checks in the
-release guide, using the maintainer's existing credentials.
+optional multi-device access uses Ouros. Local development builds can use ad-hoc
+signatures. The prepared macOS preview download has a Developer ID signature,
+Apple's accepted notarization and a validated stapled ticket; the extracted ZIP
+also passes Gatekeeper and deep strict signature checks. Follow the release guide
+with the maintainer's existing credentials for subsequent candidates.
 
 Agent clients launch managed services through `fleetctl`, with an owner, purpose
 and lease. They read `list`, `show`, `logs`, `events` and `doctor` before acting.

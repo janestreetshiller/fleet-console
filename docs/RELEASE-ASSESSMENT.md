@@ -94,7 +94,10 @@ source-archive instructions. The private Git repository preserves its existing
 history; the reviewed source archive contains the current tree and its license
 notices, with machine-local instruction adapters excluded through `.gitattributes`.
 The README and launch announcement are ready for editorial use. The staged app
-and source snapshot live together in the project release folder. Local app staging
-and its signatures are checked separately from Apple ticket acceptance; the
-configured FleetConsole Apple credential profile requires maintainer setup for
-a downloadable release.
+and source snapshot live together in the project release folder. The macOS preview
+is Developer ID signed with hardened runtime; Apple accepted submission
+`71d1f3d9-c78b-403c-8cc4-ecbcfa5bcd0c`. Its stapled ticket, Gatekeeper acceptance
+(`Notarized Developer ID`) and deep strict signature were verified again after
+extracting the downloadable ZIP. Signing and authentication used the existing
+credentials in the logged-in GUI session. An SSH Background session's keychain
+status alone does not establish whether the logged-in user's release route works.
