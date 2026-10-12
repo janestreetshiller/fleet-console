@@ -1,6 +1,6 @@
 # Public source boundary
 
-FleetConsole uses a freemium distribution model: local monitoring and service management are free, with optional Ouros multi-device access at $10 USD/month.
+FleetConsole uses a freemium distribution model: local monitoring and service management are free, with optional Ouros multi-device access at $10 USD/month from Ouros AI, LLC.
 
 The public repository is https://github.com/janestreetshiller/fleet-console-core. Its MIT source snapshot includes:
 

@@ -10,7 +10,7 @@ FleetCore, the controller, CLI and Rust protocol are published under MIT; the
 native UI source remains private. Local monitoring and service control are free.
 The public source and downloads live at
 https://github.com/janestreetshiller/fleet-console-core.
-Optional multi-device access costs $10 USD/month through Ouros. Connect your Ouros
+Optional multi-device access costs $10 USD/month through Ouros, operated by Ouros AI, LLC. Connect your Ouros
 account in Devices, refresh the subscription options, and complete secure checkout;
 refresh your subscription to link additional computers.
 SwiftTerm retains its own MIT notices.
