@@ -22,6 +22,7 @@ struct AgentsContent: View {
                            fixer: fixer, billing: model.ourosBilling,
                            register: { sheet = .register }, mailbox: { sheet = .mailbox },
                            manage: { sheet = .manage },
+                           dismiss: { model.dismissMessages($0) },
                            sendToFixer: { fixerProblem = model.sendToFixer(model.attention, openDashboard: openDashboard) })
             .sheet(item: $sheet) { destination in
                 if destination == .mailbox {
@@ -72,6 +73,7 @@ struct AgentGlanceContent: View {
     var register: () -> Void
     var mailbox: () -> Void
     var manage: () -> Void
+    var dismiss: ([Int64]) -> Void = { _ in }
     var sendToFixer: () -> Void = {}
 
     static let visibleMessages = 3
@@ -87,6 +89,14 @@ struct AgentGlanceContent: View {
             HStack(spacing: 8) {
                 Text("Messages").font(FleetFont.sectionLabel)
                 Spacer(minLength: 4)
+                if !messages.isEmpty {
+                    Button("Clear") { dismiss(messages.map(\.id)) }
+                        .buttonStyle(.plain)
+                        .font(FleetFont.caption)
+                        .foregroundStyle(SurfaceInk.secondary)
+                        .help("Dismiss every message from this list. Agents keep their history in fleetctl inbox.")
+                        .accessibilityIdentifier("agents.messages.clear")
+                }
                 Button(pendingReplyCount > 0 ? "\(pendingReplyCount) waiting" : "Mailbox (\(messageCount))",
                        action: mailbox)
                     .controlSize(.small)
@@ -101,8 +111,12 @@ struct AgentGlanceContent: View {
                         .frame(height: 28, alignment: .leading)
                 } else {
                     ForEach(messages.prefix(Self.visibleMessages)) { message in
-                        Button(action: mailbox) { AgentMessageLine(message: message) }
-                            .buttonStyle(.plain)
+                        HStack(spacing: 2) {
+                            Button(action: mailbox) { AgentMessageLine(message: message) }
+                                .buttonStyle(.plain)
+                            IconButton(symbol: "xmark", help: "Dismiss this message") { dismiss([message.id]) }
+                                .accessibilityIdentifier("agents.message.dismiss.\(message.id)")
+                        }
                     }
                 }
             }
@@ -333,6 +347,10 @@ struct AgentsMailboxSheet: View {
             HStack {
                 Text("Mailbox (\(pendingIDs.count + answered.count))").font(FleetFont.title)
                 Spacer()
+                if !model.recentMessages.isEmpty {
+                    Button("Clear All") { model.dismissMessages(model.recentMessages.map(\.id)) }
+                        .help("Dismiss every message here. Agents keep their history in fleetctl inbox.")
+                }
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             .padding(FleetMetrics.gutter)
@@ -517,6 +535,9 @@ struct MessageRow: View {
                         Spacer()
                         Text(Fmt.relative(message.createdAt))
                             .font(FleetFont.micro).foregroundStyle(SurfaceInk.secondary)
+                        IconButton(symbol: "xmark", help: "Dismiss this message") {
+                            model.dismissMessages([message.id])
+                        }
                     }
                     Text(message.body)
                         .font(FleetFont.subtitle)

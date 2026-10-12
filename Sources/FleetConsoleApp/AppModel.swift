@@ -157,11 +157,12 @@ final class AppModel {
         if agentSummaries != agents { agentSummaries = agents }
         let profiles = snapshot.agentProfiles
         if agentProfiles != profiles { agentProfiles = profiles }
-        if recentMessages != snapshot.messages {
-            let previouslyKnown = Set(recentMessages.map(\.id))
-            recentMessages = snapshot.messages
+        if mailbox != snapshot.messages {
+            let previouslyKnown = Set(mailbox.map(\.id))
+            mailbox = snapshot.messages
+            recentMessages = mailbox.filter { !dismissals.contains($0.id) }
             // Notify once, for messages we have not seen before.
-            let fresh = snapshot.messages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
+            let fresh = recentMessages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
             if !didInitialLoad {
                 didInitialLoad = true          // don't replay the backlog on launch
             } else {
@@ -193,7 +194,12 @@ final class AppModel {
 
     private(set) var agentSummaries: [AgentSummary] = []
     private(set) var agentProfiles: [AgentProfile] = []
+    /// The mailbox as the operator sees it: everything the controller holds,
+    /// less what was dismissed here.
     private(set) var recentMessages: [AgentMessage] = []
+    /// The controller's mailbox, unfiltered.
+    @ObservationIgnored private var mailbox: [AgentMessage] = []
+    @ObservationIgnored private let dismissals = MessageDismissals()
     private(set) var externalServices: [ExternalService] = []
     private(set) var sessions: [AgentSession] = []
 
@@ -440,6 +446,15 @@ final class AppModel {
         perform(RPCRequest(op: .reply, body: text, messageID: message.id), serviceID: nil)
     }
 
+    /// Takes messages off every surface — the Agents tab, the mailbox, Home and
+    /// the menu-bar count. A view decision, not a deletion: the controller keeps
+    /// its history, so `fleetctl inbox` still shows an agent what it said.
+    func dismissMessages(_ ids: [Int64]) {
+        guard !ids.isEmpty else { return }
+        dismissals.insert(ids)
+        recentMessages = mailbox.filter { !dismissals.contains($0.id) }
+    }
+
     func markMessagesSeen() {
         guard DaemonClient.shared.requestPolicy.allows(.markSeen) else { return }
         guard recentMessages.contains(where: { $0.seenAt == nil }) else { return }
@@ -529,5 +544,28 @@ final class AppModel {
 
     func openConfigFile() {
         NSWorkspace.shared.open(FleetPaths.config)
+    }
+}
+
+/// Dismissed message IDs, kept in user defaults. Bounded: message IDs only
+/// grow, so the oldest dismissals are the ones the controller has already
+/// rotated out of the snapshot.
+final class MessageDismissals {
+    private static let key = "fleetconsole.dismissedMessages"
+    private static let limit = 2_000
+    private let defaults: UserDefaults
+    private var ids: Set<Int64>
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        ids = Set((defaults.array(forKey: Self.key) as? [NSNumber] ?? []).map(\.int64Value))
+    }
+
+    func contains(_ id: Int64) -> Bool { ids.contains(id) }
+
+    func insert(_ new: [Int64]) {
+        ids.formUnion(new)
+        if ids.count > Self.limit { ids = Set(ids.sorted().suffix(Self.limit)) }
+        defaults.set(ids.sorted().map(NSNumber.init(value:)), forKey: Self.key)
     }
 }
