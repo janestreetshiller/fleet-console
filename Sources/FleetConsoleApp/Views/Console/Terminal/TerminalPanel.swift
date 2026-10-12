@@ -88,6 +88,12 @@ final class TerminalPanel: PTYBackedSurface {
         )
     }
 
+    /// Runs one command line in the panel's shell, as if typed and entered.
+    func run(_ commandLine: String) {
+        session.send(commandLine + "\r")
+        session.focusTerminal()
+    }
+
     // MARK: Private
 
     private func makeLaunch(dir: URL) -> PTYSession.Launch {

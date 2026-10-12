@@ -157,11 +157,12 @@ final class AppModel {
         if agentSummaries != agents { agentSummaries = agents }
         let profiles = snapshot.agentProfiles
         if agentProfiles != profiles { agentProfiles = profiles }
-        if recentMessages != snapshot.messages {
-            let previouslyKnown = Set(recentMessages.map(\.id))
-            recentMessages = snapshot.messages
+        if mailbox != snapshot.messages {
+            let previouslyKnown = Set(mailbox.map(\.id))
+            mailbox = snapshot.messages
+            recentMessages = mailbox.filter { !dismissals.contains($0.id) }
             // Notify once, for messages we have not seen before.
-            let fresh = snapshot.messages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
+            let fresh = recentMessages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
             if !didInitialLoad {
                 didInitialLoad = true          // don't replay the backlog on launch
             } else {
@@ -193,7 +194,12 @@ final class AppModel {
 
     private(set) var agentSummaries: [AgentSummary] = []
     private(set) var agentProfiles: [AgentProfile] = []
+    /// The mailbox as the operator sees it: everything the controller holds,
+    /// less what was dismissed here.
     private(set) var recentMessages: [AgentMessage] = []
+    /// The controller's mailbox, unfiltered.
+    @ObservationIgnored private var mailbox: [AgentMessage] = []
+    @ObservationIgnored private let dismissals = MessageDismissals()
     private(set) var externalServices: [ExternalService] = []
     private(set) var sessions: [AgentSession] = []
 
@@ -221,19 +227,34 @@ final class AppModel {
     // actually read. Deleted rather than kept as a seam — the popover is the
     // seam, and a second item would start from it.
 
-    var fleetGlyph: String { "square.stack.3d.up.fill" }
+    /// CPU, RAM and disk, in that order, as the menu bar draws them. A reading
+    /// that has not been taken yet is a dash, never a confident zero.
+    var fleetMeters: [MenuBarMeter] {
+        [MenuBarMeter(label: "CPU",
+                      value: system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"),
+         MenuBarMeter(label: "RAM",
+                      value: system.memory.totalBytes > 0 ? ConsoleFmt.utilPercent(system.memory.usedShare) : "—"),
+         MenuBarMeter(label: "DISK",
+                      value: system.storage.totalBytes > 0 ? ConsoleFmt.utilPercent(system.storage.usedShare) : "—")]
+    }
 
-    /// The one number worth acting on: someone waiting on you, then anything
-    /// wrong, then how many services are actually running.
-    var fleetText: String {
-        let cpu = system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"
-        let memory = system.memory.totalBytes > 0
-            ? ConsoleFmt.utilPercent(system.memory.usedShare) : "—"
-        var text = "CPU \(cpu)  RAM \(memory)"
-        if !connected { text += "  Offline" }
-        else if awaitingReplyCount > 0 { text += "  !\(awaitingReplyCount)" }
-        else if criticalCount + warningCount > 0 { text += "  !\(criticalCount + warningCount)" }
-        return text
+    /// The one thing worth acting on, after the meters: someone waiting on you,
+    /// then anything wrong. Empty when there is nothing to do.
+    var fleetAlert: String {
+        if !connected { return "Offline" }
+        if awaitingReplyCount > 0 { return "!\(awaitingReplyCount)" }
+        if criticalCount + warningCount > 0 { return "!\(criticalCount + warningCount)" }
+        return ""
+    }
+
+    /// The same precedence as one sentence, for the identity rows in the
+    /// popover header and the dashboard sidebar.
+    var fleetStatusLine: String {
+        guard connected else { return "Controller offline" }
+        if awaitingReplyCount > 0 { return "\(awaitingReplyCount) awaiting your answer" }
+        if criticalCount > 0 { return "\(criticalCount) critical · \(warningCount) warning" }
+        if warningCount > 0 { return "\(warningCount) warning" }
+        return "\(runningServices.count) services running"
     }
 
     var fleetTint: StatusTone? {
@@ -425,6 +446,15 @@ final class AppModel {
         perform(RPCRequest(op: .reply, body: text, messageID: message.id), serviceID: nil)
     }
 
+    /// Takes messages off every surface — the Agents tab, the mailbox, Home and
+    /// the menu-bar count. A view decision, not a deletion: the controller keeps
+    /// its history, so `fleetctl inbox` still shows an agent what it said.
+    func dismissMessages(_ ids: [Int64]) {
+        guard !ids.isEmpty else { return }
+        dismissals.insert(ids)
+        recentMessages = mailbox.filter { !dismissals.contains($0.id) }
+    }
+
     func markMessagesSeen() {
         guard DaemonClient.shared.requestPolicy.allows(.markSeen) else { return }
         guard recentMessages.contains(where: { $0.seenAt == nil }) else { return }
@@ -514,5 +544,28 @@ final class AppModel {
 
     func openConfigFile() {
         NSWorkspace.shared.open(FleetPaths.config)
+    }
+}
+
+/// Dismissed message IDs, kept in user defaults. Bounded: message IDs only
+/// grow, so the oldest dismissals are the ones the controller has already
+/// rotated out of the snapshot.
+final class MessageDismissals {
+    private static let key = "fleetconsole.dismissedMessages"
+    private static let limit = 2_000
+    private let defaults: UserDefaults
+    private var ids: Set<Int64>
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        ids = Set((defaults.array(forKey: Self.key) as? [NSNumber] ?? []).map(\.int64Value))
+    }
+
+    func contains(_ id: Int64) -> Bool { ids.contains(id) }
+
+    func insert(_ new: [Int64]) {
+        ids.formUnion(new)
+        if ids.count > Self.limit { ids = Set(ids.sorted().suffix(Self.limit)) }
+        defaults.set(ids.sorted().map(NSNumber.init(value:)), forKey: Self.key)
     }
 }

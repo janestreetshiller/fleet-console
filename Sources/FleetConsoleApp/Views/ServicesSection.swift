@@ -78,7 +78,11 @@ struct ServiceRowView: View {
                           tone: isStale ? .unknown : service.state.tone,
                           badge: service.state.needsAttention ? service.state.tone : nil,
                           title: labels.displayName(for: service),
-                          subtitle: "\(service.state.label)\(isStale ? " · stale" : "") · \(service.ownerAgent) · \(service.projectFolderName)",
+                          // The state beside the name; under it, what the service
+                          // is *for* — the purpose its agent declared at launch.
+                          // The owner and project are in the tooltip and detail.
+                          titleDetail: service.state.label + (isStale ? " · stale" : ""),
+                          subtitle: service.purpose,
                           trailingText: Fmt.duration(service.uptime),
                           trailingMono: true) {
                 if model.busyServiceIDs.contains(service.id) {
@@ -111,7 +115,8 @@ struct ServiceRowView: View {
     }
 
     private var rowHelp: String {
-        var parts = [labels.displayName(for: service), service.state.label, service.purpose]
+        var parts = [labels.displayName(for: service), "\(service.state.label): \(service.state.meaning)",
+                     service.purpose, "owned by \(service.ownerAgent) in \(service.projectFolderName)"]
         if let color = labels.label(for: service.id).color { parts.append("\(color.label) tag") }
         if isStale { parts.append("Status not refreshed recently") }
         return parts.joined(separator: " — ")

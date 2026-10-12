@@ -41,7 +41,6 @@ struct ConsoleRootView: View {
             ChromeToolField(model: model, console: console, tools: tools,
                             outerWidth: contentWidth)
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) { DashboardFooter(model: model) }
         // One easing for both sides. `showsInspector` is the value that changes
         // when the inspector is toggled *or* when width takes it away, so both
         // routes animate identically instead of one sliding and one snapping.
