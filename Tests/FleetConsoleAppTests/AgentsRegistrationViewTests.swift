@@ -184,12 +184,7 @@ struct AgentsRegistrationViewTests {
         let point = NSPoint(x: box.midX * view.bounds.width,
                             y: (view.isFlipped ? 1 - box.midY : box.midY) * view.bounds.height)
         let location = view.convert(point, to: nil)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            let event = try #require(NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
-            window.sendEvent(event)
-        }
+        try sendSyntheticClick(at: location, in: window)
         settle()
     }
 

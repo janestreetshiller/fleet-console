@@ -63,6 +63,13 @@ hdiutil create \
 
 rm -rf "$STAGING"
 
+# Sign the disk image with the identity that signed the app. An unsigned image
+# can be notarized and stapled, yet Gatekeeper's install check still rejects it
+# with "no usable signature".
+IDENTITY="$(printf '%s' "$signature" | sed -n 's/^Authority=\(Developer ID Application: .*\)$/\1/p' | head -1)"
+codesign --force --sign "$IDENTITY" --timestamp "$DMG"
+codesign --verify --strict "$DMG"
+
 # Notarize the DMG itself and staple, so the disk image passes Gatekeeper too.
 # Uses the same keychain profile as Scripts/notarize.sh.
 PROFILE="${FLEETCONSOLE_NOTARY_PROFILE:-nokie-notary}"
