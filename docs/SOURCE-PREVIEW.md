@@ -17,4 +17,6 @@ The free macOS app download is published alongside the core source only after De
 
 Use `Scripts/export-public-source.py <fresh-directory> [revision]` from the private release tree. Run `Scripts/test-public-source.py`, inspect the exported manifest, scan the actual export for secrets, and run its own Swift/Rust checks before pushing. Keep runtime receipts private. Public marketing captures must use the current native views, reviewed demo data and explicit fixture provenance.
 
+The prepared macOS download carries a Developer ID signature, Apple's accepted notarization and a validated stapled ticket; the extracted archive also passes Gatekeeper and deep strict signature checks. Local development builds can use ad-hoc signatures; follow the release guide with the maintainer's existing credentials for subsequent candidates.
+
 Agent clients launch through `fleetctl`, with an owner, purpose and lease. Read before acting, renew what is needed, and stop launched work when it ends. Claims add visibility without signalling authority. Paused services retain their resources and postpone expiry cleanup until resumed.

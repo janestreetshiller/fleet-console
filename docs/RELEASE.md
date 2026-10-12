@@ -125,7 +125,20 @@ FLEETCONSOLE_OUTPUT_DIR="$stage" FLEETCONSOLE_NOTARY_PROFILE="$notary_profile" \
   Scripts/notarize.sh
 ```
 
-It submits, staples and validates that artifact; do not create credentials automatically. The equivalent explicit submission is:
+It submits, staples and validates that artifact; do not create credentials automatically.
+
+When invoking release tools over SSH, check the execution context before drawing
+conclusions about keychain availability. `launchctl managername` distinguishes a
+Background session from the logged-in Aqua session. The same installed identity
+can fail in the former while actual signing succeeds in the latter. Run an
+approved, task-specific release script through a background LaunchServices launch
+in the existing GUI session, retain its log, and verify the resulting artifact.
+Preserve keychain ACLs and protection; credentials remain in their existing store.
+Test a configured notary profile against its default store before adding
+`--keychain`: explicitly selecting a file-based login keychain can hide credentials
+that work through the default data-protection store.
+
+The equivalent explicit submission is:
 
 ```bash
 /usr/bin/ditto -c -k --sequesterRsrc --keepParent \
