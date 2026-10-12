@@ -17,13 +17,6 @@ https://github.com/janestreetshiller/fleet-console-core/releases/latest
 
 Local monitoring and service management are free. Optional multi-device access costs $10 USD/month through Ouros (Ouros AI, LLC). The published MIT source covers FleetCore, fleetd, fleetctl and the Rust protocol; the native UI source remains private. Do not promise AI repairs, included inference credits or a donation checkout.
 
-## Private soundtrack reference
-
-The maintainer previously supplied a reference for Freestylers by Dimitri K and Lil Texas:
-https://music.apple.com/nz/album/freestylers-single/1834093807
-
-The existing local edit and soundtrack are private reference material. Possession of that recording is not evidence of commercial clearance. Do not publish it without documented master and synchronization permissions; use a silent cut or a separately cleared soundtrack for launch. Preserve the original private edit and its provenance rather than replacing it.
-
 ## Visual provenance
 
 Record source revision, capture method, fixture/live status, individual capture review, output hash, FFmpeg command and full-decode result alongside each export. Label native fixture renders as demo states and editorial still-image montages as such. Preserve older edits as historical evidence; the current launch pack identifies its replacement assets explicitly.
