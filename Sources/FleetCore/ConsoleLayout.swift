@@ -155,7 +155,8 @@ public enum ConsoleLayout {
     /// was defined to hold was cut off at the floor.
     public static let titlebarReserve: CGFloat = 55
 
-    /// The module header — title, subtitle and the space under them.
+    /// A module's control row and the space under it. Modules carry no title
+    /// row; this is the budget for the controls that replaced it.
     public static let moduleHeaderHeight: CGFloat = 55
 
     /// The module's bottom padding, below the last card.
@@ -182,7 +183,6 @@ public enum ConsoleLayout {
     /// talking.
     public static let minimumContentHeight: CGFloat =
         titlebarReserve + moduleHeaderHeight + cardHeight + moduleBottomPadding
-        + DashboardContentGeometry.footerHeight
 
     /// The complete instrument count, not just the four original metrics.
     /// Avoid a single orphan card when reducing a row still uses available width.

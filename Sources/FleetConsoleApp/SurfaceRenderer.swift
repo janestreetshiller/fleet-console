@@ -88,7 +88,7 @@ enum SurfaceRenderer {
         watch("routing", counts) { _ = model.network.routing }
         watch("processes", counts) { _ = model.processes.rows }
         watch("menu-bar", counts) {
-            _ = model.fleetText; _ = model.fleetTint; _ = model.fleetTooltip
+            _ = model.fleetMeters; _ = model.fleetAlert; _ = model.fleetTint; _ = model.fleetTooltip
         }
 
         let deadline = Date().addingTimeInterval(seconds)
@@ -169,6 +169,7 @@ enum SurfaceRenderer {
 
         for appearance in Appearance.allCases {
             NSApp.appearance = NSAppearance(named: appearance.name)
+            renderMenuBar(model: model, appearance: appearance, into: out)
             renderPopover(model: model, fixture: fixture, registration: registration, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
             renderTaskComposer(registration: registration, appearance: appearance, into: out)
@@ -256,6 +257,40 @@ enum SurfaceRenderer {
     enum Appearance: String, CaseIterable {
         case light, dark
         var name: NSAppearance.Name { self == .light ? .aqua : .darkAqua }
+    }
+
+    // MARK: - Menu bar
+
+    /// The status item on a strip of menu bar, drawn through the same
+    /// `MenuBarItemController.render` the live item uses: once with nothing to
+    /// act on, once with an attention count beside the meters.
+    private static func renderMenuBar(model: AppModel, appearance: Appearance, into out: URL) {
+        let states: [(String, String, StatusTone?)] = [("clear", "", nil), ("alert", "!3", .warn)]
+        for (name, alert, tint) in states {
+            let strip = NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
+            strip.wantsLayer = true
+            strip.layer?.backgroundColor = (appearance == .light
+                ? NSColor(white: 0.93, alpha: 1) : NSColor(white: 0.16, alpha: 1)).cgColor
+            let button = NSButton(frame: .zero)
+            button.isBordered = false
+            button.imagePosition = .imageLeading
+            MenuBarItemController.render(.init(meters: model.fleetMeters, alert: alert, tint: tint,
+                                               tooltip: "", accessibilityLabel: "FleetConsole"),
+                                         on: button)
+            button.sizeToFit()
+            button.setFrameOrigin(NSPoint(x: (strip.bounds.width - button.frame.width) / 2,
+                                          y: (strip.bounds.height - button.frame.height) / 2))
+            strip.addSubview(button)
+            let window = NSWindow(contentRect: strip.frame, styleMask: [.borderless],
+                                  backing: .buffered, defer: false)
+            window.appearance = NSAppearance(named: appearance.name)
+            window.contentView = strip
+            window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
+            window.orderFront(nil)
+            settle(turns: 10)
+            capture(strip, to: out.appendingPathComponent("menubar-\(name)-\(appearance.rawValue).png"))
+            window.orderOut(nil)
+        }
     }
 
     // MARK: - Popover

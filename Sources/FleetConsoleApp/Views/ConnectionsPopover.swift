@@ -31,8 +31,6 @@ struct ConnectionsPopover: View {
                     content
                     Divider()
                     NetworkAdminFooter(model: model)
-                    Divider()
-                    PopoverFooter(model: model, openDashboard: openDashboard)
                 }
                 .frame(width: FleetMetrics.popoverWidth)
             }

@@ -111,6 +111,14 @@ final class ChromeTools {
         registry.surface(for: tool).activate(context: context)
     }
 
+    /// Opens the terminal on `context` and runs `commandLine` in it. The way an
+    /// outside agent is started from inside the app: in a shell you can watch,
+    /// answer and stop, not as a hidden child.
+    func run(_ commandLine: String, in context: ToolContext) {
+        if revealed == .terminal { update(context: context) } else { toggle(.terminal, context: context) }
+        (registry.surface(for: .terminal) as? TerminalPanel)?.run(commandLine)
+    }
+
     func dismiss() {
         guard let tool = revealed else { return }
         coalescers[tool]?.reset()

@@ -16,34 +16,26 @@ struct FleetSidebarView: View {
     @State private var managingDevices = false
 
     var body: some View {
-        // One list, not two. This Mac and the remote nodes were previously split
-        // across an unlabelled section and a "Fleet" section, which drew a
-        // boundary where there is no distinction: they are all machines you own
-        // and all of them are the fleet. The local machine leads because it is
-        // the one every local module describes, and it is marked as *this* one
-        // by its row, not by being fenced off above a header.
+        // Two unlabelled clusters and the devices. The first is this Mac: where
+        // the window opens and the instruments that describe the machine. The
+        // second is the background work on it. Their spacing is the boundary;
+        // a heading over each restated what the rows already say.
         List(selection: navigationSelection) {
-            Section("This Mac") {
+            Section {
+                Label("Needs Attention", systemImage: "exclamationmark.circle")
+                    .tag("attention")
                 ForEach([ConsoleModule.overview, .processes, .storage]) { module in
                     Label(module.rawValue, systemImage: module.symbol)
-                        .font(ConsoleFont.rowTitle)
-                        .padding(.vertical, 3)
                         .tag("module:" + module.rawValue)
                 }
             }
-            Section("Background Work") {
-                Label("Needs Attention", systemImage: "exclamationmark.circle")
-                    .font(ConsoleFont.rowTitle)
-                    .padding(.vertical, 3)
-                    .tag("attention")
+            Section {
                 ForEach([ConsoleModule.services, .events, .plists]) { module in
                     Label(module.rawValue, systemImage: module.symbol)
-                        .font(ConsoleFont.rowTitle)
-                        .padding(.vertical, 3)
                         .tag("module:" + module.rawValue)
                 }
             }
-                Section("Devices") {
+            Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
                         .tag("device:" + row.id)
@@ -51,32 +43,19 @@ struct FleetSidebarView: View {
                 Button { managingDevices = true } label: {
                     Label("Link a Device…", systemImage: "plus.circle")
                 }
+                .buttonStyle(.plain)
+                .foregroundStyle(SurfaceInk.secondary)
                 .help("Multi-device access: $10/month through Ouros")
-                }
+            }
         }
+        .font(ConsoleFont.rowTitle)
         .listStyle(.sidebar)
         // The mesh sits on the page like everything else. Without this the
         // sidebar column paints AppKit's own vibrancy over the field, and the
         // window has one column that is not on the same sheet of paper as the
         // other two.
         .scrollContentBackground(.hidden)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            // The signature: the one place the console signs itself. The mark
-            // is drawn on its construction circle and the name is set as a
-            // plotted legend beside it — the same treatment every plate label
-            // in the app wears, at the one place it is the app's own name.
-            HStack(spacing: 8) {
-                FleetMark(size: 20)
-                Text("FleetConsole")
-                    .font(ConsoleFont.cardTitle)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .accessibilityElement(children: .combine)
-        }
+        .safeAreaInset(edge: .bottom, spacing: 0) { profileCard }
         // The column width is set by `ConsoleRootView`, not here: the resting
         // width is the golden section of whatever the split view has to divide,
         // which is a function of the window and of whether a tool panel is open.
@@ -86,6 +65,30 @@ struct FleetSidebarView: View {
 
         .onAppear { model.refreshDevices() }
         .sheet(isPresented: $managingDevices) { DeviceManagementView(model: model) }
+    }
+
+    /// The bottom-left corner: the app, the account, and the links the window
+    /// footer used to carry. The live line stays quiet unless the controller is
+    /// down, which is the one fact here that changes what the window can do.
+    private var profileCard: some View {
+        OurosProfileCard(title: "FleetConsole", detail: accountLine,
+                         tone: model.connected ? nil : .bad) {
+            FleetBadgeMark(size: $0)
+        } menuItems: {
+            Button("Ouros Account…") { managingDevices = true }
+            Button("Edit Configuration…") { model.openConfigFile() }
+            Divider()
+            Button("Ouros Website") { model.openURL("https://ouros.md") }
+            Button("Source & Support") { model.openURL("https://github.com/janestreetshiller/fleet-console") }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
+    }
+
+    private var accountLine: String {
+        guard model.connected else { return "Controller offline" }
+        if model.ourosBilling.active { return "Ouros · Multi-device" }
+        return model.ourosBilling.signedIn ? "Ouros account" : "Local · Free"
     }
 
     private var navigationSelection: Binding<String> {
@@ -135,23 +138,27 @@ private struct DeviceNodeRow: View {
                        tone: record.health.tone,
                        size: FleetMetrics.iconRowLarge,
                        badge: record.health == .reachable ? nil : record.health.tone)
+            // Name and latency share the first line and the route takes the
+            // second, so the name gets the row's width instead of a third
+            // column of pip and badge squeezing it to "demo-stu…". Health is
+            // the icon's badge, which appears only when something is off.
             VStack(alignment: .leading, spacing: 2) {
-                Text(record.name)
-                    .font(ConsoleFont.rowTitle.weight(.medium))
-                    .lineLimit(1)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(record.name)
+                        .font(ConsoleFont.rowTitle.weight(.medium))
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                    Spacer(minLength: 0)
+                    if let rtt = record.evidence.icmpRTTms, record.health != .unreachable {
+                        ConsoleBadge(text: ConsoleFmt.latency(rtt), tone: latencyTone)
+                            .fixedSize()
+                    }
+                }
                 Text(detailLine)
                     .font(ConsoleFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
-            }
-            Spacer(minLength: 4)
-            VStack(alignment: .trailing, spacing: 3) {
-                StatusPip(tone: record.health.tone, size: 7,
-                          pulsing: record.health == .reachable)
-                if let rtt = record.evidence.icmpRTTms, record.health != .unreachable {
-                    ConsoleBadge(text: ConsoleFmt.latency(rtt), tone: latencyTone)
-                }
             }
         }
         .padding(.vertical, 2)

@@ -1,13 +1,12 @@
 #!/bin/bash
-# Draws Resources/AppIcon.icns from Scripts/appicon/Icon.swift.
+# Draws Resources/AppIcon.icns from Scripts/appicon/Icon.swift and the emblem.
 #
 #   Scripts/make-icon.sh          # regenerate the .icns
 #   Scripts/make-icon.sh --sheet  # also write a contact sheet to build/design
 #
-# The icon is code, not a binary asset: the mark comes from the same geometry
-# MenuBarItem.swift draws, and every size in the iconset is rendered at its own
-# scale rather than downsampled from 1024, so the mesh can thin out as the canvas
-# shrinks. Re-run this after changing either one.
+# The plate is code and the F is Sources/FleetConsoleApp/Brand/fleet-letter.png,
+# the same file the app's mark loads. Every size in the iconset is drawn at its
+# own scale rather than downsampled from 1024. Re-run this after changing either.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -17,7 +16,7 @@ trap 'rm -rf "$(dirname "$ICONSET")"' EXIT
 mkdir -p "$ICONSET" "$ROOT/Resources"
 
 echo "▸ rendering…"
-swift "$ROOT/Scripts/appicon/Icon.swift" "$ICONSET"
+swift "$ROOT/Scripts/appicon/Icon.swift" "$ICONSET" "$ROOT/Sources/FleetConsoleApp/Brand/fleet-letter.png"
 
 echo "▸ packing…"
 iconutil -c icns "$ICONSET" -o "$ROOT/Resources/AppIcon.icns"

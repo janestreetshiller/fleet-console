@@ -75,6 +75,9 @@ struct FleetMark: View {
     /// alone: at 14pt in a bar full of system glyphs, the circle is the
     /// difference between a mark and a smudge.
     var construction = true
+    /// The stroke's ink. White on the app badge's dark plate, the sketch accent
+    /// on the paper.
+    var ink: Color = SketchInk.accent
 
     var body: some View {
         Canvas { context, canvasSize in
@@ -95,14 +98,14 @@ struct FleetMark: View {
             stroke.addLine(to: CGPoint(x: 18 * unit, y: 7 * unit))
             stroke.move(to: CGPoint(x: 8.5 * unit, y: 12.6 * unit))
             stroke.addLine(to: CGPoint(x: 15.2 * unit, y: 12.6 * unit))
-            context.stroke(stroke, with: .color(SketchInk.accent),
+            context.stroke(stroke, with: .color(ink),
                            style: StrokeStyle(lineWidth: SketchMetrics.markStroke * unit,
                                               lineCap: .round, lineJoin: .round))
 
             // The pen-down dot: where the stroke began, left visible.
             context.fill(
                 Path(ellipseIn: CGRect(x: 7 * unit, y: 18 * unit, width: 3 * unit, height: 3 * unit)),
-                with: .color(SketchInk.accent))
+                with: .color(ink))
         }
         .frame(width: size, height: size)
         .accessibilityLabel("FleetConsole")
