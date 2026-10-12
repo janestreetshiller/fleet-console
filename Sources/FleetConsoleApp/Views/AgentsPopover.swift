@@ -162,29 +162,41 @@ struct AgentsManagerSheet: View {
     }
 }
 
-/// All provided messages remain reachable, with pending replies first. Reuse the
-/// existing reply loop rather than routing into a nonexistent dashboard module.
+/// Current inbox is distinct from persisted history, which stays reachable.
 struct AgentsMailboxSheet: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
     @State private var replyingTo: AgentMessage?
     @State private var replyText = ""
+    @State private var showHistory = false
     @FocusState private var replyFocused: Bool
 
     private var pendingIDs: Set<Int64> { Set(model.awaitingReplies.map(\.id)) }
-    private var answered: [AgentMessage] { model.recentMessages.filter { !pendingIDs.contains($0.id) } }
+    private var answered: [AgentMessage] {
+        (showHistory ? model.messageHistory : model.recentMessages).filter { !pendingIDs.contains($0.id) }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Mailbox (\(pendingIDs.count + answered.count))").font(FleetFont.title)
+                Text("\(showHistory ? "Message history" : "Inbox") (\(pendingIDs.count + answered.count))").font(FleetFont.title)
                 Spacer()
+                Toggle("History", isOn: $showHistory)
+                    .toggleStyle(.button)
+                    .accessibilityIdentifier("mailbox.history")
+                    .help("Include old seen notices and resolved questions. Nothing is deleted.")
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
             .padding(FleetMetrics.gutter)
             Hairline()
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
+                    if !model.connected {
+                        EmptyLine(text: showHistory
+                                  ? "Controller unavailable — showing last received history."
+                                  : "Controller unavailable — message state is unknown.")
+                            .accessibilityIdentifier("mailbox.unavailable")
+                    }
                     if !model.awaitingReplies.isEmpty {
                         CompactHeader(title: "Waiting on you", trailing: "\(model.awaitingReplies.count)")
                         ForEach(model.awaitingReplies) { message in
@@ -197,7 +209,10 @@ struct AgentsMailboxSheet: View {
                                    replyText: $replyText, replyFocused: $replyFocused)
                     }
                     if model.awaitingReplies.isEmpty && answered.isEmpty {
-                        EmptyLine(text: "No messages yet.")
+                        if model.connected || showHistory {
+                            EmptyLine(text: showHistory ? "No message history." : "No current messages.")
+                                .accessibilityIdentifier("mailbox.empty")
+                        }
                     }
                 }
                 .padding(.vertical, FleetMetrics.rowVerticalPadding)

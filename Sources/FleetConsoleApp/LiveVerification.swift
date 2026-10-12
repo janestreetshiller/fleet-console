@@ -197,6 +197,7 @@ enum LiveVerification {
         let startCPU = cpuSeconds()
         let startChildrenCPU = cpuSeconds(RUSAGE_CHILDREN)
         let start = ProcessInfo.processInfo.systemUptime
+        let initialSnapshotAt = model.lastSnapshotAt
         spin(seconds)
         let elapsed = ProcessInfo.processInfo.systemUptime - start
         let processCPU = (cpuSeconds() - startCPU) / elapsed * 100
@@ -243,7 +244,27 @@ enum LiveVerification {
                               "width": size.width, "height": size.height])
             }
         }
-        let passed = telemetryPassed && bounded
+        // Capture the actual current inbox against this same live subscription,
+        // never against fixture messages or a replacement daemon.
+        let mailboxHosting = NSHostingView(rootView: AgentsMailboxSheet(model: model))
+        let mailboxWindow = NSWindow(contentRect: NSRect(x: -20_000, y: -20_000, width: 560, height: 520),
+                                     styleMask: [.borderless], backing: .buffered, defer: false)
+        mailboxWindow.contentView = mailboxHosting
+        mailboxWindow.backgroundColor = .windowBackgroundColor
+        mailboxWindow.orderFront(nil)
+        for (label, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            NSApp.appearance = NSAppearance(named: appearance)
+            mailboxWindow.appearance = NSAppearance(named: appearance)
+            spin(0.3)
+            let filename = "mailbox-current-\(label).png"
+            capture(mailboxWindow, to: output.appendingPathComponent(filename))
+            captures.append(filename)
+        }
+        mailboxWindow.orderOut(nil)
+        let snapshotAdvanced = initialSnapshotAt.map { initial in
+            model.lastSnapshotAt.map { $0 > initial } ?? false
+        } ?? false
+        let passed = telemetryPassed && bounded && snapshotAdvanced
         #if DEBUG
         let configuration = "debug"
         #else
@@ -257,6 +278,13 @@ enum LiveVerification {
             "processPeakResidentBytes": usage.ru_maxrss,
             "cpuBrand": model.system.topology.brand, "logicalCores": model.system.topology.logicalCores,
             "readOnlyPassed": readOnly, "daemonSnapshotPassed": daemonPassed,
+            "daemonPID": model.daemon?.pid as Any? ?? NSNull(),
+            "initialSnapshotAt": initialSnapshotAt?.timeIntervalSince1970 as Any? ?? NSNull(),
+            "finalSnapshotAt": model.lastSnapshotAt?.timeIntervalSince1970 as Any? ?? NSNull(),
+            "snapshotAdvanced": snapshotAdvanced,
+            "currentMessageCount": model.recentMessages.count,
+            "historyMessageCount": model.messageHistory.count,
+            "pendingReplyCount": model.awaitingReplyCount,
             "boundedPopoverPassed": bounded, "captureSizes": sizes, "captures": captures
         ]
         do {

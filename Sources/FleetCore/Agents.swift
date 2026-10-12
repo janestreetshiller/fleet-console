@@ -162,6 +162,16 @@ public struct AgentMessage: Codable, Sendable, Identifiable, Hashable {
     }
 
     public var isAwaitingReply: Bool { needsReply && reply == nil }
+
+    /// Current inbox is not the append-only archive. Unanswered questions and
+    /// unread notices stay actionable regardless of age; seen notices age out
+    /// after a day, and answered questions belong only in history.
+    public func isCurrent(at now: Date, recentWindow: TimeInterval = 24 * 3600) -> Bool {
+        guard reply == nil, repliedAt == nil else { return false }
+        if isAwaitingReply || seenAt == nil { return true }
+        let age = now.timeIntervalSince(createdAt)
+        return age.isFinite && age >= 0 && age <= recentWindow
+    }
 }
 
 // MARK: - Agents

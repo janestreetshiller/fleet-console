@@ -153,13 +153,17 @@ final class AppModel {
         if !existingDevices.isEmpty { devicesChanged = true }
         if devicesChanged { deviceRows = rebuiltDevices }
 
-        let agents = snapshot.agentSummaries
+        // The daemon's mailbox is persisted history, not evidence of work now.
+        // Filter at the client boundary so an older installed daemon is safe too.
+        var currentSnapshot = snapshot
+        currentSnapshot.messages = snapshot.messages.filter { $0.isCurrent(at: Date()) }
+        let agents = currentSnapshot.agentSummaries
         if agentSummaries != agents { agentSummaries = agents }
-        let profiles = snapshot.agentProfiles
+        let profiles = currentSnapshot.agentProfiles
         if agentProfiles != profiles { agentProfiles = profiles }
-        if recentMessages != snapshot.messages {
-            let previouslyKnown = Set(recentMessages.map(\.id))
-            recentMessages = snapshot.messages
+        if messageHistory != snapshot.messages {
+            let previouslyKnown = Set(messageHistory.map(\.id))
+            messageHistory = snapshot.messages
             // Notify once, for messages we have not seen before.
             let fresh = snapshot.messages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
             if !didInitialLoad {
@@ -193,7 +197,15 @@ final class AppModel {
 
     private(set) var agentSummaries: [AgentSummary] = []
     private(set) var agentProfiles: [AgentProfile] = []
-    private(set) var recentMessages: [AgentMessage] = []
+    private(set) var messageHistory: [AgentMessage] = []
+    var recentMessages: [AgentMessage] {
+        // Observe the local clock as well as snapshots: a seen notice can age
+        // out even while the daemon's unchanged mailbox is being pushed.
+        _ = clockTick
+        guard connected else { return [] }
+        let now = Date()
+        return messageHistory.filter { $0.isCurrent(at: now) }
+    }
     private(set) var externalServices: [ExternalService] = []
     private(set) var sessions: [AgentSession] = []
 
