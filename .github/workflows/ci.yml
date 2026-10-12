@@ -45,7 +45,23 @@ jobs:
       - name: Build release with the existing CMO workaround
         run: swift build -c release --disable-index-store -Xswiftc -disable-cmo
       - name: Run Swift tests
-        run: swift test --disable-index-store
+        run: |
+          swift test --disable-index-store > swift-test.log 2>&1 &
+          pid=$!
+          for i in $(seq 1 96); do
+            if ! kill -0 "$pid" 2>/dev/null; then
+              wait "$pid"; status=$?; cat swift-test.log; exit "$status"
+            fi
+            sleep 5
+          done
+          tail -60 swift-test.log
+          ps -axo pid,ppid,stat,etime,command | grep -E 'swift|xctest|PackageTests' | grep -v grep
+          for p in $(pgrep -f 'swiftpm-testing-helper|PackageTests.xctest'); do
+            echo "=== sample $p"
+            sample "$p" 3 -mayDie -file "sample-$p.txt" >/dev/null 2>&1 || true
+            cat "sample-$p.txt" || true
+          done
+          exit 1
       - name: Check Rust protocol and conformance targets
         run: >-
           cargo check --manifest-path rust/Cargo.toml
