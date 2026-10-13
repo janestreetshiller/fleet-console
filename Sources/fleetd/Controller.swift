@@ -13,7 +13,7 @@ import FleetCore
 /// That paragraph is the justification for `@unchecked Sendable`: the serial queue
 /// is what makes every stored property safe to touch from the other two.
 final class Controller: @unchecked Sendable {
-    static let version = "1.0.1"
+    static let version = "1.1.0"
 
     let queue = DispatchQueue(label: "com.fleetconsole.controller")
     private let workQueue = DispatchQueue(label: "com.fleetconsole.work", attributes: .concurrent)
