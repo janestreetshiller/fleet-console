@@ -165,9 +165,21 @@ final class NetworkMonitor {
                 if self.vlan != vlan { self.vlan = vlan }
                 if self.thunderbolt != thunderbolt { self.thunderbolt = thunderbolt }
                 if self.exo != exo { self.exo = exo }
-                let wifi = self.probeWiFi(ports: ports)   // CoreWLAN prefers the main thread
-                if self.wifi != wifi { self.wifi = wifi }
-                self.isRefreshing = false
+                // The Wi-Fi probe used to run here on the main actor, and one
+                // CoreWiFi XPC reply (`ssid()` under a pending Location
+                // authorization) never arrived — freezing the main thread and
+                // with it the whole app, quit included. It is a synchronous
+                // system call, so it runs on the probe queue like its siblings,
+                // where a late reply can only stall the next refresh.
+                let portsForWiFi = ports
+                self.probeQueue.async { [weak self] in
+                    let wifi = Self.probeWiFi(ports: portsForWiFi)
+                    Task { @MainActor in
+                        guard let self else { return }
+                        if self.wifi != wifi { self.wifi = wifi }
+                        self.isRefreshing = false
+                    }
+                }
             }
         }
     }
@@ -267,7 +279,7 @@ final class NetworkMonitor {
         return status
     }
 
-    func probeWiFi(ports: [String: String]) -> WiFiStatus {
+    nonisolated static func probeWiFi(ports: [String: String]) -> WiFiStatus {
         let device = ports["Wi-Fi"] ?? ports["AirPort"]
         var status = WiFiStatus(interface: device)
         guard let interface = device.flatMap({ CWWiFiClient.shared().interface(withName: $0) })
