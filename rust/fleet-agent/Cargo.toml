@@ -1,0 +1,22 @@
+[package]
+name = "fleet-agent"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "FleetConsole resident agent: an rx-basis operations and routing agent specialized for memory/process work, with metered usage billed through Ouros."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+tempfile.workspace = true
+fleet-proto = { path = "../fleet-proto" }
+
+[[bin]]
+name = "fleet-agent"
+path = "src/main.rs"
+
+[lib]
+name = "fleet_agent"
+path = "src/lib.rs"
