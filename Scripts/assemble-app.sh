@@ -20,7 +20,7 @@ cp "$BIN/fleetctl"        "$APP/Contents/Resources/bin/fleetctl"
 # The resident operations agent ships beside the controller and CLI. Build it
 # from the Rust workspace (release profile to match a release bundle).
 if [ "$CONFIG" = "release" ]; then RUST_PROFILE="release"; else RUST_PROFILE="debug"; fi
-(cd "$ROOT/rust" && cargo build --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
+(cd "$ROOT/rust" && cargo build --locked --jobs 2 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
 cp "$ROOT/rust/target/$RUST_PROFILE/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
@@ -97,6 +97,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# Reject inference runtimes, model weights and additional resident launch jobs
+# before any code is signed. The bundled fleet-agent is a small client only.
+python3 "$ROOT/Scripts/verify-agent-bundle.py" "$APP"
 
 # Explicit ad-hoc signing avoids keychain lookup and timestamps. Developer ID
 # retains hardened runtime/timestamps; nested code is signed inside out.

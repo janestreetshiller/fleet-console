@@ -24,9 +24,10 @@ use std::time::Duration;
 
 /// Operations the controller accepts. The wire values are Swift enum raw values,
 /// which are the case names verbatim — so `refreshDevices`, not `refresh_devices`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RpcOp {
     #[serde(rename = "ping")]
+    #[default]
     Ping,
     #[serde(rename = "snapshot")]
     Snapshot,
@@ -109,12 +110,6 @@ pub struct RpcRequest {
     pub message_id: Option<i64>,
     #[serde(rename = "unansweredOnly", skip_serializing_if = "Option::is_none")]
     pub unanswered_only: Option<bool>,
-}
-
-impl Default for RpcOp {
-    fn default() -> Self {
-        RpcOp::Ping
-    }
 }
 
 impl RpcRequest {
@@ -228,6 +223,87 @@ impl Client {
             return Err(ClientError::Closed);
         }
         serde_json::from_str(&buffer).map_err(ClientError::Decode)
+    }
+
+    /// Proposal traffic shares the operator turn's deadline and cannot read
+    /// arbitrary daemon output into memory. Ordinary clients keep `send`.
+    pub fn send_bounded(
+        &mut self,
+        request: &RpcRequest,
+        deadline: std::time::Instant,
+        maximum: usize,
+    ) -> Result<RpcResponse, ClientError> {
+        use std::os::fd::AsRawFd;
+        fn remaining(deadline: std::time::Instant) -> Result<Duration, ClientError> {
+            deadline.checked_duration_since(std::time::Instant::now()).filter(|d| !d.is_zero())
+                .ok_or_else(|| ClientError::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, "proposal deadline exceeded")))
+        }
+        #[repr(C)]
+        struct PollFd { fd: i32, events: i16, revents: i16 }
+        #[cfg(target_os = "macos")]
+        type PollCount = u32;
+        #[cfg(not(target_os = "macos"))]
+        type PollCount = usize;
+        extern "C" { fn poll(fds: *mut PollFd, count: PollCount, milliseconds: i32) -> i32; }
+        fn ready(fd: i32, events: i16, deadline: std::time::Instant) -> Result<(), ClientError> {
+            loop {
+                let timeout = remaining(deadline)?;
+                let milliseconds = timeout.as_millis().saturating_add(1).min(i32::MAX as u128) as i32;
+                let mut descriptor = PollFd { fd, events, revents: 0 };
+                let result = unsafe { poll(&mut descriptor, 1, milliseconds) };
+                if result > 0 { return Ok(()); }
+                if result == 0 { remaining(deadline)?; continue; }
+                let error = std::io::Error::last_os_error();
+                if error.kind() != std::io::ErrorKind::Interrupted { return Err(ClientError::Io(error)); }
+            }
+        }
+        // Darwin rejects Unix SO_SNDTIMEO; poll + O_NONBLOCK gives both writes
+        // and reads the same deadline, including partial and trickled frames.
+        self.writer.set_nonblocking(true).map_err(ClientError::Io)?;
+        let result = (|| {
+            let mut line = serde_json::to_vec(request).map_err(ClientError::Decode)?;
+            line.push(b'\n');
+            let mut left = line.as_slice();
+            while !left.is_empty() {
+                ready(self.writer.as_raw_fd(), 4, deadline)?; // POLLOUT
+                let written = match self.writer.write(left) {
+                    Ok(written) => written,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                    Err(error) => return Err(ClientError::Io(error)),
+                };
+                if written == 0 { return Err(ClientError::Closed); }
+                left = &left[written..];
+            }
+            let mut buffer = Vec::new();
+            loop {
+                remaining(deadline)?;
+                if self.reader.buffer().is_empty() {
+                    ready(self.reader.get_ref().as_raw_fd(), 1, deadline)?; // POLLIN
+                }
+                let available = match self.reader.fill_buf() {
+                    Ok(available) => available,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
+                    Err(error) => return Err(ClientError::Io(error)),
+                };
+                if available.is_empty() { return Err(ClientError::Closed); }
+                let end = available.iter().position(|b| *b == b'\n').map(|i| i+1);
+                let count = end.unwrap_or(available.len());
+                if count > maximum.saturating_sub(buffer.len()) {
+                    return Err(ClientError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                        "controller response exceeds proposal byte limit")));
+                }
+                buffer.extend_from_slice(&available[..count]);
+                self.reader.consume(count);
+                if end.is_some() { break; }
+            }
+            remaining(deadline)?;
+            serde_json::from_slice(&buffer).map_err(ClientError::Decode)
+        })();
+        let reset = self.writer.set_nonblocking(false).map_err(ClientError::Io);
+        match result {
+            Err(error) => Err(error),
+            Ok(response) => { reset?; Ok(response) }
+        }
     }
 
     /// The exact bytes we would put on the wire, for tests that assert shape

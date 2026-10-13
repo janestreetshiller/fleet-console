@@ -162,9 +162,10 @@ struct FixerRow: View {
                 Text("None installed")
                     .font(FleetFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
-                    .help("Install Claude Code, Codex or the Fleet agent to hand problems to it.")
+                    .help("Install Claude Code, Codex or fleet-agent to hand problems to it.")
             } else {
                 Picker("Fixer", selection: $settings.designated) {
+                    Text("None").tag(Optional<FixAgentKind>.none)
                     ForEach(settings.installed) { Text($0.title).tag(Optional($0)) }
                 }
                 .pickerStyle(.menu)
@@ -181,7 +182,9 @@ struct FixerRow: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.small)
             .disabled(problemCount == 0 || settings.designated == nil)
-            .help("Write a report of what needs attention and start the fixer on it in the dashboard terminal.")
+            .help(settings.designated == .fleetAgent
+                  ? "Ask Fleet Agent for a read-only proposal in the dashboard terminal."
+                  : "Write a report of what needs attention and start the fixer on it in the dashboard terminal.")
             .accessibilityIdentifier("agents.fixer.send")
         }
         .frame(height: 28)

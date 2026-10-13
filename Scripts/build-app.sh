@@ -40,8 +40,8 @@ CMO_WORKAROUND=(-Xswiftc -disable-cmo)
 
 echo "▸ building ($CONFIG)…"
 cd "$ROOT"
-swift build -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}"
-BIN="$(swift build -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}" --show-bin-path)"
+swift build --jobs 2 -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}"
+BIN="$(swift build --jobs 2 -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}" --show-bin-path)"
 
 echo "▸ assembling bundle…"
 # Keep the reservation and every destination operation in one fd-anchored
