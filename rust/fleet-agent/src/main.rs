@@ -3,7 +3,7 @@
 
 use fleet_agent::engine::{self, EngineConfig, HttpModelClient, ModelClient};
 use fleet_agent::meter::{self, MeterRecord, TurnUsage};
-use fleet_agent::{default_ledger_path, default_socket_path, server, tools};
+use fleet_agent::{default_ledger_path, default_socket_path, guard, server, tools};
 use serde_json::json;
 use std::io::{IsTerminal, Write};
 use std::process::ExitCode;
@@ -12,14 +12,15 @@ const USAGE: &str = "fleet-agent — the FleetConsole resident operations agent
 
 USAGE:
     fleet-agent serve                    MCP stdio server (JSON-RPC 2.0)
-    fleet-agent ask \"<question>\"         one agent turn against the local model
-    fleet-agent ask --json \"<question>\"  machine-readable turn result
+    fleet-agent propose \"<question>\"     read-only proposal against a configured endpoint
+    fleet-agent propose --json \"<question>\" machine-readable proposal
+    fleet-agent ask \"<question>\"         compatibility alias for propose
     fleet-agent meter [--days N]         metered usage ledger, signed totals
-    fleet-agent self-check                schema hash, daemon reachability, model health
+    fleet-agent self-check                schema hash, daemon reachability, passive configuration
 
 ENVIRONMENT:
-    FLEET_AGENT_LLM_URL   local model endpoint (default http://127.0.0.1:53144)
-    FLEET_AGENT_MODEL     model name (default qwen3.5-9b-local)
+    FLEET_AGENT_LLM_URL   explicit already-running loopback endpoint (required for inference)
+    FLEET_AGENT_MODEL     model alias (default local; never loads or starts a server)
     FLEET_AGENT_LEDGER   ledger path (default <support>/agent-billing/meter-ledger.txt)
 ";
 
@@ -27,7 +28,7 @@ fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("serve") => cmd_serve(),
-        Some("ask") => cmd_ask(&args[1..]),
+        Some("ask" | "propose") => cmd_ask(&args[1..]),
         Some("meter") => cmd_meter(&args[1..]),
         Some("self-check") => cmd_self_check(),
         Some("--help" | "-h" | "help") | None => {
@@ -53,7 +54,10 @@ fn cmd_serve() -> ExitCode {
             socket.display()
         );
     }
-    let dispatcher = tools::Dispatcher { client: &mut client, socket_path: socket };
+    let dispatcher = tools::Dispatcher {
+        client: &mut client,
+        socket_path: socket,
+    };
     let mut srv = server::Server::new(dispatcher);
     match srv.serve(std::io::stdin().lock(), std::io::stdout().lock()) {
         Ok(()) => ExitCode::SUCCESS,
@@ -76,13 +80,36 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
         eprintln!("ask: a question is required\n{USAGE}");
         return ExitCode::from(2);
     }
+    let config = EngineConfig::default();
+    if let Err(error) = guard::check_question(&question).and_then(|_| config.validate()) {
+        return proposal_error(json, &error);
+    }
+    if let Some(flag) = rest
+        .iter()
+        .find(|a| a.starts_with("--") && a.as_str() != "--json")
+    {
+        return proposal_error(json, &format!("unknown proposal flag {flag}"));
+    }
+    if let Err(error) = guard::require_headroom(guard::sample_memory()) {
+        return proposal_error(json, &error);
+    }
+    let _lease =
+        match guard::InferenceLease::acquire(&fleet_agent::support_dir().join("inference.lock")) {
+            Ok(lease) => lease,
+            Err(error) => return proposal_error(json, &error),
+        };
     let socket = default_socket_path();
     let mut client = fleet_agent::connect_controller(&socket);
     if client.is_none() && !json {
-        eprintln!("note: fleetd not reachable at {} — read-only answers unavailable", socket.display());
+        eprintln!(
+            "note: fleetd not reachable at {} — read-only answers unavailable",
+            socket.display()
+        );
     }
-    let mut dispatcher = tools::Dispatcher { client: &mut client, socket_path: socket };
-    let config = EngineConfig::default();
+    let mut dispatcher = tools::Dispatcher {
+        client: &mut client,
+        socket_path: socket,
+    };
     let mut model = HttpModelClient::new(EngineConfig {
         base_url: config.base_url.clone(),
         model: config.model.clone(),
@@ -140,6 +167,15 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
     }
 }
 
+fn proposal_error(json: bool, error: &str) -> ExitCode {
+    if json {
+        println!("{}", json!({ "error": error }));
+    } else {
+        eprintln!("fleet-agent: {error}");
+    }
+    ExitCode::FAILURE
+}
+
 fn cmd_meter(rest: &[String]) -> ExitCode {
     let path = std::env::var("FLEET_AGENT_LEDGER")
         .map(std::path::PathBuf::from)
@@ -168,14 +204,22 @@ fn cmd_meter(rest: &[String]) -> ExitCode {
                 acc
             });
             println!("ledger: {}", path.display());
-            println!("records: {} total, {} in the last {days} day(s), {} invalid signature(s)",
-                records.len(), recent.len(), invalid);
+            println!(
+                "records: {} total, {} in the last {days} day(s), {} invalid signature(s)",
+                records.len(),
+                recent.len(),
+                invalid
+            );
             println!(
                 "usage (window): {} input + {} output tokens across {} turn(s)",
-                period_usage.input_tokens, period_usage.output_tokens,
+                period_usage.input_tokens,
+                period_usage.output_tokens,
                 recent.iter().map(|r| r.turns).sum::<u64>()
             );
-            println!("usage (all time): {} input + {} output tokens", usage.input_tokens, usage.output_tokens);
+            println!(
+                "usage (all time): {} input + {} output tokens",
+                usage.input_tokens, usage.output_tokens
+            );
             if invalid > 0 {
                 eprintln!(
                     "warning: {invalid} ledger line(s) failed signature validation and were excluded — inspect the file before billing from it"
@@ -210,8 +254,11 @@ fn cmd_self_check() -> ExitCode {
     if let Some(ref mut c) = client {
         let response = c.send(&fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Ping));
         match response {
-            Ok(r) if r.ok => println!("✓ fleetd reachable at {} (v{})", socket.display(),
-                r.daemon.map(|d| d.version).unwrap_or_default()),
+            Ok(r) if r.ok => println!(
+                "✓ fleetd reachable at {} (v{})",
+                socket.display(),
+                r.daemon.map(|d| d.version).unwrap_or_default()
+            ),
             _ => {
                 println!("✗ fleetd at {} answered with an error", socket.display());
                 ok = false;
@@ -223,29 +270,17 @@ fn cmd_self_check() -> ExitCode {
     }
 
     let config = EngineConfig::default();
-    let mut model = HttpModelClient::new(EngineConfig {
-        base_url: config.base_url.clone(),
-        model: config.model.clone(),
-        max_iterations: config.max_iterations,
-    });
-    let probe = model.chat(&[json!({
-        "role": "user",
-        "content": "Reply with the single word: ok"
-    })]);
-    match probe {
-        Ok(response) => {
-            let content = response
-                .get("choices")
-                .and_then(|c| c.get(0))
-                .and_then(|c| c.get("message"))
-                .and_then(|m| m.get("content"))
-                .and_then(|c| c.as_str())
-                .unwrap_or("");
-            println!("✓ local model {} answered: {}", model.name(), content.chars().take(60).collect::<String>());
-        }
-        Err(e) => {
-            println!("✗ local model {} at {}: {e}", model.name(), config.base_url);
-            ok = false;
+    if config.base_url.is_empty() {
+        println!("✓ inference is disabled until FLEET_AGENT_LLM_URL is explicitly configured");
+    } else {
+        match config.validate() {
+            Ok(()) => {
+                println!("✓ model configuration is valid (passive check; no model request sent)")
+            }
+            Err(error) => {
+                println!("✗ model configuration: {error}");
+                ok = false;
+            }
         }
     }
 

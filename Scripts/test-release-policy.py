@@ -51,17 +51,18 @@ class ScriptFixture(unittest.TestCase):
         mock = self.tools / "mock-tool.py"
         shutil.copyfile(SCRIPTS / "release-policy-mock-tool.py", mock)
         mock.chmod(0o755)
-        for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto"):
+        for name in ("swift", "cargo", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto"):
             (self.tools / name).symlink_to(mock)
         (self.tools / "python3").symlink_to(sys.executable)
         scripts = self.root / "Scripts"
         scripts.mkdir()
-        for name in ("build-app.sh", "assemble-app.sh", "benchmark.sh", "release-staging.py", "notarize.sh"):
+        for name in ("build-app.sh", "assemble-app.sh", "verify-agent-bundle.py", "benchmark.sh", "release-staging.py", "notarize.sh"):
             if (SCRIPTS / name).is_file():
                 # No rewritten guards: the fixture always runs current production bytes.
                 shutil.copyfile(SCRIPTS / name, scripts / name)
         self.home = self.root / "home"
         self.home.mkdir()
+        (self.root / "rust").mkdir()
         resources = self.root / "Resources"
         resources.mkdir()
         (resources / "AppIcon.icns").write_text("TEST DATA: icon\n")
@@ -135,6 +136,26 @@ class ScriptFixture(unittest.TestCase):
 
 
 class PackagingTests(ScriptFixture):
+    def test_model_weights_are_rejected_before_signing(self):
+        (self.bin / "SwiftTerm.bundle/unexpected.gguf").write_bytes(b"model fixture")
+        result = self.run_script("build-app.sh", "release")
+        self.expect_failure(result, "inference runtime or model weights cannot ship")
+        self.assertNotIn("codesign", [call["tool"] for call in self.calls()])
+
+    def test_bundled_agent_builds_with_bounded_parallelism(self):
+        result = self.run_script("build-app.sh", "release")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        builds = [call for call in self.calls() if call["tool"] in ("swift", "cargo")]
+        self.assertEqual({call["tool"] for call in builds}, {"swift", "cargo"})
+        for call in builds:
+            self.assertIn("--jobs", call["args"], call)
+            self.assertLessEqual(int(call["args"][call["args"].index("--jobs") + 1]), 2)
+        self.assertTrue((self.app / "Contents/Resources/bin/fleet-agent").is_file())
+        self.assertEqual(
+            {p.name for p in (self.app / "Contents/Library/LaunchAgents").iterdir()},
+            {"com.fleetconsole.fleetd.plist"},
+        )
+
     def test_existing_bundle_refused_even_when_lsof_fails(self):
         self.existing_bundle()
         before = snapshot(self.app)
@@ -305,18 +326,18 @@ class PackagingTests(ScriptFixture):
         self.assertTrue((self.app / "Contents/Resources/SwiftTerm.bundle/shaders.metallib").is_file())
         self.assertTrue((self.app / "Contents/Frameworks/Test.framework/inner.dylib").is_file())
         calls = self.calls()
-        self.assertTrue(all(call["tool"] in ("swift", "xcrun", "codesign") for call in calls))
+        self.assertTrue(all(call["tool"] in ("swift", "cargo", "xcrun", "codesign") for call in calls))
         stripping = [index for index, call in enumerate(calls) if call["tool"] == "xcrun"]
         signing = [index for index, call in enumerate(calls) if call["tool"] == "codesign"]
-        self.assertEqual(len(stripping), 3)
+        self.assertEqual(len(stripping), 4)
         self.assertLess(max(stripping), min(signing))
         code_calls = [call["args"] for call in calls if call["tool"] == "codesign"]
         signed = [args for args in code_calls if "--sign" in args]
         names = [(Path(call["cwd"]) / call["args"][-1]).resolve().name
                  for call in calls if call["tool"] == "codesign" and "--sign" in call["args"]]
-        self.assertEqual(set(names), {"inner.dylib", "Test.framework", "test.dylib", "fleetd", "fleetctl", "FleetConsole.app"})
+        self.assertEqual(set(names), {"inner.dylib", "Test.framework", "test.dylib", "fleetd", "fleetctl", "fleet-agent", "FleetConsole.app"})
         self.assertLess(names.index("inner.dylib"), names.index("Test.framework"))
-        self.assertEqual(names[-3:], ["fleetd", "fleetctl", "FleetConsole.app"])
+        self.assertEqual(names[-4:], ["fleetd", "fleetctl", "fleet-agent", "FleetConsole.app"])
         for args in signed:
             self.assertEqual(args[args.index("--sign") + 1], "-")
             self.assertIn("--timestamp=none", args)
@@ -348,7 +369,8 @@ class PackagingTests(ScriptFixture):
     def test_every_signing_or_verification_failure_stops_packaging(self):
         failures = ("sign:Test.framework", "verify:Test.framework", "sign:test.dylib", "verify:test.dylib",
                     "sign:fleetd", "verify:fleetd",
-                    "sign:fleetctl", "verify:fleetctl", "sign:FleetConsole.app", "verify:FleetConsole.app", "deep")
+                    "sign:fleetctl", "verify:fleetctl", "sign:fleet-agent", "verify:fleet-agent",
+                    "sign:FleetConsole.app", "verify:FleetConsole.app", "deep")
         for index, failure in enumerate(failures):
             with self.subTest(failure=failure):
                 stage = self.root / f"signing-failure-{index}"

@@ -208,6 +208,102 @@ pub struct Dispatcher<'a> {
 }
 
 impl<'a> Dispatcher<'a> {
+    /// Executable proposal boundary. Model-supplied `confirm=true` cannot opt
+    /// into controller mutations, including lease renewal and mailbox writes.
+    pub fn call_read_only(
+        &mut self,
+        name: &str,
+        args: &Value,
+        deadline: std::time::Instant,
+    ) -> Result<Value, DispatchError> {
+        if !READ_ONLY_TOOLS.contains(&name) {
+            return Err(DispatchError(format!(
+                "proposal is read-only: tool `{name}` is not permitted"
+            )));
+        }
+        crate::http::remaining(deadline).map_err(DispatchError)?;
+        let request = match name {
+            "fleet_logs" => {
+                let id = str_field(args, "serviceID")
+                    .ok_or_else(|| DispatchError("fleet_logs: serviceID is required".into()))?;
+                let mut r = fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Logs);
+                r.service_id = Some(id);
+                r.stream = Some(
+                    args.get("stream")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("out")
+                        .into(),
+                );
+                r.max_bytes = Some(8192);
+                r
+            }
+            "fleet_events" => {
+                let mut r = fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Events);
+                r.service_id = str_field(args, "serviceID");
+                r.limit = Some(
+                    args.get("limit")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(20)
+                        .clamp(1, 50),
+                );
+                r
+            }
+            _ => fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot),
+        };
+        let response = match self.daemon()?.send_bounded(
+            &request,
+            deadline.min(std::time::Instant::now() + crate::guard::ROUND_TIMEOUT),
+            crate::guard::MAX_RESPONSE_BYTES,
+        ) {
+            Ok(response) => response,
+            Err(error) => {
+                // A partial or oversized frame cannot be safely reused by a
+                // later tool request. Drop it instead of reading stale bytes.
+                *self.client = None;
+                return Err(DispatchError(format!(
+                    "controller round trip failed: {error}"
+                )));
+            }
+        };
+        let mut out = serde_json::to_value(OpaqueResponse::from(response))
+            .map_err(|e| DispatchError(format!("encode response: {e}")))?;
+        match name {
+            "fleet_top_memory" => Ok(top_memory(
+                &out,
+                args.get("limit")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(10)
+                    .clamp(1, 50) as usize,
+            )),
+            "fleet_mem_advice" => mem_advice(&out, args.get("serviceID").and_then(|v| v.as_str())),
+            "fleet_ps" => {
+                if let Some(snapshot) = out.get_mut("snapshot").and_then(|s| s.as_object_mut()) {
+                    snapshot.retain(|key, _| key == "daemon" || key == "services");
+                    if let Some(services) =
+                        snapshot.get_mut("services").and_then(|s| s.as_array_mut())
+                    {
+                        for service in services {
+                            if let Some(service) = service.as_object_mut() {
+                                service.retain(|key, _| {
+                                    matches!(
+                                        key.as_str(),
+                                        "id" | "friendlyName"
+                                            | "ownerAgent"
+                                            | "state"
+                                            | "pid"
+                                            | "resources"
+                                    )
+                                });
+                            }
+                        }
+                    }
+                }
+                Ok(out)
+            }
+            _ => Ok(out),
+        }
+    }
+
     /// Fail closed with a reason when the daemon is missing: an agent
     /// surface that fabricates success over a dead socket is the defect
     /// class this codebase keeps having to remove.
@@ -256,11 +352,18 @@ impl<'a> Dispatcher<'a> {
             )));
         }
         let empty = json!({});
-        let args = if args.as_object().is_some() { args.clone() } else { empty };
+        let args = if args.as_object().is_some() {
+            args.clone()
+        } else {
+            empty
+        };
         match name {
-            "fleet_snapshot" => self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot)),
+            "fleet_snapshot" => {
+                self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))
+            }
             "fleet_ps" => {
-                let mut out = self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
+                let mut out =
+                    self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
                 if let Some(snapshot) = out.get_mut("snapshot").and_then(|s| s.as_object_mut()) {
                     snapshot.retain(|key, _| key == "daemon" || key == "services");
                     for service in snapshot
@@ -273,7 +376,11 @@ impl<'a> Dispatcher<'a> {
                             obj.retain(|key, _| {
                                 matches!(
                                     key.as_str(),
-                                    "id" | "friendlyName" | "ownerAgent" | "state" | "pid" | "resources"
+                                    "id" | "friendlyName"
+                                        | "ownerAgent"
+                                        | "state"
+                                        | "pid"
+                                        | "resources"
                                 )
                             });
                         }
@@ -287,11 +394,13 @@ impl<'a> Dispatcher<'a> {
                     .and_then(|v| v.as_u64())
                     .unwrap_or(10)
                     .clamp(1, 50) as usize;
-                let snapshot = self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
+                let snapshot =
+                    self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
                 Ok(top_memory(&snapshot, limit))
             }
             "fleet_mem_advice" => {
-                let snapshot = self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
+                let snapshot =
+                    self.send(fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Snapshot))?;
                 mem_advice(&snapshot, args.get("serviceID").and_then(|v| v.as_str()))
             }
             "fleet_logs" => {
@@ -325,7 +434,9 @@ impl<'a> Dispatcher<'a> {
                             .collect::<Option<Vec<String>>>()
                     })
                     .filter(|c| !c.is_empty())
-                    .ok_or_else(|| DispatchError("fleet_launch: command must be a non-empty argv array".into()))?;
+                    .ok_or_else(|| {
+                        DispatchError("fleet_launch: command must be a non-empty argv array".into())
+                    })?;
                 let launch = json!({
                     "command": command,
                     "cwd": str_field(&args, "cwd").unwrap_or_default(),
@@ -368,7 +479,9 @@ impl<'a> Dispatcher<'a> {
                     .get("ttlSeconds")
                     .and_then(|v| v.as_f64())
                     .filter(|t| *t > 0.0)
-                    .ok_or_else(|| DispatchError("fleet_renew: ttlSeconds must be positive".into()))?;
+                    .ok_or_else(|| {
+                        DispatchError("fleet_renew: ttlSeconds must be positive".into())
+                    })?;
                 let mut request = fleet_proto::RpcRequest::new(fleet_proto::RpcOp::Renew);
                 request.service_id = Some(service_id);
                 request.ttl_sec = Some(ttl);
@@ -398,7 +511,9 @@ impl<'a> Dispatcher<'a> {
                 );
                 self.send(request)
             }
-            _ => Err(DispatchError(format!("tool `{name}` is defined but not dispatched"))),
+            _ => Err(DispatchError(format!(
+                "tool `{name}` is defined but not dispatched"
+            ))),
         }
     }
 }
@@ -435,7 +550,9 @@ impl From<fleet_proto::RpcResponse> for OpaqueResponse {
             service: response.service,
             events: response.events,
             logs: response.logs,
-            daemon: response.daemon.map(|d| serde_json::to_value(&d).unwrap_or(Value::Null)),
+            daemon: response
+                .daemon
+                .map(|d| serde_json::to_value(&d).unwrap_or(Value::Null)),
             messages: response.messages,
             message: response.message,
         }
@@ -527,7 +644,10 @@ fn mem_advice(snapshot_response: &Value, service_id: Option<&str>) -> Result<Val
         let service = snapshot
             .get("services")
             .and_then(|s| s.as_array())
-            .and_then(|a| a.iter().find(|s| s.get("id").and_then(|i| i.as_str()) == Some(service_id)))
+            .and_then(|a| {
+                a.iter()
+                    .find(|s| s.get("id").and_then(|i| i.as_str()) == Some(service_id))
+            })
             .ok_or_else(|| {
                 DispatchError(format!(
                     "no supervised service with id `{service_id}` — list ids with fleet_ps"
@@ -586,14 +706,22 @@ mod tests {
         use sha2::Digest;
         let digest = sha2::Sha256::digest(tools_list_payload().as_bytes());
         let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(hex, SCHEMA_SHA256, "tool schema drifted — repin SCHEMA_SHA256 after review");
+        assert_eq!(
+            hex, SCHEMA_SHA256,
+            "tool schema drifted — repin SCHEMA_SHA256 after review"
+        );
     }
 
     #[test]
     fn every_definition_is_valid_canonical_json() {
         for tool in TOOLS {
             let parsed: Value = serde_json::from_str(tool.input_schema).expect(tool.name);
-            assert_eq!(canonical(&parsed), tool.input_schema, "{} schema not canonical", tool.name);
+            assert_eq!(
+                canonical(&parsed),
+                tool.input_schema,
+                "{} schema not canonical",
+                tool.name
+            );
         }
     }
 
@@ -611,7 +739,10 @@ mod tests {
     #[test]
     fn unknown_tool_fails_closed() {
         let mut none: Option<fleet_proto::Client> = None;
-        let mut dispatcher = Dispatcher { client: &mut none, socket_path: Default::default() };
+        let mut dispatcher = Dispatcher {
+            client: &mut none,
+            socket_path: Default::default(),
+        };
         let err = dispatcher.call("fleet_shell", &json!({})).unwrap_err();
         assert!(err.0.contains("never invent tool names"));
     }
@@ -631,7 +762,10 @@ mod tests {
     #[test]
     fn confirm_gate_refuses_false_and_missing() {
         let mut none: Option<fleet_proto::Client> = None;
-        let mut dispatcher = Dispatcher { client: &mut none, socket_path: Default::default() };
+        let mut dispatcher = Dispatcher {
+            client: &mut none,
+            socket_path: Default::default(),
+        };
         for args in [json!({}), json!({"confirm": false})] {
             let err = dispatcher.call("fleet_stop", &args).unwrap_err();
             assert!(err.0.contains("refused"), "got: {}", err.0);
@@ -639,7 +773,10 @@ mod tests {
         // Missing daemon means we never reach the confirm-passed path's send,
         // so a true confirm must produce the *socket* error, not a panic.
         let err = dispatcher
-            .call("fleet_stop", &json!({"confirm": true, "serviceID": "x", "reason": "y"}))
+            .call(
+                "fleet_stop",
+                &json!({"confirm": true, "serviceID": "x", "reason": "y"}),
+            )
             .unwrap_err();
         assert!(err.0.contains("not reachable"));
     }

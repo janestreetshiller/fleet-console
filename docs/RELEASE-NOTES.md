@@ -20,9 +20,11 @@ billed through Ouros. An rx-basis component specialized for console residency.
   the same tool surface over JSON-RPC 2.0 with a byte-stable, hash-pinned
   `tools/list` and fail-closed `tools/call` that names the socket when the
   controller is down.
-- **Local engine.** The `ask` command runs a bounded tool-call loop on the
-  machine's local inference (`qwen3.5-9b-local` at llama-server), loopback
-  pinned — the model endpoint cannot be pointed at the network.
+- **Local proposals.** `propose` and its `ask` alias run a read-only, serialized
+  loop against an explicitly configured, already running loopback endpoint.
+  There is no default RX connection or model startup. Memory admission, byte
+  limits, and an overall deadline bound the work. Bundling the binary does not
+  select it as the fixer or register another resident launch job.
 - **Metered billing through Ouros.** Every turn appends one HMAC-signed
   `FLTA-` record (agent, UTC period, model, input/output tokens, turns) to
   `<support>/agent-billing/meter-ledger.txt`, readable offline by the Ouros
@@ -32,8 +34,8 @@ billed through Ouros. An rx-basis component specialized for console residency.
 - **Verification.** 34 Rust tests (meter signing/tampering, knowledge
   classifications, schema byte-stability and pin, MCP protocol, engine loop
   with usage accounting), `cargo clippy` clean for the new crate, and a
-  `self-check` that proves the pinned hash, the live controller and the live
-  model in one command.
+  passive `self-check` for the pinned hash, live controller, and configuration;
+  it performs no model inference.
 
 Controller version string: `fleetd 1.1.0`. App bundle:
 `CFBundleShortVersionString 1.1.0`.

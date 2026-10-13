@@ -27,7 +27,10 @@ impl<'a> Server<'a> {
         let mut line = String::new();
         loop {
             line.clear();
-            let n = reader.read_line(&mut line)?;
+            let n = std::io::Read::take(&mut reader, (crate::guard::MAX_REQUEST_BYTES + 1) as u64).read_line(&mut line)?;
+            if n > crate::guard::MAX_REQUEST_BYTES {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "MCP request exceeds byte limit"));
+            }
             if n == 0 {
                 return Ok(());
             }
