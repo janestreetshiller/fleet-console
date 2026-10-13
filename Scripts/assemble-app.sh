@@ -17,6 +17,11 @@ mkdir -p "$APP/Contents/MacOS" \
 cp "$BIN/FleetConsoleApp" "$APP/Contents/MacOS/FleetConsole"
 cp "$BIN/fleetd"          "$APP/Contents/Resources/bin/fleetd"
 cp "$BIN/fleetctl"        "$APP/Contents/Resources/bin/fleetctl"
+# The resident operations agent ships beside the controller and CLI. Build it
+# from the Rust workspace (release profile to match a release bundle).
+if [ "$CONFIG" = "release" ]; then RUST_PROFILE="release"; else RUST_PROFILE="debug"; fi
+(cd "$ROOT/rust" && cargo build --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
+cp "$ROOT/rust/target/$RUST_PROFILE/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
 # Keep debug symbols in SwiftPM's build outputs, not the shipping release bundle.
@@ -24,7 +29,8 @@ cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/Launch
 if [ "$CONFIG" = "release" ]; then
     for BINARY in "$APP/Contents/MacOS/FleetConsole" \
                   "$APP/Contents/Resources/bin/fleetd" \
-                  "$APP/Contents/Resources/bin/fleetctl"; do
+                  "$APP/Contents/Resources/bin/fleetctl" \
+                  "$APP/Contents/Resources/bin/fleet-agent"; do
         xcrun strip -S "$BINARY"
     done
 fi
@@ -117,7 +123,7 @@ sign_code() {
 find "$APP/Contents/Frameworks" -depth \
     \( -type d -name '*.framework' -o -type f -name '*.dylib' \) -print0 \
     | while IFS= read -r -d '' CODE; do sign_code "$CODE"; done
-for BINARY in "$APP/Contents/Resources/bin/fleetd" "$APP/Contents/Resources/bin/fleetctl"; do
+for BINARY in "$APP/Contents/Resources/bin/fleetd" "$APP/Contents/Resources/bin/fleetctl" "$APP/Contents/Resources/bin/fleet-agent"; do
     sign_code "$BINARY"
 done
 sign_code "$APP"
