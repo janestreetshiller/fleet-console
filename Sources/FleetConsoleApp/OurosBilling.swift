@@ -248,7 +248,7 @@ final class OurosBilling {
             if let raw = value.url {
                 guard let url = URL(string: raw), url.scheme == "https", url.host == "checkout.stripe.com",
                       url.user == nil, url.password == nil else { throw Failure.invalidResponse }
-                NSWorkspace.shared.open(url); message = "Finish checkout, then refresh your subscription."
+                openBrowser(url); message = "Finish checkout, then refresh your subscription."
             } else if value.state == "expired" {
                 if multiDevice { checkoutKey = nil }
                 UserDefaults.standard.removeObject(forKey: keyName)
@@ -270,7 +270,7 @@ final class OurosBilling {
             let value: Portal = try await request("/hvy/v1/fleet-console/portal", method: "POST", body: [:])
             guard let url = URL(string: value.url), url.scheme == "https", url.host == "billing.stripe.com",
                   url.user == nil, url.password == nil else { throw Failure.invalidResponse }
-            NSWorkspace.shared.open(url)
+            openBrowser(url)
         } catch { handle(error) }
     }
 

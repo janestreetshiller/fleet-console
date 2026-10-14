@@ -31,11 +31,11 @@ enum ConsoleFont {
     /// Secondary row text, evidence, hints.
     static let subtitle = Font.system(.subheadline)
     /// Timestamps, units, legend labels.
-    static let caption = Font.system(.caption)
+    static let caption = Font.system(.callout)
     /// Smaller than caption: the sensor metric's unit line.
-    static let micro = Font.system(.caption2)
+    static let micro = Font.system(.footnote)
     /// Badge numerals and micro labels.
-    static let badge = Font.system(.caption2, weight: .medium)
+    static let badge = Font.system(.footnote, weight: .medium)
     /// A glyph that annotates a row without becoming part of its text — the
     /// supervised-by-the-controller shield, and anything else that sits after a
     /// title as a mark rather than a word.

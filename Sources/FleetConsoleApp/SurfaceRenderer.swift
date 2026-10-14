@@ -174,7 +174,7 @@ enum SurfaceRenderer {
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
             renderTaskComposer(registration: registration, appearance: appearance, into: out)
             renderStandalone(AnyView(DeviceManagementView(model: model)), name: "device-management",
-                             size: NSSize(width: 560, height: 650), appearance: appearance, into: out)
+                             size: NSSize(width: 600, height: 650), appearance: appearance, into: out)
             renderStandalone(AnyView(WelcomeView(model: model, dismiss: {})), name: "welcome",
                              size: NSSize(width: 560, height: 420), appearance: appearance, into: out)
         }

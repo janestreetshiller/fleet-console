@@ -20,7 +20,8 @@ extension View {
     // Retains the existing surface API; AppKit supplies the appearance colors.
     func sketchSubstrate(seed: Double = 0, grainSeed: UInt64 = 7,
                          ground: Bool = true) -> some View {
-        background {
+        modifier(NativeAccessibilityBehavior())
+        .background {
             if ground {
                 SketchInk.ground
                     .ignoresSafeArea()
@@ -31,9 +32,24 @@ extension View {
     }
 }
 
+/// Honor the system motion setting at every window and popover root.
+private struct NativeAccessibilityBehavior: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content.transaction { transaction in
+            if reduceMotion {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
+    }
+}
+
 struct PlateSurface: ViewModifier {
     var corner: CGFloat
     var padding: CGFloat
+    @Environment(\.colorSchemeContrast) private var contrast
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: corner, style: .continuous)
@@ -41,7 +57,8 @@ struct PlateSurface: ViewModifier {
             .padding(padding)
             .background { shape.fill(SketchInk.plate) }
             .overlay {
-                shape.strokeBorder(Color(nsColor: .separatorColor), lineWidth: 0.5)
+                shape.strokeBorder(Color(nsColor: contrast == .increased ? .labelColor : .separatorColor),
+                                   lineWidth: contrast == .increased ? 1 : 0.5)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }

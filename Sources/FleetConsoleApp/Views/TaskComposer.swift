@@ -232,10 +232,9 @@ struct TaskComposerView: View {
     }
 
     private func fieldLabel(_ text: String) -> some View {
-        Text(text.uppercased())
-            .font(FleetFont.micro)
+        Text(text)
+            .font(FleetFont.subtitle)
             .foregroundStyle(.secondary)
-            .tracking(0.6)
     }
 }
 
