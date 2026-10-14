@@ -55,12 +55,12 @@ struct ServicesModule: View {
                             .foregroundStyle(SurfaceInk.secondary)
                     }
                     ForEach(unmanaged) { process in
-                        UnmanagedRow(process: process)
-                            .tag(process.id)
-                            .onTapGesture {
-                                console.selectedUnmanagedID = process.id
-                                console.selectedServiceID = nil
-                            }
+                        Button {
+                            console.selectedUnmanagedID = process.id
+                            console.selectedServiceID = nil
+                        } label: { UnmanagedRow(process: process) }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Inspect \(process.command), process \(process.pid)")
                     }
                 } label: {
                     HStack {

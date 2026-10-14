@@ -14,6 +14,9 @@ struct DeviceManagementView: View {
     @State private var pendingRemoval: FleetConfig.DeviceConfig?
     @State private var savedName: String?
     @State private var needsReload = false
+    @FocusState private var focusedField: Field?
+
+    private enum Field: Hashable { case name, address, user }
 
     private var linked: [FleetConfig.DeviceConfig] { model.settings.config.devices.filter { !$0.isSelf } }
     private var request: DeviceLinkRequest {
@@ -37,11 +40,45 @@ struct DeviceManagementView: View {
             .padding(ConsoleMetrics.gutter)
             Divider()
             Form {
+                Section("Ouros Account") {
+                    LabeledContent("Multi-device", value: "US$10/month")
+                    Label(model.ourosBilling.active ? "Subscription active"
+                          : model.ourosBilling.signedIn ? "Signed in · subscription required" : "Sign in to link your computers",
+                          systemImage: model.ourosBilling.active ? "checkmark.circle" : "person.crop.circle")
+                    Text("Local monitoring is free. Multi-device access is billed monthly through Ouros. AI credits are purchased separately.")
+                        .font(ConsoleFont.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    ViewThatFits(in: .horizontal) {
+                        HStack { accountControls }
+                        VStack(alignment: .leading, spacing: 8) { accountControls }
+                    }
+                    .disabled(model.ourosBilling.busy)
+                    if let message = model.ourosBilling.message {
+                        Label(message, systemImage: "info.circle")
+                            .font(ConsoleFont.caption)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
                 Section("Link a Device") {
-                    TextField("Device name", text: $name)
-                    TextField("Hostname or IP address", text: $address)
-                    TextField("SSH username (optional)", text: $user)
+                    LabeledContent("Name") {
+                        TextField("Mac Studio", text: $name)
+                            .labelsHidden().accessibilityLabel("Device name")
+                            .focused($focusedField, equals: .name)
+                            .onSubmit { focusedField = .address }
+                    }
+                    LabeledContent("Address") {
+                        TextField("Hostname or IP address", text: $address)
+                            .labelsHidden().accessibilityLabel("Hostname or IP address")
+                            .focused($focusedField, equals: .address)
+                            .onSubmit { focusedField = .user }
+                    }
+                    LabeledContent("SSH user") {
+                        TextField("Optional", text: $user)
+                            .labelsHidden().accessibilityLabel("SSH username, optional")
+                            .focused($focusedField, equals: .user)
+                    }
                     Toggle("Read its FleetConsole service inventory", isOn: $readServices)
+                        .toggleStyle(.checkbox)
                     Text("Checks reachability over the network. Optional service inventory uses your existing SSH configuration.")
                         .font(ConsoleFont.caption).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -56,65 +93,32 @@ struct DeviceManagementView: View {
                     }
 
                 }
-                Section("Linked Devices") {
-                    if linked.isEmpty {
-                        Text("No additional devices linked.").foregroundStyle(.secondary)
-                    }
-                    ForEach(linked, id: \.id) { device in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(device.name)
-                                Text(device.localHost ?? device.tailscaleHost ?? "No address")
-                                    .font(ConsoleFont.caption).foregroundStyle(.secondary)
-                                    .textSelection(.enabled)
+                .disabled(!model.ourosBilling.active || busy)
+                if !linked.isEmpty {
+                    Section("Linked Devices") {
+                        ForEach(linked, id: \.id) { device in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(device.name)
+                                    Text(device.localHost ?? device.tailscaleHost ?? "No address")
+                                        .font(ConsoleFont.caption).foregroundStyle(.secondary)
+                                        .textSelection(.enabled)
+                                }
+                                Spacer()
+                                Button("Unlink", role: .destructive) { pendingRemoval = device }
+                                    .disabled(busy)
+                                    .accessibilityLabel("Unlink \(device.name)")
                             }
-                            Spacer()
-                            Button("Unlink", role: .destructive) { pendingRemoval = device }
-                                .disabled(busy)
-                                .accessibilityLabel("Unlink \(device.name)")
                         }
                     }
-                }
-                Section("Ouros") {
-                    HStack {
-                        Text("Multi-device")
-                        Spacer()
-                        Text("$10/month").foregroundStyle(.secondary)
-                    }
-                    Text(model.ourosBilling.active ? "Multi-device is active on your Ouros account." : "Local monitoring is free.")
-                        .font(ConsoleFont.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    HStack {
-                        if !model.ourosBilling.signedIn {
-                            Button("Connect Ouros Account…") { model.ourosBilling.connect() }
-                        } else if model.ourosBilling.active {
-                            Button("Manage Subscription…") { Task { await model.ourosBilling.manage() } }
-                        } else {
-                            Button("Subscribe — $10/month…") { Task { await model.ourosBilling.subscribe() } }
-                                .disabled(!model.ourosBilling.available)
-                        }
-                        Button("Manage AI Credits…") {
-                            NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
-                        }
-                        .help("Open your Ouros billing and AI credits account")
-                        Button("Refresh") { Task { await model.ourosBilling.refresh(userInitiated: true) } }
-                        if model.ourosBilling.signedIn {
-                            Button("Disconnect") { Task { await model.ourosBilling.disconnect() } }
-                        }
-                    }
-                    .disabled(model.ourosBilling.busy)
-                    if let message = model.ourosBilling.message {
-                        Text(message).font(ConsoleFont.caption).foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
                 }
             }
             .formStyle(.grouped)
             Divider()
             HStack(spacing: 8) {
-                if busy { ProgressView().controlSize(.small) }
+                if busy || model.ourosBilling.busy { ProgressView().controlSize(.small) }
                 Text(busy ? "Updating devices…"
+                     : !model.ourosBilling.signedIn ? "Sign in, subscribe, then link a device."
                      : !model.connected ? "Connect the local controller to link a device."
                      : !model.ourosBilling.active ? "Subscribe to link additional devices."
                      : savedName.map { "\($0) linked." } ?? (name.isEmpty && address.isEmpty
@@ -123,15 +127,16 @@ struct DeviceManagementView: View {
                     .font(ConsoleFont.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
-                Button(busy ? "Saving…" : "Link Device") { link() }
-                    .disabled(busy || !model.connected || !model.ourosBilling.active || validationError != nil
-                              || !DaemonClient.shared.requestPolicy.allows(.reloadConfig))
+                Button(primaryTitle) { primaryAction() }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(primaryDisabled)
                     .keyboardShortcut(.defaultAction)
             }
             .padding(ConsoleMetrics.gutter)
         }
-        .frame(width: 560, height: 650)
-        .task { await model.ourosBilling.refresh(userInitiated: false) }
+        .frame(width: 600, height: 650)
+        .sketchSubstrate()
+        .task { await model.ourosBilling.refresh(userInitiated: true) }
         .sheet(isPresented: Binding(
             get: { model.ourosBilling.userCode != nil },
             set: { if !$0 { model.ourosBilling.cancelConnection() } })) {
@@ -151,6 +156,39 @@ struct DeviceManagementView: View {
             } message: {
                 Text("Removes this computer from FleetConsole. Its processes and files are untouched.")
             }
+    }
+
+    @ViewBuilder private var accountControls: some View {
+        if model.ourosBilling.active {
+            Button("Manage Subscription…") { Task { await model.ourosBilling.manage() } }
+        }
+        Button("AI Credits…") {
+            NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
+        }
+        Button("Refresh") { Task { await model.ourosBilling.refresh(userInitiated: false) } }
+        if model.ourosBilling.signedIn {
+            Button("Sign Out") { Task { await model.ourosBilling.disconnect() } }
+        }
+    }
+
+    private var primaryTitle: String {
+        if !model.ourosBilling.signedIn { return "Sign In to Ouros…" }
+        if !model.ourosBilling.active { return "Subscribe for $10/month…" }
+        return busy ? "Linking…" : "Link Device"
+    }
+
+    private var primaryDisabled: Bool {
+        if busy || model.ourosBilling.busy { return true }
+        if !model.ourosBilling.signedIn { return false }
+        if !model.ourosBilling.active { return !model.ourosBilling.available }
+        return !model.connected || validationError != nil || !DaemonClient.shared.requestPolicy.allows(.reloadConfig)
+    }
+
+    private func primaryAction() {
+        guard !primaryDisabled else { return }
+        if !model.ourosBilling.signedIn { model.ourosBilling.connect() }
+        else if !model.ourosBilling.active { Task { await model.ourosBilling.subscribe() } }
+        else { link() }
     }
 
     private func link() {
@@ -200,15 +238,18 @@ private struct OurosConnectionView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Text(billing.userCode ?? "").font(.title2.monospaced())
                 .textSelection(.enabled).accessibilityLabel("Connection code")
+            ProgressView("Waiting for your approval…")
+                .controlSize(.small)
             HStack {
                 Button("Cancel") { billing.cancelConnection() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Button("Continue in Ouros…") {
                     if let url = billing.verificationURL { NSWorkspace.shared.open(url) }
-                }.keyboardShortcut(.defaultAction)
+                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }
         }
         .padding(ConsoleMetrics.gutter)
         .frame(width: 420)
+        .sketchSubstrate()
     }
 }

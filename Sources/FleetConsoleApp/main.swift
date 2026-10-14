@@ -15,7 +15,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sent by a second launch to the instance that is already running.
     static let openDashboardNotification = Notification.Name("com.fleetconsole.openDashboard")
 
-    private let model = AppModel()
+    private let model: AppModel = {
+        #if FLEET_SURFACE_RENDERER
+        let arguments = CommandLine.arguments
+        let argumentPath = arguments.firstIndex(of: "--billing-browser-capture").flatMap {
+            $0 + 1 < arguments.count ? arguments[$0 + 1] : nil
+        }
+        if let path = argumentPath ?? Bundle.main.object(forInfoDictionaryKey: "FleetConsoleVerificationBrowserCapture") as? String {
+            let destination = URL(fileURLWithPath: path)
+            let billing = OurosBilling(useKeychain: false, openBrowser: { url in
+                do {
+                    try Data(url.absoluteString.utf8).write(to: destination, options: .atomic)
+                    try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: destination.path)
+                } catch { FleetLog.warn("Could not record the verification browser destination") }
+            })
+            return AppModel(billing: billing)
+        }
+        #endif
+        return AppModel()
+    }()
     private var fleetItem: MenuBarItemController!
     private var consoleWindow: ConsoleWindowController?
     private var welcomeWindow: WelcomeWindowController?
@@ -26,6 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // set of icons to the menu bar and another subscription to the controller,
         // and the copies are indistinguishable to anyone looking at the menu bar.
         if handOffToRunningInstance() { return }
+        let review = CommandLine.arguments.contains("--review")
+            || Bundle.main.object(forInfoDictionaryKey: "FleetConsoleReviewBuild") as? Bool == true
 
         // The main menu: ⌘K/⌘R/⌘1…⌘6 and the standard Edit items that make
         // text fields behave. Commands route to the console window via
@@ -36,7 +56,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self, selector: #selector(showDashboard),
             name: Self.openDashboardNotification, object: nil)
 
-        Notifier.requestAuthorizationIfNeeded()
+        if !review { Notifier.requestAuthorizationIfNeeded() }
 
         fleetItem = MenuBarItemController(
             identifier: "fleet",
@@ -59,11 +79,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 model.markMessagesSeen()
             })
 
-        registerHelperIfPossible()
+        if !review { registerHelperIfPossible() }
         observeModel()
-        showWelcomeIfDue()
+        if !review { showWelcomeIfDue() }
 
-        if CommandLine.arguments.contains("--dashboard")
+        if review || CommandLine.arguments.contains("--dashboard")
             || ProcessInfo.processInfo.environment["FLEETCONSOLE_DASHBOARD"] == "1" {
             showDashboard()
         }
@@ -301,7 +321,14 @@ MainActor.assumeIsolated {
     let application = NSApplication.shared
     let delegate = AppDelegate()
     application.delegate = delegate
-    application.setActivationPolicy(.accessory)   // menu-bar only, no Dock icon
+    // Review bundles expose a normal window to native accessibility automation.
+    // Shipping builds remain menu-bar apps.
+    #if FLEET_SURFACE_RENDERER
+    let reviewWindow = Bundle.main.object(forInfoDictionaryKey: "FleetConsoleReviewBuild") as? Bool == true
+    application.setActivationPolicy(reviewWindow ? .regular : .accessory)
+    #else
+    application.setActivationPolicy(.accessory)
+    #endif
     objc_setAssociatedObject(application, "fleetconsole.delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
     application.run()
 }

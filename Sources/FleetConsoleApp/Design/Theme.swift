@@ -44,7 +44,7 @@ enum FleetFont {
     /// Big numerals in stat tiles.
     static let stat = Font.system(size: 22, weight: .semibold)
 
-    static func mono(_ size: CGFloat = 10, weight: Font.Weight = .regular) -> Font {
+    static func mono(_ size: CGFloat = 12, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
     }
 }

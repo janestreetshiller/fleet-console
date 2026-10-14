@@ -227,10 +227,9 @@ private struct FactCell: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(label.uppercased())
+            Text(label)
                 .font(ConsoleFont.badge.weight(.semibold))
                 .foregroundStyle(SurfaceInk.secondary)
-                .kerning(0.5)
             Text(value)
                 .font(ConsoleFont.mono(.caption))
                 .foregroundStyle(.secondary)

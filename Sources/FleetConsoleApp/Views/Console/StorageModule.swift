@@ -393,6 +393,11 @@ struct SegmentedStorageBar: View {
                         }
                         .help(tooltip(stripe))
                         .onTapGesture { toggle(stripe.id) }
+                        .focusable()
+                        .onKeyPress(keys: [.return, .space], phases: .down) { _ in
+                            toggle(stripe.id)
+                            return .handled
+                        }
                         // Each stripe is its own element: the bar used to
                         // collapse to one label, which made the segment
                         // inspector unreachable without a pointer.

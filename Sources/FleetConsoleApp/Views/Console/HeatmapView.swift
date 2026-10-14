@@ -260,6 +260,12 @@ struct HeatmapView: View {
             hovered = inside ? item : (hovered?.id == item.id ? nil : hovered)
         }
         .onTapGesture { activate(item) }
+        .focusable(item.action != .none)
+        .onKeyPress(keys: [.return, .space], phases: .down) { _ in
+            guard item.action != .none else { return .ignored }
+            activate(item)
+            return .handled
+        }
         .help("\(item.name) — \(ConsoleFmt.bytes(item.bytes))\n\(item.detail)")
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.name), \(ConsoleFmt.bytes(item.bytes))")

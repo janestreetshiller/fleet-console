@@ -10,9 +10,9 @@ The complete source — core, controller, CLI, Rust protocol and native app —
 is published under MIT. Local monitoring and service control are free.
 The source and downloads live at
 https://github.com/janestreetshiller/fleet-console.
-Optional multi-device access costs $10 USD/month through Ouros, operated by Ouros AI, LLC. Connect your Ouros
-account in Devices, refresh the subscription options, and complete secure checkout;
-refresh your subscription to link additional computers.
+Optional multi-device access costs $10 USD/month through Ouros, operated by
+Ouros AI, LLC. Choose **Link a Device…**, sign in to Ouros, and complete secure
+checkout. Refresh the subscription after payment to link additional computers.
 SwiftTerm retains its own MIT notices.
 
 CPU and memory lead the Overview with taller plots. Choose CPU or Memory to focus
@@ -101,6 +101,11 @@ installation, and distribution. `fleetctl` is bundled at
 on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 
 ## Tools and keyboard access
+
+The interface uses macOS fonts, appearance colors and native controls. The sidebar
+toggle stays at the left edge; the inspector toggle stays at the right edge.
+Device fields retain their labels, selectable process rows work with the keyboard,
+and shared surfaces honor Reduce Motion and Increase Contrast.
 
 The dashboard's **Tools** menu opens Terminal and Files. Terminal is
 your shell; commands entered there become supervised only when launched through

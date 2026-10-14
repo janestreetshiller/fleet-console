@@ -56,7 +56,7 @@ enum SurfaceInk {
     /// A value that is absent, or a control that is unavailable. One step under
     /// `.secondary`, which is as far as text can go and still be read — the two
     /// literals this replaced were 0.5 and 0.6, and nothing distinguished them.
-    static var dim: Color { Color.secondary.opacity(0.6) }
+    static var dim: Color { Color(nsColor: .secondaryLabelColor) }
 
     /// An untinted border on a control — a capsule, a chip, a picker segment.
     static var outline: Color { Color.primary.opacity(0.3) }
