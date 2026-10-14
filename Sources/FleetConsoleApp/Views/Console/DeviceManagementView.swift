@@ -165,7 +165,7 @@ struct DeviceManagementView: View {
         Button("AI Credits…") {
             NSWorkspace.shared.open(URL(string: "https://ouros.md/dashboard#/billing")!)
         }
-        Button("Refresh") { Task { await model.ourosBilling.refresh(userInitiated: false) } }
+        Button("Refresh") { Task { await model.ourosBilling.refresh(userInitiated: true) } }
         if model.ourosBilling.signedIn {
             Button("Sign Out") { Task { await model.ourosBilling.disconnect() } }
         }
