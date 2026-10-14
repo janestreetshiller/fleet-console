@@ -51,6 +51,7 @@ cargo build -p fleet-agent          # binary: rust/target/debug/fleet-agent
 fleet-agent serve                   # MCP stdio server (JSON-RPC 2.0)
 fleet-agent propose "what's eating memory?"
 fleet-agent propose --json "…"      # machine-readable read-only proposal
+fleet-agent propose --prompt-file request.md # complete UTF-8 question, up to 32 KiB
 fleet-agent ask "…"                 # compatibility alias for propose
 fleet-agent meter                   # signed ledger totals (default 7 days)
 fleet-agent meter --days 30
@@ -68,7 +69,11 @@ requests.
 
 `propose` and `ask` expose only observation tools. The dispatcher rejects every
 state-changing tool even if the model supplies `confirm:true`. The app invokes
-the absolute bundled binary and supplies the report contents directly.
+the absolute bundled binary and saves the complete request in a distinct report
+file, passed with `--prompt-file`, so the shell does not echo all findings.
+Terminal output separates a single preparing status from the proposal or error;
+reply and diagnostic bodies are preserved. Piped, JSON and MCP output retain
+their existing format. `NO_COLOR` and `TERM=dumb` disable label emphasis.
 
 One proposal runs at a time, protected by an operating-system lock that releases
 on exit or crash. Inference refuses warning/critical pressure, unavailable memory

@@ -5,6 +5,74 @@ import FleetCore
 
 @Suite(.serialized)
 struct FixAgentTests {
+    @Test("Queued fix requests in the same second retain distinct files and complete contents")
+    func simultaneousRequestsKeepTheirContents() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = FixReport.location(now: now)
+        let second = FixReport.location(now: now)
+        #expect(first != second)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let firstPath = directory.appendingPathComponent(first.lastPathComponent)
+        let secondPath = directory.appendingPathComponent(second.lastPathComponent)
+        let firstRequest = FixReport.proposalPrompt(markdown: "First finding\n'quoted' café\n")
+        let secondRequest = FixReport.proposalPrompt(markdown: "Second finding\nkeep both requests\n")
+        try FixReport.write(firstRequest, to: firstPath)
+        try FixReport.write(secondRequest, to: secondPath)
+        #expect(try Data(contentsOf: firstPath) == Data(firstRequest.utf8))
+        #expect(try Data(contentsOf: secondPath) == Data(secondRequest.utf8))
+    }
+
+    @MainActor @Test("The Fleet Agent handoff keeps the full request in a file and the terminal command short")
+    func compactProposalHandoff() throws {
+        let suite = "fix-agent-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("fleet-agent", forKey: "fleetconsole.fixAgent")
+        let settings = FixAgentSettings(defaults: defaults) { _ in
+            URL(fileURLWithPath: "/Fleet's App/bin/fleet-agent")
+        }
+        let capture = FixerLaunchCapture()
+        let observer = NotificationCenter.default.addObserver(forName: ConsoleCommand.runInTerminal,
+                                                              object: nil, queue: .main) { note in
+            let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String ?? ""
+            MainActor.assumeIsolated { capture.notifications.append(["command": command]) }
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+        var saved: String?
+        var path: URL?
+        let item = AttentionItem(id: "readable", severity: .critical, title: "Worker failed",
+                                 detail: "Full finding: \"worker's stderr\" — connection refused\n" + String(repeating: "long finding ", count: 100))
+        let model = AppModel()
+        model.sendToFixer([item], openDashboard: {}, settings: settings, loadReportEvents: { $0([]) },
+                          writeReport: { request, location in saved = request; path = location })
+        let command = try #require(capture.notifications.first?["command"])
+        let request = try #require(saved)
+        let location = try #require(path)
+        #expect(command == "'/Fleet'\\''s App/bin/fleet-agent' propose --prompt-file " + location.path.shellQuoted)
+        #expect(!command.contains("\n"))
+        #expect(!command.contains(item.detail))
+        #expect(request.hasPrefix("FleetConsole found the problems below on this Mac."))
+        #expect(request.contains(item.detail))
+        #expect(request.contains("Do not launch, restart, stop, renew or otherwise change any service."))
+        if let evidence = ProcessInfo.processInfo.environment["FLEET_HANDOFF_EVIDENCE_DIR"] {
+            let directory = URL(fileURLWithPath: evidence, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let before = "'/Fleet'\\''s App/bin/fleet-agent' propose " + request.shellQuoted
+            let receipt: [String: Any] = [
+                "entryPoint": "AppModel.sendToFixer -> ConsoleCommand.runInTerminal",
+                "newCommand": command, "newCommandBytes": command.utf8.count,
+                "previousInlineCommandBytesForSameRequest": before.utf8.count,
+                "completeRequestBytes": request.utf8.count,
+                "requestContainsCompleteFinding": request.contains(item.detail),
+                "requestContainsReadOnlyPolicy": request.contains("Do not launch, restart, stop, renew or otherwise change any service."),
+                "sample": "Test finding, not host diagnostics"
+            ]
+            try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
+                .write(to: directory.appendingPathComponent("handoff-receipt.json"))
+        }
+    }
+
     @Test("A prompt survives the shell intact, quotes and all")
     func shellQuoting() {
         #expect("plain".shellQuoted == "'plain'")
@@ -121,7 +189,7 @@ struct FixAgentTests {
         #expect(FixAgentBinary.resolve("fleet-agent", resourceURL: resources, searchPathResolve: resolve)?.path == "/old-path/fleet-agent")
     }
 
-    @MainActor @Test("The actual handoff uses the resolved binary and embeds the fleet-agent report")
+    @MainActor @Test("The actual handoff uses the resolved binary and saves the complete fleet-agent request")
     func notificationCarriesProposalAndReport() throws {
         let model = AppModel()
         let capture = FixerLaunchCapture()
@@ -170,10 +238,12 @@ struct FixAgentTests {
             #expect(written.contains(item.detail))
             #expect(notification[ConsoleCommand.userInfoSubject] == "\(kind.title) · fixture problem")
             if kind == .fleetAgent {
-                #expect(command.hasPrefix(bundled.path.shellQuoted + " propose "))
-                #expect(command.contains("# FleetConsole fix request"))
-                #expect(command.contains(item.detail))
-                #expect(command.contains("read-only tools"))
+                let path = try #require(writtenPath)
+                #expect(command == bundled.path.shellQuoted + " propose --prompt-file " + path.path.shellQuoted)
+                #expect(!command.contains("# FleetConsole fix request"))
+                #expect(!command.contains(item.detail))
+                #expect(written.contains("read-only tools"))
+                #expect(written.hasPrefix(FixReport.proposalPrompt(markdown: "# FleetConsole fix request")))
                 #expect(!command.contains("wrote them up at"))
                 #expect(!command.hasPrefix("fleet-agent "))
                 #expect(!command.contains(" ask "))
