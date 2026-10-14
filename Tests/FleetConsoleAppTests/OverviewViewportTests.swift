@@ -209,12 +209,7 @@ struct OverviewViewportTests {
     @MainActor private func click(_ object: NSObject, in window: NSWindow) throws {
         let rect = window.convertFromScreen(try frame(object))
         let location = NSPoint(x: rect.midX, y: rect.midY)
-        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-            let event = try #require(NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
-                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
-                context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0))
-            window.sendEvent(event)
-        }
+        try sendSyntheticClick(at: location, in: window)
     }
 
     @MainActor @Test("Search filters names and command lines before applying the process cap")
