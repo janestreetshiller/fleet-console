@@ -5,7 +5,7 @@ use fleet_agent::engine::{self, EngineConfig, HttpModelClient, ModelClient};
 use fleet_agent::meter::{self, MeterRecord, TurnUsage};
 use fleet_agent::{default_ledger_path, default_socket_path, guard, server, tools};
 use serde_json::json;
-use std::io::{IsTerminal, Write};
+use std::io::{IsTerminal, Read, Write};
 use std::process::ExitCode;
 
 const USAGE: &str = "fleet-agent — the FleetConsole resident operations agent
@@ -14,6 +14,7 @@ USAGE:
     fleet-agent serve                    MCP stdio server (JSON-RPC 2.0)
     fleet-agent propose \"<question>\"     read-only proposal against a configured endpoint
     fleet-agent propose --json \"<question>\" machine-readable proposal
+    fleet-agent propose --prompt-file PATH read the complete UTF-8 question from a file
     fleet-agent ask \"<question>\"         compatibility alias for propose
     fleet-agent meter [--days N]         metered usage ledger, signed totals
     fleet-agent self-check                schema hash, daemon reachability, passive configuration
@@ -70,12 +71,10 @@ fn cmd_serve() -> ExitCode {
 
 fn cmd_ask(rest: &[String]) -> ExitCode {
     let json = rest.iter().any(|a| a == "--json");
-    let question = rest
-        .iter()
-        .filter(|a| !a.starts_with("--"))
-        .cloned()
-        .collect::<Vec<_>>()
-        .join(" ");
+    let question = match proposal_question(rest) {
+        Ok(question) => question,
+        Err(error) => return proposal_error(json, &error),
+    };
     if question.trim().is_empty() {
         eprintln!("ask: a question is required\n{USAGE}");
         return ExitCode::from(2);
@@ -83,12 +82,6 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
     let config = EngineConfig::default();
     if let Err(error) = guard::check_question(&question).and_then(|_| config.validate()) {
         return proposal_error(json, &error);
-    }
-    if let Some(flag) = rest
-        .iter()
-        .find(|a| a.starts_with("--") && a.as_str() != "--json")
-    {
-        return proposal_error(json, &format!("unknown proposal flag {flag}"));
     }
     if let Err(error) = guard::require_headroom(guard::sample_memory()) {
         return proposal_error(json, &error);
@@ -120,6 +113,12 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0);
+    let presentation = ProposalPresentation::for_stream(json, std::io::stdout().is_terminal());
+    if presentation.terminal {
+        print!("{}", presentation.started());
+        // The status must reach the PTY while the request is still running.
+        let _ = std::io::stdout().flush();
+    }
     let result = engine::ask_once(&mut model, &mut dispatcher, &question, &config);
     match result {
         Ok(turn) => {
@@ -152,18 +151,11 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
                 });
                 println!("{}", out);
             } else {
-                println!("{}", turn.reply);
+                print!("{}", presentation.reply(&turn.reply));
             }
             ExitCode::SUCCESS
         }
-        Err(e) => {
-            if json {
-                println!("{}", json!({ "error": e }));
-            } else {
-                eprintln!("fleet-agent: {e}");
-            }
-            ExitCode::FAILURE
-        }
+        Err(e) => proposal_error(json, &e),
     }
 }
 
@@ -171,9 +163,131 @@ fn proposal_error(json: bool, error: &str) -> ExitCode {
     if json {
         println!("{}", json!({ "error": error }));
     } else {
-        eprintln!("fleet-agent: {error}");
+        let presentation = ProposalPresentation::for_stream(false, std::io::stderr().is_terminal());
+        eprint!("{}", presentation.error(error));
     }
     ExitCode::FAILURE
+}
+
+/// File transport keeps the full request out of the shell's command echo. The
+/// same byte limit applies to inline questions and files, without truncation.
+fn proposal_question(rest: &[String]) -> Result<String, String> {
+    let mut inline = Vec::new();
+    let mut prompt_file = None;
+    let mut arguments = rest.iter();
+    while let Some(argument) = arguments.next() {
+        match argument.as_str() {
+            "--json" => {}
+            "--prompt-file" => {
+                if prompt_file.is_some() {
+                    return Err("--prompt-file may be supplied only once".into());
+                }
+                let path = arguments
+                    .next()
+                    .filter(|path| !path.starts_with("--") && !path.is_empty())
+                    .ok_or("--prompt-file requires a path")?;
+                prompt_file = Some(path);
+            }
+            flag if flag.starts_with("--") => {
+                return Err(format!("unknown proposal flag {flag}"));
+            }
+            _ => inline.push(argument.as_str()),
+        }
+    }
+    let Some(path) = prompt_file else {
+        return Ok(inline.join(" "));
+    };
+    if !inline.is_empty() {
+        return Err("use either --prompt-file or an inline question, not both".into());
+    }
+    use std::os::unix::fs::OpenOptionsExt;
+    // The package targets Darwin and Linux; opening a FIFO must not wait for a
+    // writer before we can reject it. O_NONBLOCK does not alter regular files.
+    #[cfg(target_os = "macos")]
+    const NONBLOCK: i32 = 0x0004;
+    #[cfg(not(target_os = "macos"))]
+    const NONBLOCK: i32 = 0x0800;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(NONBLOCK)
+        .open(path)
+        .map_err(|error| format!("cannot read prompt file {path}: {error}"))?;
+    if !file
+        .metadata()
+        .map_err(|error| format!("cannot inspect prompt file {path}: {error}"))?
+        .is_file()
+    {
+        return Err(format!("prompt file {path} must be a regular file"));
+    }
+    let mut bytes = Vec::new();
+    file.take((guard::MAX_QUESTION_BYTES + 1) as u64)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("cannot read prompt file {path}: {error}"))?;
+    if bytes.len() > guard::MAX_QUESTION_BYTES {
+        return Err(format!(
+            "proposal input exceeds {} bytes",
+            guard::MAX_QUESTION_BYTES
+        ));
+    }
+    String::from_utf8(bytes)
+        .map_err(|error| format!("prompt file {path} is not valid UTF-8: {error}"))
+}
+
+/// Only Fleet Agent's own labels are styled. Reply/error content and terminal
+/// control sequences pass through unchanged; machine-readable output stays raw.
+struct ProposalPresentation {
+    terminal: bool,
+    emphasis: bool,
+}
+
+impl ProposalPresentation {
+    fn for_stream(json: bool, terminal: bool) -> Self {
+        Self::new(
+            json,
+            terminal,
+            std::env::var_os("NO_COLOR").is_some(),
+            std::env::var("TERM").as_deref() == Ok("dumb"),
+        )
+    }
+
+    fn new(json: bool, terminal: bool, no_color: bool, dumb: bool) -> Self {
+        Self {
+            terminal: terminal && !json,
+            emphasis: terminal && !json && !no_color && !dumb,
+        }
+    }
+
+    fn label(&self, text: &str) -> String {
+        if self.emphasis {
+            format!("\x1b[1m{text}\x1b[0m")
+        } else {
+            text.into()
+        }
+    }
+
+    fn started(&self) -> String {
+        if self.terminal {
+            format!("\n{} · Preparing proposal…\n", self.label("Fleet Agent"))
+        } else {
+            String::new()
+        }
+    }
+
+    fn reply(&self, reply: &str) -> String {
+        if self.terminal {
+            format!("\n{}\n\n{reply}\n\n", self.label("Proposal"))
+        } else {
+            format!("{reply}\n")
+        }
+    }
+
+    fn error(&self, error: &str) -> String {
+        if self.terminal {
+            format!("\n{}\n\nfleet-agent: {error}\n\n", self.label("Error"))
+        } else {
+            format!("fleet-agent: {error}\n")
+        }
+    }
 }
 
 fn cmd_meter(rest: &[String]) -> ExitCode {
@@ -291,5 +405,151 @@ fn cmd_self_check() -> ExitCode {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use super::*;
+
+    fn arguments(values: &[&str]) -> Vec<String> {
+        values.iter().map(|value| value.to_string()).collect()
+    }
+
+    #[test]
+    fn prompt_file_preserves_exact_utf8_question_including_whitespace() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("prompt 'quoted' ü.txt");
+        let question = "  café 'quoted' $HOME `printf untouched`\r\n\nTrailing spaces  \n\n";
+        std::fs::write(&path, question).unwrap();
+        let rest = arguments(&["--json", "--prompt-file", path.to_str().unwrap()]);
+        assert_eq!(
+            proposal_question(&rest).unwrap().as_bytes(),
+            question.as_bytes()
+        );
+    }
+
+    #[test]
+    fn prompt_file_accepts_the_limit_and_rejects_one_more_byte_and_invalid_utf8() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("prompt.txt");
+        let rest = arguments(&["--prompt-file", path.to_str().unwrap()]);
+        let exact = "é".repeat(guard::MAX_QUESTION_BYTES / 2);
+        std::fs::write(&path, &exact).unwrap();
+        assert_eq!(proposal_question(&rest).unwrap(), exact);
+        std::fs::write(&path, format!("{exact}x")).unwrap();
+        assert!(proposal_question(&rest)
+            .unwrap_err()
+            .contains("input exceeds"));
+        std::fs::write(&path, [0xff, 0xfe]).unwrap();
+        assert!(proposal_question(&rest)
+            .unwrap_err()
+            .contains("not valid UTF-8"));
+    }
+
+    #[test]
+    fn prompt_file_rejects_fifo_and_directory_but_accepts_regular_symlink() {
+        let directory = tempfile::tempdir().unwrap();
+        let fifo = directory.path().join("prompt.fifo");
+        assert!(std::process::Command::new("mkfifo")
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success());
+        for path in [&fifo, &directory.path().to_path_buf()] {
+            let start = std::time::Instant::now();
+            let error = proposal_question(&arguments(&["--prompt-file", path.to_str().unwrap()]))
+                .unwrap_err();
+            assert!(error.contains("must be a regular file"), "{error}");
+            assert!(start.elapsed() < std::time::Duration::from_secs(1));
+        }
+        let regular = directory.path().join("prompt.txt");
+        let link = directory.path().join("prompt-link.txt");
+        std::fs::write(&regular, "Exact linked content\n").unwrap();
+        std::os::unix::fs::symlink(&regular, &link).unwrap();
+        assert_eq!(
+            proposal_question(&arguments(&["--prompt-file", link.to_str().unwrap()])).unwrap(),
+            "Exact linked content\n"
+        );
+    }
+
+    #[test]
+    fn proposal_arguments_reject_ambiguous_or_incomplete_transport() {
+        for (rest, error) in [
+            (arguments(&["--prompt-file"]), "requires a path"),
+            (arguments(&["--prompt-file", "--json"]), "requires a path"),
+            (arguments(&["--prompt-file", ""]), "requires a path"),
+            (
+                arguments(&["--prompt-file", "one", "--prompt-file", "two"]),
+                "only once",
+            ),
+            (arguments(&["question", "--prompt-file", "one"]), "not both"),
+            (arguments(&["--prompt-file", "one", "question"]), "not both"),
+            (
+                arguments(&["--unknown", "question"]),
+                "unknown proposal flag",
+            ),
+        ] {
+            assert!(proposal_question(&rest).unwrap_err().contains(error));
+        }
+        assert_eq!(
+            proposal_question(&arguments(&["first", "--json", "second"])).unwrap(),
+            "first second"
+        );
+    }
+
+    #[test]
+    fn terminal_labels_leave_reply_and_error_bytes_intact() {
+        let presentation = ProposalPresentation::new(false, true, false, false);
+        for reply in [
+            "Short finding.",
+            "A long result that wraps only in the terminal, with  spaces and\n    indentation.",
+            "\x1b[31mcolour\x1b[0m\rreplace\x1b[K\n世界\n\n",
+        ] {
+            assert_eq!(
+                presentation.reply(reply),
+                format!("\n\x1b[1mProposal\x1b[0m\n\n{reply}\n\n")
+            );
+        }
+        let error = "request failed\n  detail: \x1b[31mE42\x1b[0m";
+        assert_eq!(
+            presentation.error(error),
+            format!("\n\x1b[1mError\x1b[0m\n\nfleet-agent: {error}\n\n")
+        );
+        assert_eq!(
+            presentation.started().matches("Preparing proposal").count(),
+            1
+        );
+        if let Some(directory) = std::env::var_os("FLEET_AGENT_PRESENTATION_EVIDENCE_DIR") {
+            let directory = std::path::PathBuf::from(directory);
+            std::fs::create_dir_all(&directory).unwrap();
+            for (name, reply) in [
+                ("short.ansi", "TEST DATA: A short read-only proposal for formatter/PTY verification.".to_string()),
+                ("wrapped.ansi", format!("TEST DATA: A long formatter/PTY proposal that must wrap without losing content.\n\n{}\n\n    Indented evidence stays indented.\n    /a/long/path/whose/full/content/must/stay/copyable/without/truncation", "Evidence, command, result and status remain readable with every original word preserved. ".repeat(5))),
+                ("controls.ansi", "TEST DATA: Original terminal controls follow.\n\x1b[31mred content\x1b[0m\nProgress 10%\rProgress 90%\x1b[K\nUnicode 世界 · café\n\nOriginal blank line above.".to_string()),
+            ] {
+                std::fs::write(directory.join(name), presentation.started() + &presentation.reply(&reply)).unwrap();
+            }
+            std::fs::write(directory.join("error.ansi"), presentation.error("TEST DATA: Failed command\n  Full detail: permission denied for /a/long/path; diagnostic E42 stays intact.")).unwrap();
+        }
+    }
+
+    #[test]
+    fn pipes_json_no_color_and_dumb_term_preserve_their_output_contracts() {
+        for (json, terminal) in [(false, false), (true, false), (true, true)] {
+            let presentation = ProposalPresentation::new(json, terminal, false, false);
+            assert!(presentation.started().is_empty());
+            assert_eq!(presentation.reply("body\n"), "body\n\n");
+            assert_eq!(presentation.error("detail\n"), "fleet-agent: detail\n\n");
+        }
+        for (no_color, dumb) in [(true, false), (false, true)] {
+            let presentation = ProposalPresentation::new(false, true, no_color, dumb);
+            assert_eq!(presentation.reply("body"), "\nProposal\n\nbody\n\n");
+            assert_eq!(
+                presentation.error("detail"),
+                "\nError\n\nfleet-agent: detail\n\n"
+            );
+            assert!(!presentation.started().contains('\x1b'));
+        }
     }
 }

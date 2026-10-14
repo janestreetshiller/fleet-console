@@ -78,6 +78,86 @@ fn executable_rejects_oversized_input_before_any_model_connection() {
         std::io::ErrorKind::WouldBlock
     );
 }
+
+#[test]
+fn executable_prompt_file_limits_encoding_and_arguments_fail_before_model_connection() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("prompt.txt");
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    for (bytes, expected) in [
+        (vec![b'x'; MAX_QUESTION_BYTES + 1], "input exceeds"),
+        (vec![0xff, 0xfe], "not valid UTF-8"),
+    ] {
+        std::fs::write(&path, bytes).unwrap();
+        let output = cli()
+            .env("FLEET_AGENT_LLM_URL", &endpoint)
+            .args(["propose", "--json", "--prompt-file"])
+            .arg(&path)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert!(value["error"].as_str().unwrap().contains(expected));
+        assert!(output.stderr.is_empty());
+    }
+    std::fs::write(&path, vec![b'x'; MAX_QUESTION_BYTES]).unwrap();
+    let accepted = cli()
+        .args(["propose", "--json", "--prompt-file"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    let value: Value = serde_json::from_slice(&accepted.stdout).unwrap();
+    assert!(value["error"]
+        .as_str()
+        .unwrap()
+        .contains("set FLEET_AGENT_LLM_URL"));
+    for (arguments, expected) in [
+        (vec!["--prompt-file"], "requires a path"),
+        (vec!["--prompt-file", "--json"], "requires a path"),
+        (
+            vec!["--prompt-file", "one", "--prompt-file", "two"],
+            "only once",
+        ),
+        (vec!["--prompt-file", "one", "also inline"], "not both"),
+        (vec!["--unknown", "question"], "unknown proposal flag"),
+        (
+            vec!["--prompt-file", "/FLEET_TEST_NO_SUCH_PROMPT_47C9"],
+            "cannot read prompt file",
+        ),
+    ] {
+        let output = cli()
+            .env("FLEET_AGENT_LLM_URL", &endpoint)
+            .args(["propose", "--json"])
+            .args(arguments)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        let value: Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert!(
+            value["error"].as_str().unwrap().contains(expected),
+            "{value}"
+        );
+        assert!(output.stderr.is_empty());
+    }
+    std::fs::write(&path, " \r\n").unwrap();
+    let empty = cli()
+        .args(["propose", "--prompt-file"])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert_eq!(empty.status.code(), Some(2));
+    assert!(empty.stdout.is_empty());
+    assert!(String::from_utf8(empty.stderr)
+        .unwrap()
+        .contains("a question is required"));
+    assert_eq!(
+        listener.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
 #[test]
 fn executable_self_check_never_sends_a_model_request() {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();

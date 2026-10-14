@@ -11,7 +11,7 @@ import FleetCore
 // into a report file, and starts the agent you designated on that report in the
 // dashboard's own terminal, in the service's working directory. You watch it,
 // answer it, stop it. External fixers act through `fleetctl` and report through
-// its mailbox. The bundled fleet-agent receives the report inline and returns
+// its mailbox. The bundled fleet-agent reads the complete saved request and returns
 // a read-only proposal for the operator to review.
 
 /// The agents FleetConsole knows how to start on a report.
@@ -35,11 +35,13 @@ enum FixAgentKind: String, CaseIterable, Identifiable, Sendable {
 
     /// The command line typed into the terminal. The bundled agent produces a
     /// read-only proposal; external agents retain their interactive workflow.
-    func commandLine(prompt: String, executableURL: URL? = nil) -> String {
+    func commandLine(prompt: String, executableURL: URL? = nil, promptFileURL: URL? = nil) -> String {
         let binary = executableURL?.path.shellQuoted ?? executable
         switch self {
         case .claude, .codex: return "\(binary) \(prompt.shellQuoted)"
-        case .fleetAgent: return "\(binary) propose \(prompt.shellQuoted)"
+        case .fleetAgent:
+            if let promptFileURL { return "\(binary) propose --prompt-file \(promptFileURL.path.shellQuoted)" }
+            return "\(binary) propose \(prompt.shellQuoted)"
         }
     }
 }
@@ -160,7 +162,9 @@ enum FixReport {
         let directory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/FleetConsole/fix-reports", isDirectory: true)
         let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
-        return directory.appendingPathComponent("fix-\(stamp).md")
+        // The shell can read after a second handoff is queued. Each request
+        // must retain its own contents even when both arrive in the same second.
+        return directory.appendingPathComponent("fix-\(stamp)-\(UUID().uuidString).md")
     }
 
     static func write(_ markdown: String, to url: URL) throws {
@@ -216,19 +220,22 @@ extension AppModel {
             let prompt = fixer == .fleetAgent
                 ? FixReport.proposalPrompt(markdown: markdown)
                 : FixReport.prompt(reportPath: report.path, agentID: fixer.executable, fleetctl: fleetctl.shellQuoted)
-            // Reject the full inline request before writing or dispatching;
+            // Reject the complete request before writing or dispatching;
             // external fixers retain their report-file workflow.
             guard fixer != .fleetAgent || prompt.utf8.count <= FixReport.maximumPromptBytes else {
                 self.actionError = "The fix request exceeds 32 KiB. Send fewer problems at once; no findings were truncated."
                 return
             }
-            do { try writeReport(markdown, report) } catch {
+            // Keep the exact proposal prompt in the saved report instead of
+            // echoing all findings and instructions into the shell command.
+            do { try writeReport(fixer == .fleetAgent ? prompt : markdown, report) } catch {
                 self.actionError = "The fix report could not be written."
                 return
             }
             let directory = services.count == 1 && !services[0].cwd.isEmpty ? services[0].cwd : NSHomeDirectory()
             NotificationCenter.default.post(name: ConsoleCommand.runInTerminal, object: nil, userInfo: [
-                ConsoleCommand.userInfoCommand: fixer.commandLine(prompt: prompt, executableURL: executableURL),
+                ConsoleCommand.userInfoCommand: fixer.commandLine(prompt: prompt, executableURL: executableURL,
+                                                                  promptFileURL: fixer == .fleetAgent ? report : nil),
                 ConsoleCommand.userInfoDirectory: directory,
                 ConsoleCommand.userInfoSubject: "\(fixer.title) · \(items.count == 1 ? items[0].title : "\(items.count) problems")",
             ])
