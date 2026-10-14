@@ -154,7 +154,13 @@ final class OurosBilling {
                 membership = try await request("/hvy/v1/fleet-console/entitlement")
                 if active { checkoutKey = nil }
             } else { membership = nil }
-            message = available ? nil : "Ouros billing is unavailable. Try again."
+            if !available {
+                message = "Ouros billing is unavailable. Try again."
+            } else if !signedIn && userInitiated {
+                message = "Sign in to check your subscription. If you already paid, use the same Ouros account."
+            } else {
+                message = nil
+            }
         } catch { handle(error) }
     }
 

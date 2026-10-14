@@ -70,4 +70,14 @@ struct BillingPrivacyTests {
         #expect(BillingRequestProbe.requests.last?.url?.path == "/hvy/v1/fleet-console/entitlement")
         #expect(BillingRequestProbe.requests.last?.value(forHTTPHeaderField: "Authorization") != nil)
     }
+
+    @MainActor @Test func signedOutExplicitRefreshExplainsHowToRecoverAnExistingPurchase() async {
+        let billing = OurosBilling(useKeychain: false, sessionConfiguration: configuration(), openBrowser: { _ in })
+        await billing.refresh(userInitiated: true)
+        #expect(billing.available)
+        #expect(!billing.signedIn)
+        #expect(!billing.active)
+        #expect(billing.message == "Sign in to check your subscription. If you already paid, use the same Ouros account.")
+        #expect(BillingRequestProbe.requests.map { $0.url!.path } == ["/hvy/v1/fleet-console/offers"])
+    }
 }
