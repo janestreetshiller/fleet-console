@@ -64,4 +64,29 @@ struct InvestigationTests {
                                              values: ["invalid": .infinity], context: [:], processes: [])
         #expect(throws: (any Error).self) { try nonfinite.starter() }
     }
+    @Test func gatewayUsesExistingServerAuthorizedTextContract() throws {
+        let payload = try InvestigationGatewayPayload.make(model: "catalog-model", starter: "{\"subject\":\"cpu\"}")
+        let object = try #require(JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        #expect(object["model"] as? String == "catalog-model")
+        #expect(object["stream"] as? Bool == false)
+        #expect(object["tools"] == nil)
+        let messages = try #require(object["messages"] as? [[String: String]])
+        #expect(messages.count == 2)
+        #expect(messages.last?["content"] == "{\"subject\":\"cpu\"}")
+        #expect(payload.count <= 16_384)
+        #expect(throws: (any Error).self) {
+            try InvestigationGatewayPayload.make(model: "catalog-model", starter: String(repeating: "x", count: 17_000))
+        }
+    }
+
+    @Test func uncertainGatewayFailuresNeverPermitBlindReplay() {
+        let upstream = Data("{\"error\":{\"code\":\"upstream_error\"}}".utf8)
+        #expect(!InvestigationGatewayPayload.refusedBeforeDispatch(data: upstream, status: 400))
+        #expect(!InvestigationGatewayPayload.refusedBeforeDispatch(data: upstream, status: 422))
+        #expect(!InvestigationGatewayPayload.refusedBeforeDispatch(data: upstream, status: 429))
+        #expect(!InvestigationGatewayPayload.refusedBeforeDispatch(data: upstream, status: 502))
+        let denied = Data("{\"code\":\"subscription_required\"}".utf8)
+        #expect(InvestigationGatewayPayload.refusedBeforeDispatch(data: denied, status: 402))
+    }
+
 }

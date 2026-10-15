@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 import Observation
 
 // The shell surface — backed by a real PTY running the user's login shell.
@@ -27,17 +28,40 @@ final class TerminalPanel: PTYBackedSurface {
     private var investigationSession: PTYSession?
     private var session: PTYSession { investigationSession ?? shellSession }
 
-    /// Separate PTY: never type evidence or commands into an existing shell/agent.
-    func investigate(_ starter: String, executable: URL) -> Bool {
-        if let existing = investigationSession, existing.phase == .running || existing.phase == .idle { return false }
+    private var investigationBusy = false
+    private var investigationBilling: OurosBilling?
+    @ObservationIgnored private var investigationTask: Task<Void, Never>?
+
+    /// Separate output-only terminal transcript. Never creates a local inference
+    /// process, types into a shell, or exposes the account token to argv/env.
+    func investigate(_ starter: String, billing: OurosBilling, validation: @escaping @MainActor () -> Bool) -> Bool {
+        guard !investigationBusy else { return false }
         let fresh = PTYSession(refusesBelowMinimum: false)
         if let grid = session.proposed { fresh.settle(grid) }
         investigationSession = fresh
-        fresh.ensureRunning(PTYSession.Launch(executable: executable, arguments: ["propose", starter],
-            workingDirectory: URL(fileURLWithPath: NSHomeDirectory()),
-            environment: ToolBinary.environment(withSearchPath: false), banner: starter))
+        investigationBilling = billing
+        investigationBusy = true
+        appendInvestigation(starter + "\n\nVerifying Ouros agent availability…\n")
+        investigationTask = Task { [weak self] in
+            guard let self else { return }
+            defer { investigationBusy = false; investigationTask = nil }
+            do {
+                let reply = try await billing.investigate(starter: starter, validateObservation: validation)
+                appendInvestigation("\nOuros analysis (snapshot only; no execution tools):\n" + reply + "\n")
+            } catch { appendInvestigation("\n" + error.localizedDescription + "\n") }
+        }
         fresh.focusTerminal()
         return true
+    }
+
+    private func appendInvestigation(_ text: String) {
+        // Provider output is untrusted: strip terminal escape/control sequences
+        // and directional overrides before feeding the emulator as display data.
+        let safe = String(text.unicodeScalars.filter {
+            $0 == "\n" || $0 == "\t" || (!CharacterSet.controlCharacters.contains($0)
+                && !(0x202A...0x202E).contains($0.value) && !(0x2066...0x2069).contains($0.value))
+        })
+        investigationSession?.host.terminal.feed(text: safe.replacingOccurrences(of: "\n", with: "\r\n"))
     }
     private var currentContext = ToolContext()
     private var activated = false
@@ -48,7 +72,7 @@ final class TerminalPanel: PTYBackedSurface {
 
     var reservedWidth: CGFloat { session.reservedWidth }
 
-    var isLive: Bool { session.phase == .running }
+    var isLive: Bool { investigationBusy || shellSession.phase == .running }
 
     // MARK: ToolSurface
 
@@ -91,7 +115,7 @@ final class TerminalPanel: PTYBackedSurface {
     func makeView() -> AnyView {
         AnyView(
             VStack(spacing: 4) {
-            if let investigation = investigationSession {
+            if investigationSession != nil {
                 HStack {
                     Text("Read-only investigation").font(ConsoleFont.caption)
                     Spacer()
@@ -99,7 +123,13 @@ final class TerminalPanel: PTYBackedSurface {
                         investigationSession = nil
                         activate(context: currentContext)
                     }
-                        .disabled(investigation.phase == .running || investigation.phase == .idle)
+                        .disabled(investigationBusy)
+                }
+                if let billing = investigationBilling, let requestID = billing.unconfirmedInvestigationID, !investigationBusy {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Unconfirmed request: " + requestID).font(ConsoleFont.caption).textSelection(.enabled)
+                        Button("Acknowledge after reviewing account receipts") { billing.acknowledgeUnconfirmedInvestigation() }
+                    }
                 }
             }
             PTYPanelView(

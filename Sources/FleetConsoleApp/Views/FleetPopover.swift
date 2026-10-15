@@ -70,6 +70,7 @@ struct FleetPopover: View {
         openDashboard()
         NotificationCenter.default.post(name: ConsoleCommand.selectModule, object: nil,
             userInfo: [ConsoleCommand.userInfoModule: requested == .processes
-                ? ConsoleModule.processes.rawValue : ConsoleModule.services.rawValue])
+                ? ConsoleModule.processes.rawValue : ConsoleModule.services.rawValue,
+                       "operationsSection": requested == .connections ? "Network" : requested == .agents ? "Agents" : "Services"])
     }
 }
