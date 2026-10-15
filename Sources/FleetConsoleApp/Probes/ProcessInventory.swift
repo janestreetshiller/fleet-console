@@ -109,13 +109,13 @@ struct ProcessRow: Identifiable, Equatable {
 @MainActor
 final class ProcessInventory {
     private(set) var rows: [ProcessRow] = []
-    struct Observation: Identifiable {
+    struct CapturedProcesses: Identifiable {
         let id: Date
         let processes: [InvestigationRequest.ProcessEvidence]
         var time: Date { id }
     }
     /// At most 120 captures × 48 redacted rows. No argv, environment or user names.
-    private(set) var observations: [Observation] = []
+    private(set) var observations: [CapturedProcesses] = []
     private(set) var capturedAt: Date?
 
     /// pid → children, rebuilt with each capture. The inspector's process tree
@@ -171,7 +171,7 @@ final class ProcessInventory {
                 let memory = ProcessWeight.memory.ranked(collected, limit: 24)
                 var seen = Set<Int32>()
                 let bounded = (cpu + memory).filter { seen.insert($0.pid).inserted }
-                self.observations.append(Observation(id: captured, processes: bounded.map(InvestigationRequest.ProcessEvidence.init)))
+                self.observations.append(CapturedProcesses(id: captured, processes: bounded.map(InvestigationRequest.ProcessEvidence.init)))
                 if self.observations.count > 120 { self.observations.removeFirst(self.observations.count - 120) }
                 self.sampling = false
             }
