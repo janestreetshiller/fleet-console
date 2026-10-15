@@ -22,16 +22,10 @@ struct FleetSidebarView: View {
         // a heading over each restated what the rows already say.
         List(selection: navigationSelection) {
             Section {
-                Label("Needs Attention", systemImage: "exclamationmark.circle")
+                Label("Overview", systemImage: "exclamationmark.circle")
                     .tag("attention")
-                ForEach([ConsoleModule.overview, .processes, .storage]) { module in
-                    Label(module.rawValue, systemImage: module.symbol)
-                        .tag("module:" + module.rawValue)
-                }
-            }
-            Section {
-                ForEach([ConsoleModule.services, .events, .plists]) { module in
-                    Label(module.rawValue, systemImage: module.symbol)
+                ForEach([ConsoleModule.overview, .processes, .services]) { module in
+                    Label(module == .overview ? "Trends" : module == .services ? "Operations" : module.rawValue, systemImage: module.symbol)
                         .tag("module:" + module.rawValue)
                 }
             }
@@ -94,7 +88,7 @@ struct FleetSidebarView: View {
     private var navigationSelection: Binding<String> {
         Binding {
             if !console.isLocalDeviceSelected { return "device:" + console.selectedDeviceID }
-            return console.atHome ? "attention" : "module:" + console.module.rawValue
+            return console.atHome ? "attention" : "module:" + ([ConsoleModule.storage, .events, .plists].contains(console.module) ? ConsoleModule.services.rawValue : console.module.rawValue)
         } set: { destination in
             if destination == "attention" {
                 console.goHome()

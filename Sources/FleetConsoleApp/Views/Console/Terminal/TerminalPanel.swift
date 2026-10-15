@@ -1,4 +1,5 @@
 import SwiftUI
+import Observation
 
 // The shell surface — backed by a real PTY running the user's login shell.
 //
@@ -17,11 +18,27 @@ import SwiftUI
 //     when computing the grid; the layout of the panel's content region is the
 //     only input to `TerminalGrid.fitting`.
 
+@Observable
 @MainActor
 final class TerminalPanel: PTYBackedSurface {
     let tool: ConsoleTool = .terminal
 
-    private let session = PTYSession(refusesBelowMinimum: false)
+    private let shellSession = PTYSession(refusesBelowMinimum: false)
+    private var investigationSession: PTYSession?
+    private var session: PTYSession { investigationSession ?? shellSession }
+
+    /// Separate PTY: never type evidence or commands into an existing shell/agent.
+    func investigate(_ starter: String, executable: URL) -> Bool {
+        if let existing = investigationSession, existing.phase == .running || existing.phase == .idle { return false }
+        let fresh = PTYSession(refusesBelowMinimum: false)
+        if let grid = session.proposed { fresh.settle(grid) }
+        investigationSession = fresh
+        fresh.ensureRunning(PTYSession.Launch(executable: executable, arguments: ["propose", starter],
+            workingDirectory: URL(fileURLWithPath: NSHomeDirectory()),
+            environment: ToolBinary.environment(withSearchPath: false), banner: starter))
+        fresh.focusTerminal()
+        return true
+    }
     private var currentContext = ToolContext()
     private var activated = false
 
@@ -36,6 +53,7 @@ final class TerminalPanel: PTYBackedSurface {
     // MARK: ToolSurface
 
     func activate(context: ToolContext) {
+        if investigationSession != nil { session.focusTerminal(); return }
         let dir = ToolBinary.usableDirectory(context.workingDirectory)
 
         if !activated {
@@ -72,11 +90,24 @@ final class TerminalPanel: PTYBackedSurface {
 
     func makeView() -> AnyView {
         AnyView(
+            VStack(spacing: 4) {
+            if let investigation = investigationSession {
+                HStack {
+                    Text("Read-only investigation").font(ConsoleFont.caption)
+                    Spacer()
+                    Button("Return to shell") {
+                        investigationSession = nil
+                        activate(context: currentContext)
+                    }
+                        .disabled(investigation.phase == .running || investigation.phase == .idle)
+                }
+            }
             PTYPanelView(
                 session: session,
                 tooNarrowDetail: "A shell needs at least \(TerminalGrid.minimum.columns) columns "
                     + "and \(TerminalGrid.minimum.rows) rows to draw honestly. Widen the panel."
             )
+            .id(ObjectIdentifier(session.host))
             .onAppear {
                 // The panel was just revealed. If a grid was already settled
                 // (e.g. resized while hidden), flush it now.
@@ -85,13 +116,17 @@ final class TerminalPanel: PTYBackedSurface {
                 }
                 self.session.focusTerminal()
             }
+            }
         )
     }
 
     /// Runs one command line in the panel's shell, as if typed and entered.
-    func run(_ commandLine: String) {
+    @discardableResult
+    func run(_ commandLine: String) -> Bool {
+        guard investigationSession == nil else { return false }
         session.send(commandLine + "\r")
         session.focusTerminal()
+        return true
     }
 
     // MARK: Private

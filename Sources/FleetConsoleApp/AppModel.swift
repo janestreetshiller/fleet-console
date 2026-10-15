@@ -171,6 +171,18 @@ final class AppModel {
         }
         if externalServices != snapshot.external { externalServices = snapshot.external }
         if sessions != snapshot.sessions { sessions = snapshot.sessions }
+        // Retain bounded metadata from actual pushes. No transcript, purpose, argv or paths.
+        if jobObservations.last.map({ snapshot.generatedAt.timeIntervalSince($0.time) >= 4 }) ?? true {
+            let agentEntries = snapshot.sessions.prefix(32).map {
+                "Detected " + InvestigationRequest.label($0.tool) + " · pid \($0.pid)"
+            }
+            let serviceEntries = snapshot.services.prefix(32).map {
+                "Service " + InvestigationRequest.label($0.id) + " · owner " + InvestigationRequest.label($0.ownerAgent)
+                    + " · pid " + ($0.pid.map(String.init) ?? "none") + " · " + $0.state.rawValue
+            }
+            jobObservations.append(JobObservation(time: snapshot.generatedAt, entries: agentEntries + serviceEntries))
+            if jobObservations.count > 120 { jobObservations.removeFirst(jobObservations.count - 120) }
+        }
         if unmanaged != snapshot.unmanaged { unmanaged = snapshot.unmanaged }
         if attention != snapshot.attention { attention = snapshot.attention }
         if recentEvents != snapshot.recentEvents { recentEvents = snapshot.recentEvents }
@@ -201,6 +213,12 @@ final class AppModel {
     @ObservationIgnored private var mailbox: [AgentMessage] = []
     @ObservationIgnored private let dismissals = MessageDismissals()
     private(set) var externalServices: [ExternalService] = []
+    struct JobObservation: Identifiable {
+        let time: Date
+        let entries: [String]
+        var id: Date { time }
+    }
+    private(set) var jobObservations: [JobObservation] = []
     private(set) var sessions: [AgentSession] = []
 
     var awaitingReplies: [AgentMessage] { recentMessages.filter(\.isAwaitingReply) }

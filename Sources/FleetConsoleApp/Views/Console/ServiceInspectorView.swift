@@ -26,6 +26,9 @@ struct ServiceInspectorView: View {
             if let record {
                 VStack(alignment: .leading, spacing: 14) {
                     header(record)
+                    if let pid = record.pid {
+                        Button("Investigate process with agent") { model.investigate(.reference(pid: pid, model: model)) }
+                    }
                     evidenceCard(record)
                     activityCard(record)
                     leaseCard(record)
@@ -261,6 +264,7 @@ struct UnmanagedInspectorView: View {
                                     title: process.command,
                                     subtitle: "pid \(process.pid) · \(process.user)",
                                     subtitleKind: .identifier)
+                    Button("Investigate with agent") { model.investigate(.reference(pid: process.pid, expectedCommandLine: process.commandLine, model: model)) }
 
                     InspectorCard(title: "Why it is listed") {
                         Text(process.reason.label)
