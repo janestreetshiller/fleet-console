@@ -38,10 +38,28 @@ OUTPUT_DIR="$(python3 "$ROOT/Scripts/release-staging.py" check "$OUTPUT_DIR")"
 # delete this when it builds clean.
 CMO_WORKAROUND=(-Xswiftc -disable-cmo)
 
-echo "▸ building ($CONFIG)…"
+# Keep source, compiler output and dependency cache separate. The installed-app
+# updater supplies a private scratch outside Documents/file-provider storage.
+SCRATCH_PATH="${FLEETCONSOLE_SCRATCH_PATH:-$ROOT/.build}"
+case "$SCRATCH_PATH" in
+    /*) ;;
+    *) echo "✗ FLEETCONSOLE_SCRATCH_PATH must be absolute" >&2; exit 2 ;;
+esac
+BUILD_ARGS=(--jobs 1 -c "$CONFIG" --disable-index-store --scratch-path "$SCRATCH_PATH" "${CMO_WORKAROUND[@]}")
+if [ "${FLEETCONSOLE_OFFLINE:-0}" = "1" ]; then
+    export GIT_ALLOW_PROTOCOL=file GIT_TERMINAL_PROMPT=0 CARGO_NET_OFFLINE=true
+    export SWIFTPM_MODULECACHE_OVERRIDE="$SCRATCH_PATH/module-cache"
+    export CLANG_MODULE_CACHE_PATH="$SCRATCH_PATH/module-cache"
+    BUILD_ARGS+=(--skip-update --disable-automatic-resolution --disable-netrc
+                 --cache-path "$SCRATCH_PATH/offline-cache"
+                 --config-path "$SCRATCH_PATH/swiftpm-config"
+                 --security-path "$SCRATCH_PATH/swiftpm-security")
+fi
+export FLEETCONSOLE_DEPENDENCY_CHECKOUTS="$SCRATCH_PATH/checkouts"
+echo "▸ building ($CONFIG; one job)…"
 cd "$ROOT"
-swift build --jobs 2 -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}"
-BIN="$(swift build --jobs 2 -c "$CONFIG" --disable-index-store "${CMO_WORKAROUND[@]}" --show-bin-path)"
+swift build "${BUILD_ARGS[@]}"
+BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 
 echo "▸ assembling bundle…"
 # Keep the reservation and every destination operation in one fd-anchored

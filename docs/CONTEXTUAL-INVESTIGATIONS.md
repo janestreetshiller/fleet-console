@@ -204,12 +204,14 @@ UI acceptance remain separately deferred.
 - [x] Add source regression cases for serialization, sensitive argv omission, bounds, unknown metrics and stale/historical timestamps.
 - [x] Syntax-only validation passed (exit 0) on the final corrected source.
 - [x] Single-job offline FleetConsoleApp target build passed (exit 0).
-- [ ] Execute focused non-UI regression and mocked transport tests after coordination; none ran in this slot.
+- [x] Filtered synthetic checks passed: 12 tests in 3 suites, including mocked transport and fail-closed credential isolation.
+- [x] Packaging mocks passed 18 tests; two focused offline/scratch/metadata cases passed after fully mocking Git tooling.
 - [x] Match installed build 4 to the terminal-output release artifact and rebase onto its matching checkout/history; preserve the lack of embedded revision attestation.
 - [ ] Measure dropdown height, verify no clipped meters/network and compare existing styling.
 - [ ] Exercise right-click, double-click, keyboard and VoiceOver on every inventory row.
-- [ ] Verify signed-out, expired-session, runnable/nonrunnable catalog, server-denied entitlement, insufficient credit and account-change states with isolated fixtures, not paid requests.
-- [ ] Verify gateway unavailable, response limits, preflight staleness, concurrent refusal and ambiguous-operation persistence/review states.
+- [x] Synthetic fixtures verified signed-out/runnable/nonrunnable catalogs, scope denial, revoked account session, authoritative refusal, stale selection, ambiguous outcomes and concurrent refusal.
+- [ ] Verify deployed token scope, allowance/credit and production account interoperability; no live account calls were made.
+- [x] Synthetic timeout, oversized/malformed response, preflight staleness, concurrent refusal and unconfirmed-operation persistence/review checks passed.
 - [ ] Verify terminal output contains starter JSON and existing shell/scrollback survives transcript switching.
 - [ ] Verify graph selection, PID reuse/exit, interval selection, retention caps and missing-history states.
 - [ ] Obtain independent UI review of the candidate and let the sole updater owner package/install the approved result.
@@ -266,3 +268,33 @@ Machine-readable results and hashes are in
 application launch, UI acceptance, packaging or installation was performed.
 Remaining work is mocked transport and policy tests, deployed token/scope
 compatibility, and separately authorized UI acceptance by the sole updater.
+
+## Subsequent isolated checks and updater preparation
+
+The source now structurally prevents production credential access from development
+harnesses. See `FLEET-UPDATE-DELIVERY.md` for the context/backend design, incident
+attribution limits and exact owner update command. The account store is injected,
+missing injection fails locally, and raw private Security entry points repeat the
+guard. No ACL/security settings or production credentials were changed.
+
+The standalone fake-only proof passed (30 blocked calls; zero denied backend
+initializations), followed by the serial filtered run: **12 tests in 3 suites
+passed**, runtime **0.978 seconds**, single-job build **107.57 seconds**. Only
+`InvestigationTests`, `InvestigationTransportTests` and
+`OurosCredentialIsolationTests` ran. UI tests were compiled but not executed.
+The transport fixtures inject memory credentials and intercept every URL; the
+runtime also sets `FLEET_TEST_HARNESS=1`. No real account/backend request or browser
+was reached. The successful run rebuilt the new credential-isolated app source.
+
+Updater preparation is now implemented: one-job/offline staging in private
+scratch, build 5 plus clean source stamp, same-publisher verification,
+`--no-launch`, and original-bundle restoration on copy/signature failure.
+All three shell scripts passed Bash syntax checks. PackagingTests passed 18
+mocked cases (80.946 seconds); the two new offline/scratch/metadata cases passed
+again with system Git replaced by a fixture-only stub (2.319 seconds). No release,
+private signing key, notarization, installation or app launch was performed.
+
+The Mac build slot is released. The sole native updater owns the remaining
+release build/sign and canonical replacement at the final immutable commit.
+No staged second app or UI replay is authorized. The current installed app
+remains the verified build 4 until that owner performs the swap.
