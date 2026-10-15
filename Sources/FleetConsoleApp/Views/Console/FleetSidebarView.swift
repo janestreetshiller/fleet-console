@@ -22,10 +22,10 @@ struct FleetSidebarView: View {
         // a heading over each restated what the rows already say.
         List(selection: navigationSelection) {
             Section {
-                Label("Overview", systemImage: "exclamationmark.circle")
+                Label("Needs Attention", systemImage: "exclamationmark.circle")
                     .tag("attention")
                 ForEach([ConsoleModule.overview, .processes, .services]) { module in
-                    Label(module == .overview ? "Trends" : module == .services ? "Operations" : module.rawValue, systemImage: module.symbol)
+                    Label(module.title, systemImage: module.symbol)
                         .tag("module:" + module.rawValue)
                 }
             }

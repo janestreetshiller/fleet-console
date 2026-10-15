@@ -57,12 +57,12 @@ final class ConsoleModel {
     /// "self" or a `DeviceRecord.id`. The first column's selection.
     var selectedDeviceID = "self"
 
-    /// The landing surface. Home is a *destination*, not another module: the
-    /// module indices and their ⌘1…⌘n equivalents stay exactly where they
-    /// were, and every inspector that switches exhaustively over
-    /// `ConsoleModule` keeps compiling. `module` still remembers where you were,
-    /// so leaving home and coming back does not reset it.
-    var atHome = true
+    /// Home is a *destination*, not another module: the module indices and
+    /// their ⌘1…⌘n equivalents stay exactly where they were, and every
+    /// inspector that switches exhaustively over `ConsoleModule` keeps
+    /// compiling. The window opens on Overview. `module` still remembers where
+    /// you were, so leaving home and coming back does not reset it.
+    var atHome = false
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
@@ -188,7 +188,7 @@ final class ConsoleModel {
             return "Select something that needs attention to inspect it here."
         }
         switch effectiveModule {
-        case .overview: return "Select an interval to inspect retained process and agent observations."
+        case .overview: return "Tap a map tile to inspect its process, or select an interval for retained observations."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."

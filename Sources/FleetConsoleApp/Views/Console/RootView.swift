@@ -211,7 +211,7 @@ struct ConsoleRootView: View {
                 HomeModule(model: model, console: console)
             } else {
                 switch console.module {
-                case .overview: TrendsWorkspace(model: model, console: console)
+                case .overview: OverviewWorkspace(model: model, console: console)
                 case .processes: ProcessWorkspace(model: model, console: console)
                 case .storage: StorageModule(model: model, console: console)
                 case .services: OperationsWorkspace(model: model, console: console)
