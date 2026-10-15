@@ -29,13 +29,16 @@ containment, runtime validation coordination and canonical app updating.
   both 90-point dials, disk cells and network readouts; vertical meter padding
   changes from 44 to 16 points. The requested roughly half-height result needs
   measurement in the actual app; source dimensions do not establish that result.
-- Navigation: sidebar destinations are Overview, Trends, Processes and Operations.
-  Overview reuses the attention list, mailbox/reply flow and agent roster, and
-  adds up to 100 persistent, reversible local Later reminders. These reminders
-  do not start jobs. Operations retains Services, Network, Agents, Storage,
-  Events, Launch Services and Account. Old menu routes/shortcuts remain valid.
-- Trends: selectable CPU interval plus keyboard date controls, real process
-  snapshots and controller agent/service observations joined by timestamps.
+- Navigation: sidebar destinations are Needs Attention, Overview, Processes and
+  Operations. Needs Attention reuses the attention list, mailbox/reply flow and
+  agent roster, and adds up to 100 persistent, reversible local Later reminders.
+  These reminders do not start jobs. Overview opens on the CPU and memory
+  instrument graphs, then the consolidated process map, then the interval
+  evidence. Operations retains Services, Network, Agents, Storage, Events,
+  Launch Services and Account. Old menu routes/shortcuts remain valid.
+- Interval evidence, added under the instrument graphs: selectable CPU interval
+  plus keyboard date controls, real process snapshots and controller agent/service
+  observations joined by timestamps.
   Process history retains 120 captures of the top 24 by CPU and memory (at most
   48 rows/capture); controller history retains 120 snapshots, up to 32 sessions
   and 32 service associations each, at least four seconds apart. Existing probes
@@ -44,8 +47,9 @@ containment, runtime validation coordination and canonical app updating.
 - Processes: Relationships, Table, Heatmap and Scatter views. The graph shows
   sampled parent/child links with up to six ancestors and twelve children;
   service-owner and detected-agent badges use actual registry/PID associations.
-  It does not infer causal edges or job ancestry. Heatmap groups identify their
-  heaviest process; the remainder remains informational. Scatter uses actual
+  It does not infer causal edges or job ancestry. The same process map is on
+  Overview: area is resident memory, colour is CPU, and a tile selects its
+  heaviest process. The Processes Heatmap segment remains. Scatter uses actual
   CPU/memory observations, selects the nearest memory coordinate and states
   what it selects. No synthetic attribution data is generated.
 
@@ -59,7 +63,8 @@ containment, runtime validation coordination and canonical app updating.
 | Secondary metric glance | OverviewMetricGlance metric modifier | Implemented, runtime unverified |
 | Full process table, all scopes | Native table primary action, Return and row context menu | Implemented, runtime unverified |
 | Compact CPU/memory rankings | ProcessPopoverRow modifier | Retained source and actions; dropdown routes now open dashboard |
-| Overview instrument process preview | OverviewProcessPreview row modifier | Implemented, reachable in All instruments |
+| Overview instrument process preview | OverviewProcessPreview row modifier | On the Overview page with the CPU and memory graphs |
+| Overview process map | ProcessHeatmap items in HeatmapView | On the Overview page under the graphs; Processes Heatmap segment remains |
 | Process inspector and ancestry/children | Actions button and treeLine modifier | Implemented, runtime unverified |
 | Unmanaged process rows and inspector | Reference modifier/button | Implemented; requires current inventory identity |
 | Managed-service process inspector | Explicit investigation button | Implemented; services without a PID have no process action |

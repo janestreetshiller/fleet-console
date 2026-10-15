@@ -169,10 +169,101 @@ struct ProcessRelationsView: View {
     }
 }
 
+/// The original instrument page, with the later evidence surfaces added under it.
+///
+/// `OverviewModule` keeps the viewport it was measured against: a fixed height,
+/// no scroll of its own, and the capped process preview the viewport tests host
+/// directly. The process map and the interval chart sit on this page, so neither
+/// replaces the CPU and memory graphs.
+struct OverviewWorkspace: View {
+    let model: AppModel
+    let console: ConsoleModel
+    /// Plots stay above the 89pt floor with the compact process cap, and the
+    /// default module column still shows the process map's title under them.
+    private static let instrumentHeight: CGFloat = 640
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
+                OverviewModule(model: model, console: console)
+                    .frame(height: Self.instrumentHeight)
+                ConsolidatedProcessMap(model: model, console: console)
+                TrendsWorkspace(model: model, console: console, scrolls: false, showsInstruments: false)
+            }
+        }
+    }
+}
+
+/// Area is resident memory and colour is CPU. Search matches the process table:
+/// name or command line. Tiles still open the heaviest process.
+private struct ConsolidatedProcessMap: View {
+    let model: AppModel
+    @Bindable var console: ConsoleModel
+
+    private var query: String { console.search.trimmingCharacters(in: .whitespaces) }
+
+    private var rows: [ProcessRow] {
+        guard !query.isEmpty else { return model.processes.rows }
+        return model.processes.rows.filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+                || $0.commandLine.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        let matching = rows
+        let items = ProcessHeatmap.items(from: matching)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Process Map")
+                    .font(ConsoleFont.cardTitle)
+                Spacer()
+                Text(query.isEmpty
+                     ? "area = resident memory · colour = CPU · tap to inspect"
+                     : "\(matching.count) matching \(query.lowercased()) · area = resident memory")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            if !query.isEmpty && matching.isEmpty {
+                Text("No process matches \(query).")
+                    .font(ConsoleFont.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .frame(height: ConsoleMetrics.mapHeight, alignment: .top)
+            } else if items.isEmpty {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading the process table…")
+                        .font(ConsoleFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(height: ConsoleMetrics.mapHeight, alignment: .leading)
+            } else {
+                HeatmapView(items: items,
+                            summary: "Helpers are folded into their parent app. The “Other” tile is "
+                                   + "everything below 8 MB or past the fortieth group — rolled up, "
+                                   + "never dropped.",
+                            animatesLayout: false,
+                            investigationModel: model)
+                    .frame(height: ConsoleMetrics.mapHeight)
+            }
+        }
+        .elevatedCard()
+        .padding(.horizontal, OverviewViewportGeometry.horizontalPadding)
+        .accessibilityIdentifier("overview.process-map")
+    }
+}
+
 /// CPU interval selection joins only real retained process observations by timestamp.
 struct TrendsWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
+    /// The overview page already scrolls. A nested scroll traps the interval chart.
+    var scrolls = true
+    /// The instrument graphs are the page above this chart. The sheet is the
+    /// standalone entry, used only when this workspace is the whole column.
+    var showsInstruments = true
     @State private var selection: ClosedRange<Date>?
     @State private var instruments = false
     private var observations: [ProcessInventory.CapturedProcesses] {
@@ -180,12 +271,30 @@ struct TrendsWorkspace: View {
         return model.processes.observations.filter { selection.contains($0.time) }
     }
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
+        Group {
+            if scrolls {
+                ScrollView { intervalEvidence }
+            } else {
+                intervalEvidence
+            }
+        }
+        .sheet(isPresented: $instruments) {
+            VStack {
+                Button("Done") { instruments = false }.keyboardShortcut(.cancelAction)
+                OverviewModule(model: model, console: console)
+            }.frame(minWidth: 760, minHeight: 620)
+        }
+        .actionErrorAlert(model: model)
+    }
+
+    private var intervalEvidence: some View {
+        VStack(alignment: .leading, spacing: 12) {
                 HStack {
                     Text("CPU over time").font(ConsoleFont.cardTitle)
                     Spacer()
-                    Button("All instruments") { instruments = true }
+                    if showsInstruments {
+                        Button("All instruments") { instruments = true }
+                    }
                     Button("Clear interval") { selection = nil }.disabled(selection == nil)
                 }
                 Text("Drag across the plot to select an interval or spike. Process samples use a slower cadence than CPU; their overlap is correlation, not demonstrated cause.")
@@ -241,15 +350,8 @@ struct TrendsWorkspace: View {
                     Button("Select latest 30 seconds") { selection = model.system.sampledAt.addingTimeInterval(-30)...model.system.sampledAt }
                     Text("Select an interval to inspect contemporaneous evidence.").font(ConsoleFont.caption)
                 }
-            }.padding(ConsoleMetrics.gutter)
         }
-        .sheet(isPresented: $instruments) {
-            VStack {
-                Button("Done") { instruments = false }.keyboardShortcut(.cancelAction)
-                OverviewModule(model: model, console: console)
-            }.frame(minWidth: 760, minHeight: 620)
-        }
-        .actionErrorAlert(model: model)
+        .padding(ConsoleMetrics.gutter)
     }
 }
 
