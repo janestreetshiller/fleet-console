@@ -45,6 +45,17 @@ if name == "swift":
             target.mkdir(parents=True)
             (target / "keep.txt").write_text("TEST DATA: concurrent staging owner\n")
         print(root / "bin")
+elif name == "cargo":
+    if not args or args[0] != "build" or args[args.index("--bin") + 1] != "fleet-agent":
+        raise SystemExit("Unexpected TEST DATA cargo invocation")
+    profile = args[args.index("--profile") + 1]
+    binary = root / "rust/target" / profile / "fleet-agent"
+    binary.parent.mkdir(parents=True, exist_ok=True)
+    binary.write_text("TEST DATA: fleet-agent executable\n")
+elif name == "git":
+    # Packaging fixtures have no source repository. Never run a system Git shim
+    # (which can initialize Xcode tooling) to obtain a synthetic revision.
+    raise SystemExit(1)
 elif name == "ditto":
     if not Path(args[-2]).resolve().is_relative_to(root):
         raise SystemExit("Cannot archive outside the TEST DATA fixture")

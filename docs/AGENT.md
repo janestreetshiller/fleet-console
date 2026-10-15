@@ -4,6 +4,10 @@ The console's resident agent: a dedicated operations and routing agent that
 lives beside the `fleetd` controller and helps with all things memory and
 process, with metered usage billed through Ouros.
 
+It is a small client bundled beside `fleetd` and `fleetctl`. Bundling it does
+not designate it as the fixer, start it, install a model, or register an
+inference launch service. Selecting Fleet Agent is an explicit operator choice.
+
 It is an rx-basis component, specialized for console residency:
 
 - **Typed tools over the controller socket, never raw shell.** Every
@@ -45,25 +49,50 @@ The specialist layer (`knowledge.rs`) is what separates it from a script:
 ```bash
 cargo build -p fleet-agent          # binary: rust/target/debug/fleet-agent
 fleet-agent serve                   # MCP stdio server (JSON-RPC 2.0)
-fleet-agent ask "what's eating memory?"
-fleet-agent ask --json "…"          # machine-readable turn result
+fleet-agent propose "what's eating memory?"
+fleet-agent propose --json "…"      # machine-readable read-only proposal
+fleet-agent propose --prompt-file request.md # complete UTF-8 question, up to 32 KiB
+fleet-agent ask "…"                 # compatibility alias for propose
 fleet-agent meter                   # signed ledger totals (default 7 days)
 fleet-agent meter --days 30
-fleet-agent self-check              # schema hash, daemon, model health
+fleet-agent self-check              # schema hash, daemon, passive configuration
 ```
 
-Environment: `FLEET_AGENT_LLM_URL` (default `http://127.0.0.1:53144`),
-`FLEET_AGENT_MODEL` (default `qwen3.5-9b-local`), `FLEET_AGENT_LEDGER`
+Environment: `FLEET_AGENT_LLM_URL` (required for inference; an explicitly
+configured, already running loopback endpoint), `FLEET_AGENT_MODEL` (default
+`local`, an alias only), `FLEET_AGENT_LEDGER`
 (default `<support>/agent-billing/meter-ledger.txt`). The model endpoint is
 validated to be loopback — the resident agent cannot be pointed at the
-network by environment variable alone.
+network by environment variable alone. There is no default RX model connection
+and no model-starting code. `serve`, `meter`, and `self-check` send no inference
+requests.
+
+`propose` and `ask` expose only observation tools. The dispatcher rejects every
+state-changing tool even if the model supplies `confirm:true`. The app invokes
+the absolute bundled binary and saves the complete request in a distinct report
+file, passed with `--prompt-file`, so the shell does not echo all findings.
+Terminal output separates a single preparing status from the proposal or error;
+reply and diagnostic bodies are preserved. Piped, JSON and MCP output retain
+their existing format. `NO_COLOR` and `TERM=dumb` disable label emphasis.
+
+One proposal runs at a time, protected by an operating-system lock that releases
+on exit or crash. Inference refuses warning/critical pressure, unavailable memory
+telemetry, swap at or above 25% of physical memory, or wired plus compressed
+memory at or above 75%. Each turn has a 45-second deadline, each model/controller
+round a 15-second deadline, eight rounds, sixteen tool calls, and 512 output
+tokens. Input is capped at 32 KiB; textual prompt content at 24 KiB; serialized
+history at 32 KiB; model requests at 256 KiB; HTTP/controller responses at 1 MiB;
+tool arguments at 4 KiB and individual tool results at 8 KiB.
+Headers and individual HTTP lines are bounded too. These checks reject excess
+data instead of truncating the findings.
 
 ## Tools
 
 Read-only: `fleet_snapshot`, `fleet_ps`, `fleet_top_memory`,
 `fleet_mem_advice`, `fleet_logs`, `fleet_events`.
 
-Mutating (require `confirm:true`, and a `reason` recorded in the append-only
+The following tools belong to the host-driven MCP `serve` surface only; the
+proposal engine cannot call them. Mutating (require `confirm:true`, and a `reason` recorded in the append-only
 event log): `fleet_launch`, `fleet_stop`, `fleet_restart`, `fleet_pause`,
 `fleet_resume`, `fleet_kill`, `fleet_reconcile`.
 
@@ -92,5 +121,5 @@ knowledge classifications, byte-stability and the pinned schema hash, MCP
 stdio protocol (initialize/list/call/notification/fail-closed), engine loop
 (scripted model, tool dispatch, iteration bound, usage accounting).
 
-`fleet-agent self-check` proves the live wiring: pinned hash, real fleetd
-round trip, real model round trip.
+`fleet-agent self-check` verifies the pinned hash, the real fleetd round trip,
+and model configuration. It does not contact the model or perform inference.

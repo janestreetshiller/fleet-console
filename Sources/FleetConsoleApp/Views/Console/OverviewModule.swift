@@ -43,7 +43,7 @@ struct OverviewModule: View {
                     if focus != .memory { cpuCard(plotHeight: layout.plotHeight) }
                     if focus != .cpu { memoryCard(plotHeight: layout.plotHeight) }
                 }
-                OverviewMetricGlance(storage: system.storage, gpu: system.gpu, network: system.network,
+                OverviewMetricGlance(model: model, storage: system.storage, gpu: system.gpu, network: system.network,
                                      sensors: system.sensors, power: system.power, columns: layout.secondaryColumns) {
                     moreMetrics = true
                 }
@@ -101,6 +101,7 @@ struct OverviewModule: View {
         .padding(ConsoleMetrics.gutter)
         .frame(width: 760, height: 620)
         .accessibilityIdentifier("overview.metrics.sheet")
+        .actionErrorAlert(model: model)
     }
 
     private var focusPicker: some View {
@@ -172,6 +173,7 @@ struct OverviewModule: View {
         }
         .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
         .elevatedCard("SMC · SENSORS")
+        .investigatable(.metric("sensors", model: model), model: model)
     }
 
     private func sensorMetric(title: String, value: String, caption: String) -> some View {
@@ -222,6 +224,7 @@ struct OverviewModule: View {
             }
         }
         .accessibilityIdentifier("overview.cpu")
+        .investigatable(.metric("cpu", model: model), model: model)
     }
 
     private var cpuTint: Color {
@@ -255,12 +258,13 @@ struct OverviewModule: View {
             MemoryFacts(memory: system.memory)
         }
         .accessibilityIdentifier("overview.memory")
+        .investigatable(.metric("memory", model: model), model: model)
     }
 
     // MARK: Process map
 
     private func processMapCard(limit: Int) -> some View {
-        OverviewProcessPreview(rows: model.processes.rows, query: console.search, limit: limit, console: console)
+        OverviewProcessPreview(model: model, rows: model.processes.rows, query: console.search, limit: limit, console: console)
     }
 
     // MARK: Disk
@@ -308,6 +312,7 @@ struct OverviewModule: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         }
+        .investigatable(.metric("disk", model: model), model: model)
     }
 
     // MARK: GPU
@@ -335,6 +340,7 @@ struct OverviewModule: View {
                 }
             }
         }
+        .investigatable(.metric("gpu", model: model), model: model)
     }
 
     // MARK: Network and power
@@ -366,6 +372,7 @@ struct OverviewModule: View {
         }
         .frame(maxWidth: .infinity, minHeight: 142, alignment: .topLeading)
         .elevatedCard("NET · TRAFFIC")
+        .investigatable(.metric("network", model: model), model: model)
     }
 
     private func rateMetric(_ label: String, rate: Double?) -> some View {
@@ -396,6 +403,7 @@ struct OverviewModule: View {
                     .font(ConsoleFont.caption).foregroundStyle(.secondary)
             }
         }
+        .investigatable(.metric("battery", model: model), model: model)
     }
 
 }
@@ -405,6 +413,7 @@ struct OverviewModule: View {
 /// Filter first, then cap a memory ranking. The complete table and inspector
 /// keep their existing navigation paths instead of being duplicated here.
 struct OverviewProcessPreview: View {
+    let model: AppModel
     let rows: [ProcessRow]
     let query: String
     let limit: Int
@@ -469,6 +478,7 @@ struct OverviewProcessPreview: View {
                     .hoverHighlight()
                     .accessibilityLabel("Inspect \(row.displayName), CPU \(ConsoleFmt.cpuPercent(row.cpuPercent)), memory \(ConsoleFmt.bytes(row.residentBytes))")
                     .accessibilityIdentifier("overview.process.\(row.pid)")
+                    .investigatable(.process(row, model: model), model: model)
                     Divider()
                 }
             }
@@ -489,6 +499,7 @@ struct OverviewProcessPreview: View {
 /// Small current readings remain on Overview; their full charts and hardware
 /// facts belong to the adjacent Details action. Absence is never an idle zero.
 struct OverviewMetricGlance: View {
+    let model: AppModel
     let storage: StorageSample
     let gpu: GPUSample
     let network: NetworkTrafficSample
@@ -540,6 +551,7 @@ struct OverviewMetricGlance: View {
         .help("\(title): \(value) · \(detail)")
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("overview.glance.\(id)")
+        .investigatable(.metric(id, model: model), model: model)
     }
 }
 

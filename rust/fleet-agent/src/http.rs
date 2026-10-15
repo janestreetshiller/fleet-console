@@ -1,140 +1,285 @@
-//! Minimal std-only HTTP client for the local llama-server. No TLS, no
-//! redirects, no proxying: it speaks to 127.0.0.1 only, and the URL is
-//! validated to be a loopback origin before any connection is made.
-
+//! Bounded HTTP to an existing loopback endpoint. No redirects, proxy, DNS,
+//! model startup, retry or unbounded allocation; every IO shares one deadline.
+use crate::guard::{MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::TcpStream;
-use std::time::Duration;
-
+use std::net::{IpAddr, SocketAddr, TcpStream};
+use std::time::{Duration, Instant};
+const MAX_HEADER_BYTES: usize = 16 * 1024;
+const MAX_HEADER_LINE_BYTES: usize = 4096;
 pub struct Http {
     timeout: Duration,
 }
-
 impl Http {
     pub fn new(timeout: Duration) -> Self {
         Self { timeout }
     }
-
-    /// Parse and validate the origin; refuse anything that is not plain HTTP
-    /// on a loopback address. The agent must never be able to point its
-    /// model traffic at the network by env var alone.
     pub fn loopback_origin(url: &str) -> Result<String, String> {
         let (host, port) = parse_host_port(url)?;
-        // Exact loopback forms only: a DNS suffix (127.0.0.1.evil) or a
-        // bracketed anything is refused. localhost is included because
-        // llama-server binds it on this machine.
-        let is_loopback = host == "127.0.0.1" || host == "localhost" || host == "[::1]" || host == "::1";
-        if !is_loopback {
+        if !matches!(host.as_str(), "127.0.0.1" | "localhost" | "[::1]") {
             return Err(format!(
-                "refusing non-loopback model endpoint {host}:{port} — the resident agent runs on \
-                 local inference only"
+                "refusing non-loopback model endpoint {host}:{port}"
             ));
         }
         Ok(format!("{host}:{port}"))
     }
-
     pub fn post_json(&mut self, url: &str, body: &Value) -> Result<Value, String> {
+        self.post_json_until(url, body, Instant::now() + self.timeout)
+    }
+    pub fn post_json_until(
+        &mut self,
+        url: &str,
+        body: &Value,
+        deadline: Instant,
+    ) -> Result<Value, String> {
+        let deadline = deadline.min(Instant::now() + self.timeout);
         let authority = Self::loopback_origin(url)?;
+        let (host, port) = parse_host_port(url)?;
+        let ip: IpAddr = if host == "[::1]" { "::1" } else { "127.0.0.1" }
+            .parse()
+            .unwrap();
         let path = url
-            .split_once("://")
-            .map(|(_, rest)| rest)
-            .and_then(|rest| rest.find('/').map(|i| &rest[i..]))
-            .unwrap_or("/")
-            .to_string();
-        let payload = serde_json::to_string(body).map_err(|e| e.to_string())?;
-        let mut stream = TcpStream::connect(&authority).map_err(|e| e.to_string())?;
-        stream.set_read_timeout(Some(self.timeout)).map_err(|e| e.to_string())?;
-        stream.set_write_timeout(Some(self.timeout)).map_err(|e| e.to_string())?;
-
-        let request = format!(
-            "POST {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
-            payload.len()
-        );
-        stream.write_all(request.as_bytes()).map_err(|e| e.to_string())?;
-
-        let mut reader = BufReader::new(stream);
-        let mut status_line = String::new();
-        reader.read_line(&mut status_line).map_err(|e| e.to_string())?;
-        if !status_line.contains("200") {
-            return Err(format!("model endpoint returned {status_line}"));
+            .strip_prefix("http://")
+            .unwrap()
+            .find('/')
+            .map(|index| &url["http://".len() + index..])
+            .unwrap_or("/");
+        if path.contains(['\r', '\n', '#']) {
+            return Err("invalid model endpoint path".into());
         }
-        let mut content_length: Option<usize> = None;
+        let mut payload = LimitedBytes::new(MAX_REQUEST_BYTES);
+        serde_json::to_writer(&mut payload, body).map_err(|e| {
+            format!("model request exceeds {MAX_REQUEST_BYTES} bytes or cannot serialize: {e}")
+        })?;
+        let mut stream =
+            TcpStream::connect_timeout(&SocketAddr::new(ip, port), remaining(deadline)?)
+                .map_err(|e| format!("model endpoint unavailable: {e}"))?;
+        let header = format!("POST {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", payload.bytes.len());
+        write_until(&mut stream, header.as_bytes(), deadline)?;
+        write_until(&mut stream, &payload.bytes, deadline)?;
+        let mut reader = DeadlineReader {
+            reader: BufReader::new(stream),
+            deadline,
+        };
+        let status_line = reader.line(MAX_HEADER_LINE_BYTES)?;
+        if status_line.split_whitespace().nth(1) != Some("200") {
+            return Err(format!("model endpoint returned {}", status_line.trim()));
+        }
+        let mut header_bytes = status_line.len();
+        let mut content_length = None;
         let mut chunked = false;
         loop {
-            let mut line = String::new();
-            if reader.read_line(&mut line).map_err(|e| e.to_string())? == 0 {
+            let line = reader.line(MAX_HEADER_LINE_BYTES)?;
+            header_bytes += line.len();
+            if header_bytes > MAX_HEADER_BYTES {
+                return Err("model HTTP headers exceed limit".into());
+            }
+            if line.trim().is_empty() {
                 break;
             }
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                break;
-            }
-            let lower = trimmed.to_ascii_lowercase();
-            if let Some(len) = lower.strip_prefix("content-length:") {
-                content_length = len.trim().parse().ok();
-            } else if lower.starts_with("transfer-encoding:") && lower.contains("chunked") {
+            let lower = line.trim().to_ascii_lowercase();
+            if let Some(length) = lower.strip_prefix("content-length:") {
+                let value: usize = length
+                    .trim()
+                    .parse()
+                    .map_err(|_| "invalid content-length")?;
+                if value > MAX_RESPONSE_BYTES {
+                    return Err(format!("model response exceeds {MAX_RESPONSE_BYTES} bytes"));
+                }
+                if content_length.replace(value).is_some() {
+                    return Err("duplicate content-length".into());
+                }
+            } else if let Some(encoding) = lower.strip_prefix("transfer-encoding:") {
+                if encoding.trim() != "chunked" {
+                    return Err("unsupported transfer encoding".into());
+                }
                 chunked = true;
             }
         }
-        let mut body_raw = String::new();
+        if chunked && content_length.is_some() {
+            return Err("ambiguous HTTP body framing".into());
+        }
+        let mut raw = Vec::new();
         if chunked {
             loop {
-                let mut size_line = String::new();
-                if reader.read_line(&mut size_line).map_err(|e| e.to_string())? == 0 {
-                    break;
-                }
-                let size = usize::from_str_radix(size_line.trim(), 16).unwrap_or(0);
+                let line = reader.line(MAX_HEADER_LINE_BYTES)?;
+                let size = usize::from_str_radix(line.trim().split(';').next().unwrap_or(""), 16)
+                    .map_err(|_| "invalid chunk size")?;
                 if size == 0 {
                     break;
                 }
-                let mut chunk = vec![0u8; size];
-                std::io::Read::read_exact(&mut reader, &mut chunk).map_err(|e| e.to_string())?;
-                body_raw.push_str(&String::from_utf8_lossy(&chunk));
-                let mut crlf = String::new();
-                let _ = reader.read_line(&mut crlf);
+                if size > MAX_RESPONSE_BYTES - raw.len() {
+                    return Err(format!("model response exceeds {MAX_RESPONSE_BYTES} bytes"));
+                }
+                reader.append_exact(&mut raw, size)?;
+                if reader.line(2)? != "\r\n" {
+                    return Err("invalid chunk delimiter".into());
+                }
             }
-        } else if let Some(len) = content_length {
-            let mut buf = vec![0u8; len];
-            std::io::Read::read_exact(&mut reader, &mut buf).map_err(|e| e.to_string())?;
-            body_raw = String::from_utf8_lossy(&buf).to_string();
+        } else if let Some(length) = content_length {
+            reader.append_exact(&mut raw, length)?;
         } else {
-            let mut sink = String::new();
-            reader.read_to_string(&mut sink).map_err(|e| e.to_string())?;
-            body_raw = sink;
+            let mut chunk = [0u8; 8192];
+            loop {
+                reader.set_timeout()?;
+                let read = reader
+                    .reader
+                    .read(&mut chunk)
+                    .map_err(|e| format!("model response read: {e}"))?;
+                if read == 0 {
+                    break;
+                }
+                if read > MAX_RESPONSE_BYTES - raw.len() {
+                    return Err(format!("model response exceeds {MAX_RESPONSE_BYTES} bytes"));
+                }
+                raw.extend_from_slice(&chunk[..read]);
+            }
         }
-        serde_json::from_str(&body_raw).map_err(|e| format!("model reply is not JSON: {e}"))
+        remaining(deadline)?;
+        serde_json::from_slice(&raw).map_err(|e| format!("model reply is not JSON: {e}"))
     }
 }
-
+/// Serializes through a cap rather than allocating arbitrarily large JSON first.
+pub struct LimitedBytes {
+    pub bytes: Vec<u8>,
+    maximum: usize,
+}
+impl LimitedBytes {
+    pub fn new(maximum: usize) -> Self {
+        Self {
+            bytes: Vec::new(),
+            maximum,
+        }
+    }
+}
+impl Write for LimitedBytes {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if bytes.len() > self.maximum - self.bytes.len() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "byte limit exceeded",
+            ));
+        }
+        self.bytes.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+pub fn remaining(deadline: Instant) -> Result<Duration, String> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|d| !d.is_zero())
+        .ok_or_else(|| "proposal deadline exceeded".to_string())
+}
+fn write_until(stream: &mut TcpStream, mut bytes: &[u8], deadline: Instant) -> Result<(), String> {
+    while !bytes.is_empty() {
+        stream
+            .set_write_timeout(Some(remaining(deadline)?))
+            .map_err(|e| e.to_string())?;
+        let written = stream
+            .write(bytes)
+            .map_err(|e| format!("model request write: {e}"))?;
+        if written == 0 {
+            return Err("model endpoint closed while writing".into());
+        }
+        bytes = &bytes[written..];
+    }
+    Ok(())
+}
+struct DeadlineReader {
+    reader: BufReader<TcpStream>,
+    deadline: Instant,
+}
+impl DeadlineReader {
+    fn set_timeout(&self) -> Result<(), String> {
+        self.reader
+            .get_ref()
+            .set_read_timeout(Some(remaining(self.deadline)?))
+            .map_err(|e| e.to_string())
+    }
+    fn line(&mut self, maximum: usize) -> Result<String, String> {
+        let mut bytes = Vec::new();
+        loop {
+            self.set_timeout()?;
+            let available = self
+                .reader
+                .fill_buf()
+                .map_err(|e| format!("model HTTP read: {e}"))?;
+            if available.is_empty() {
+                return Err("model endpoint closed before complete headers/chunk".into());
+            }
+            let end = available.iter().position(|b| *b == b'\n').map(|i| i + 1);
+            let count = end.unwrap_or(available.len());
+            if count > maximum - bytes.len() {
+                return Err("model HTTP line exceeds limit".into());
+            }
+            bytes.extend_from_slice(&available[..count]);
+            self.reader.consume(count);
+            if end.is_some() {
+                return String::from_utf8(bytes).map_err(|_| "model HTTP line is not UTF-8".into());
+            }
+        }
+    }
+    fn append_exact(&mut self, bytes: &mut Vec<u8>, length: usize) -> Result<(), String> {
+        let mut left = length;
+        let mut chunk = [0u8; 8192];
+        while left > 0 {
+            self.set_timeout()?;
+            let count = left.min(chunk.len());
+            let read = self
+                .reader
+                .read(&mut chunk[..count])
+                .map_err(|e| format!("model body read: {e}"))?;
+            if read == 0 {
+                return Err("model endpoint closed before complete body".into());
+            }
+            bytes.extend_from_slice(&chunk[..read]);
+            left -= read;
+        }
+        Ok(())
+    }
+}
 fn parse_host_port(url: &str) -> Result<(String, u16), String> {
     let rest = url
         .strip_prefix("http://")
-        .ok_or_else(|| format!("refusing {url}: only plain http to loopback is allowed"))?;
+        .ok_or_else(|| "only plain HTTP to loopback is allowed".to_string())?;
     let authority = rest.split('/').next().unwrap_or(rest);
-    if let Some((host, port_str)) = authority.rsplit_once(':') {
-        let port: u16 = port_str.parse().map_err(|_| format!("bad port in {url}"))?;
-        Ok((host.to_string(), port))
+    if authority.len() > 128 || authority.contains(['\r', '\n', '?', '#', '@']) {
+        return Err("invalid model endpoint authority".into());
+    }
+    if let Some((host, port)) = authority.rsplit_once(':') {
+        let port = port
+            .parse::<u16>()
+            .map_err(|_| "invalid model endpoint port")?;
+        if port == 0 {
+            return Err("invalid model endpoint port 0".into());
+        }
+        Ok((host.into(), port))
     } else {
-        Ok((authority.to_string(), 80))
+        Ok((authority.into(), 80))
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn refuses_non_loopback() {
-        assert!(Http::loopback_origin("http://192.168.1.5:8081").is_err());
-        assert!(Http::loopback_origin("http://example.com:80").is_err());
-        assert!(Http::loopback_origin("https://127.0.0.1:8081").is_err());
-        assert!(Http::loopback_origin("http://127.0.0.1.evil:8081").is_err());
+    fn refuses_non_loopback_and_header_injection() {
+        for url in [
+            "http://192.168.1.5:8081",
+            "http://example.com:80",
+            "https://127.0.0.1:8081",
+            "http://127.0.0.1.evil:8081",
+            "http://localhost:1\r\nHost: evil",
+        ] {
+            assert!(Http::loopback_origin(url).is_err(), "{url}");
+        }
     }
-
     #[test]
     fn accepts_loopback_forms() {
         assert!(Http::loopback_origin("http://127.0.0.1:53144/v1/chat/completions").is_ok());
         assert!(Http::loopback_origin("http://localhost:8081/").is_ok());
+        assert!(Http::loopback_origin("http://[::1]:8081/").is_ok());
     }
 }

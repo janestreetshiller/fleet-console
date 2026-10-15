@@ -20,7 +20,7 @@ cp "$BIN/fleetctl"        "$APP/Contents/Resources/bin/fleetctl"
 # The resident operations agent ships beside the controller and CLI. Build it
 # from the Rust workspace (release profile to match a release bundle).
 if [ "$CONFIG" = "release" ]; then RUST_PROFILE="release"; else RUST_PROFILE="debug"; fi
-(cd "$ROOT/rust" && cargo build --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
+(cd "$ROOT/rust" && cargo build --locked --jobs 1 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
 cp "$ROOT/rust/target/$RUST_PROFILE/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
@@ -48,7 +48,7 @@ shopt -u nullglob
 
 # Authored code is MIT; SwiftTerm retains its upstream copyright notices.
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/licenses/FleetConsole-LICENSE.txt"
-SWIFTTERM_LICENSE="$ROOT/.build/checkouts/SwiftTerm/LICENSE"
+SWIFTTERM_LICENSE="${FLEETCONSOLE_DEPENDENCY_CHECKOUTS:-$ROOT/.build/checkouts}/SwiftTerm/LICENSE"
 if [ ! -f "$SWIFTTERM_LICENSE" ]; then
     echo "✗ SwiftTerm license missing at $SWIFTTERM_LICENSE" >&2
     exit 1
@@ -76,7 +76,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleExecutable</key><string>FleetConsole</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.1.0</string>
-    <key>CFBundleVersion</key><string>4</string>
+    <key>CFBundleVersion</key><string>5</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
 
     <!-- LSUIElement keeps the icon out of the Dock, but not out of Finder, Get
@@ -97,6 +97,30 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
+
+# Stamp the exact source before signing. Source archives without Git remain
+# explicitly unrecorded; the installed updater accepts only its clean commit.
+SOURCE_REVISION="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
+SOURCE_DIRTY=1
+if [ -n "$SOURCE_REVISION" ] && [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
+    SOURCE_DIRTY=0
+fi
+python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" <<'SOURCE_PLIST'
+import plistlib
+import re
+import sys
+path, revision, dirty = sys.argv[1:]
+with open(path, "rb") as stream:
+    info = plistlib.load(stream)
+info["FleetSourceRevision"] = revision if re.fullmatch(r"[0-9a-f]{40,64}", revision) else "unrecorded"
+info["FleetSourceDirty"] = dirty != "0"
+with open(path, "wb") as stream:
+    plistlib.dump(info, stream, sort_keys=False)
+SOURCE_PLIST
+
+# Reject inference runtimes, model weights and additional resident launch jobs
+# before any code is signed. The bundled fleet-agent is a small client only.
+python3 "$ROOT/Scripts/verify-agent-bundle.py" "$APP"
 
 # Explicit ad-hoc signing avoids keychain lookup and timestamps. Developer ID
 # retains hardened runtime/timestamps; nested code is signed inside out.

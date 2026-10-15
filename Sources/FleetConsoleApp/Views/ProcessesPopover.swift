@@ -108,6 +108,7 @@ struct ProcessesContent: View {
                     block: inventory.terminationBlock(for: row, enabled: terminationEnabled),
                     inspect: { inspect(row) },
                     end: { pendingTermination = row })
+                .investigatable(.process(row, model: model), model: model)
             }
         }
     }

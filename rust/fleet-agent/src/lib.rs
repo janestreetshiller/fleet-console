@@ -7,6 +7,7 @@
 //! reads to bill.
 
 pub mod engine;
+pub mod guard;
 pub mod http;
 pub mod knowledge;
 pub mod meter;

@@ -1,0 +1,30 @@
+{
+  "recordedAt": "2026-10-15T12:29:04.267272+00:00",
+  "baseline": "2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01",
+  "shellSyntax": {
+    "build-app.sh": 0,
+    "assemble-app.sh": 0,
+    "update-installed.sh": 0
+  },
+  "packagingMocks": {
+    "exitCode": 0,
+    "passed": 18,
+    "seconds": 80.946
+  },
+  "focusedOfflineScratchMetadataMocks": {
+    "exitCode": 0,
+    "passed": 2,
+    "seconds": 2.319,
+    "gitStubbed": true
+  },
+  "installerLiveExecuted": false,
+  "realSigningExecuted": false,
+  "appLaunched": false,
+  "sourceSHA256": {
+    "Scripts/build-app.sh": "88298a802bd5af0121d77dd75733a77f5363accde9d628012a260a03c2be3244",
+    "Scripts/assemble-app.sh": "921a5af0badb81e2e89e46797dd7c84be5502aa2583615813b7bcbcdf3559abc",
+    "Scripts/update-installed.sh": "7c00c47c1029f22beb099624c59160da3ed8eb25731e5baf79d5968a5e43f50f",
+    "Scripts/test-release-policy.py": "8e5d82d744531f978bfe28c5ee39521dfc54aa48a481a56466f482858fe8c875",
+    "Scripts/release-policy-mock-tool.py": "04d64ad273b7116d3c578e467e9463cfd311a9c3c251eb62bb7a17f84c380a56"
+  }
+}

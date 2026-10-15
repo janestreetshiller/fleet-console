@@ -56,6 +56,7 @@ struct ServicesModule: View {
                     }
                     ForEach(unmanaged) { process in
                         UnmanagedRow(process: process)
+                            .investigatable(.reference(pid: process.pid, expectedCommandLine: process.commandLine, model: model), model: model)
                             .tag(process.id)
                             .onTapGesture {
                                 console.selectedUnmanagedID = process.id

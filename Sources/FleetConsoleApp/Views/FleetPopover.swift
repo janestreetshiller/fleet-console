@@ -1,7 +1,8 @@
+import AppKit
 import SwiftUI
 import FleetCore
 
-/// Shared by menu commands and the five-tab popover.
+/// Legacy section routes retained for menu commands; details now open in the dashboard.
 enum FleetSection: String, CaseIterable, Identifiable {
     case quickView = "Quick View"
     case services = "Services"
@@ -28,106 +29,197 @@ struct FleetPopover: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
     var registration: AgentRegistrationModel = .shared
-    @State private var tab: FleetSection = .quickView
+    @State private var showingAccount = false
 
     var body: some View {
         VStack(spacing: 0) {
-            // No rule under the header: the identity, the tabs and the body are
-            // one surface, separated by space rather than by lines.
-            header
-
-            Group {
-                switch tab {
-                case .quickView: QuickView(model: model)
-                case .services: ServicesContent(model: model, openDashboard: openDashboard)
-                case .agents: AgentsContent(model: model, openDashboard: openDashboard, registration: registration)
-                case .processes: ProcessesContent(model: model, openDashboard: openDashboard)
-                case .connections: NetworkGlance(model: model)
-                }
-            }
-            .frame(maxHeight: FleetMetrics.popoverBodyHeight)
-        }
-        .frame(width: FleetMetrics.popoverWidth)
-        .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
-        .onAppear { consumeRequestedSection() }
-        .onChange(of: model.requestedSection) { _, _ in consumeRequestedSection() }
-        .onChange(of: enabledTabs) { _, tabs in
-            if !tabs.contains(tab) { tab = .quickView }
-        }
-    }
-
-    private var enabledTabs: [FleetSection] {
-        FleetSection.allCases.filter { $0.isEnabled(model.settings) }
-    }
-
-    private func consumeRequestedSection() {
-        guard let requested = model.requestedSection else { return }
-        tab = enabledTabs.contains(requested) ? requested : .quickView
-        model.requestedSection = nil
-    }
-
-    /// Everything the popover used to split between a top bar and a bottom
-    /// ribbon, in one header: who and how the fleet is, the way out to the
-    /// dashboard, and the section tabs. Nothing is pinned under the content, so
-    /// the content ends where it ends.
-    private var header: some View {
-        VStack(spacing: 10) {
             HStack(spacing: 4) {
                 OurosIdentityRow(title: "FleetConsole", detail: model.fleetStatusLine,
                                  tone: model.fleetTint) { FleetBadgeMark(size: $0) }
                 Spacer(minLength: 8)
-                Button(action: openDashboard) {
-                    Label("Dashboard", systemImage: "square.grid.2x2")
-                        .font(FleetFont.body.weight(.medium))
-                        .foregroundStyle(SurfaceInk.secondary)
+                IconButton(symbol: "square.grid.2x2", help: "Open dashboard and services (⌘0)", action: openDashboard)
+                AgentMenuButton { metric in
+                    model.investigate(.metric(metric, model: model))
                 }
-                .buttonStyle(.plain)
-                .padding(.trailing, 6)
-                .help("Open Dashboard (⌘0)")
-                refreshButton
-                linksMenu
-            }
-            // Equal-width segments on the pane's centerline, the full width of
-            // the header, so the tabs line up with the content under them.
-            Picker("Section", selection: $tab) {
-                ForEach(enabledTabs) { Text($0.menuTitle).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .accessibilityLabel("Popover section")
-            .frame(maxWidth: .infinity)
-        }
-        .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-    }
-
-    private var linksMenu: some View {
-        Menu {
-            Button("Edit Configuration…") { model.openConfigFile() }
-            Divider()
-            Button("Ouros Website") { model.openURL("https://ouros.md") }
-            Button("Source & Support") { model.openURL("https://github.com/janestreetshiller/fleet-console") }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .font(FleetFont.body.weight(.medium))
-                .foregroundStyle(SurfaceInk.secondary)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
-        .help("Configuration and links")
-        .accessibilityLabel("Configuration and links")
-    }
-
-    @ViewBuilder private var refreshButton: some View {
-        if model.isReconciling {
-            ProgressView().controlSize(.small).scaleEffect(0.6)
+                .frame(height: FleetMetrics.iconButtonSize)
+                .fixedSize(horizontal: true, vertical: false)
+                ConfigurationMenuButton(
+                    refresh: { model.reEvidence() },
+                    editConfiguration: { model.openConfigFile() },
+                    showAccount: { showingAccount = true },
+                    openSource: { model.openURL("https://github.com/janestreetshiller/fleet-console") }
+                )
                 .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
-                .accessibilityLabel("Refreshing FleetConsole")
-        } else {
-            IconButton(symbol: "arrow.clockwise", help: "Refresh FleetConsole") { model.reEvidence() }
+                .accessibilityLabel("Configuration and links")
+            }
+            .padding(.horizontal, FleetMetrics.gutter)
+            .padding(.top, 8)
+            .padding(.bottom, 4)
+            QuickView(model: model)
         }
+        // The meters determine the dropdown height; never offer a tall body frame.
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: FleetMetrics.popoverWidth)
+        .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
+        .actionErrorAlert(model: model)
+        .sheet(isPresented: $showingAccount) { DeviceManagementView(model: model) }
+        .onAppear { consumeRequestedSection() }
+        .onChange(of: model.requestedSection) { _, _ in consumeRequestedSection() }
+    }
+
+    private func consumeRequestedSection() {
+        guard let requested = model.requestedSection else { return }
+        model.requestedSection = nil
+        guard requested != .quickView else { return }
+        openDashboard()
+        NotificationCenter.default.post(name: ConsoleCommand.selectModule, object: nil,
+            userInfo: [ConsoleCommand.userInfoModule: requested == .processes
+                ? ConsoleModule.processes.rawValue : ConsoleModule.services.rawValue,
+                       "operationsSection": requested == .connections ? "Network" : requested == .agents ? "Agents" : "Services"])
+    }
+}
+
+/// One Agent menu for the four meters. A label on every instrument repeated
+/// the same word across the dropdown.
+private struct AgentMenuButton: NSViewRepresentable {
+    var investigate: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverButton {
+        let button = HoverButton()
+        button.title = "Agent"
+        button.imagePosition = .noImage
+        button.font = .systemFont(ofSize: 12, weight: .semibold)
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+        button.bezelStyle = .shadowlessSquare
+        button.setButtonType(.momentaryChange)
+        button.contentTintColor = .secondaryLabelColor
+        button.setAccessibilityLabel("Agent")
+        button.toolTip = "Investigate a meter"
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.pop(_:))
+        return button
+    }
+
+    func updateNSView(_ button: HoverButton, context: Context) {
+        context.coordinator.investigate = investigate
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+    }
+
+    final class Coordinator: NSObject {
+        var investigate: (String) -> Void = { _ in }
+        private let meters = [("CPU", "cpu"), ("Memory", "memory"), ("Disk", "disk"), ("Network", "network")]
+
+        @objc func pop(_ sender: NSButton) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for (title, metric) in meters {
+                let item = NSMenuItem(title: title, action: #selector(didPick(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = metric
+                menu.addItem(item)
+            }
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
+        }
+
+        @objc func didPick(_ sender: NSMenuItem) {
+            guard let metric = sender.representedObject as? String else { return }
+            investigate(metric)
+        }
+    }
+}
+
+/// Pull-down with the bezel and the hover plate turned off. SwiftUI's
+/// borderless menu button still draws a hit-box border while the pointer is
+/// over it, and that border stays up in the menu-bar dropdown.
+private struct ConfigurationMenuButton: NSViewRepresentable {
+    var refresh: () -> Void
+    var editConfiguration: () -> Void
+    var showAccount: () -> Void
+    var openSource: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverButton {
+        let button = HoverButton()
+        let symbol = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+        symbol?.isTemplate = true
+        button.image = symbol
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleProportionallyDown
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+        button.bezelStyle = .shadowlessSquare
+        button.setButtonType(.momentaryChange)
+        button.contentTintColor = .secondaryLabelColor
+        button.setAccessibilityLabel("Configuration and links")
+        button.toolTip = "Configuration and links"
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.pop(_:))
+        return button
+    }
+
+    func updateNSView(_ button: HoverButton, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.refresh = refresh
+        coordinator.editConfiguration = editConfiguration
+        coordinator.showAccount = showAccount
+        coordinator.openSource = openSource
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+    }
+
+    final class Coordinator: NSObject {
+        var refresh: () -> Void = {}
+        var editConfiguration: () -> Void = {}
+        var showAccount: () -> Void = {}
+        var openSource: () -> Void = {}
+
+        @objc func pop(_ sender: NSButton) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            let entries: [(String, Selector)] = [
+                ("Refresh", #selector(didRefresh)),
+                ("Edit Configuration…", #selector(didEdit)),
+                ("Ouros Account…", #selector(didAccount)),
+                ("Source & Support", #selector(didSource)),
+            ]
+            for (title, action) in entries {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = self
+                menu.addItem(item)
+            }
+            // Non-flipped view: y = 0 is the button's bottom edge, so the menu opens downward.
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
+        }
+
+        @objc func didRefresh() { refresh() }
+        @objc func didEdit() { editConfiguration() }
+        @objc func didAccount() { showAccount() }
+        @objc func didSource() { openSource() }
+    }
+}
+
+/// Template image, tint on hover, no bezel. `showsBorderOnlyWhileMouseInside`
+/// is the plate the dropdown was keeping around this control.
+private final class HoverButton: NSButton {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds,
+                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        contentTintColor = .labelColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        contentTintColor = .secondaryLabelColor
     }
 }

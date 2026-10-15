@@ -50,7 +50,7 @@ struct OverviewViewportTests {
     func processCapAndNavigation() throws {
         let console = ConsoleModel()
         let rows = (1...8).map { process(pid: Int32($0), name: "worker-\($0)", bytes: Int64($0 * 1_000)) }
-        let window = host(OverviewProcessPreview(rows: rows, query: "", limit: 3, console: console),
+        let window = host(OverviewProcessPreview(model: AppModel(), rows: rows, query: "", limit: 3, console: console),
                           size: NSSize(width: 940, height: 170))
         defer { window.orderOut(nil) }
         let root = try #require(window.contentView)
@@ -69,7 +69,7 @@ struct OverviewViewportTests {
 
     @MainActor @Test("The secondary glance spends the same column width as the primary charts")
     func secondaryGlanceUsesColumnWidth() throws {
-        let window = host(OverviewMetricGlance(storage: StorageSample(), gpu: GPUSample(),
+        let window = host(OverviewMetricGlance(model: AppModel(), storage: StorageSample(), gpu: GPUSample(),
             network: NetworkTrafficSample(), sensors: SensorSample(), power: PowerSample(), showDetails: {}),
             size: NSSize(width: 940, height: 70))
         defer { window.orderOut(nil) }
@@ -120,7 +120,7 @@ struct OverviewViewportTests {
 
     @MainActor @Test("Unavailable secondary readings are dashes, never idle zeroes", arguments: [false, true])
     func unavailableGlance(dark: Bool) throws {
-        let window = host(OverviewMetricGlance(storage: StorageSample(), gpu: GPUSample(),
+        let window = host(OverviewMetricGlance(model: AppModel(), storage: StorageSample(), gpu: GPUSample(),
             network: NetworkTrafficSample(), sensors: SensorSample(),
             power: PowerSample(hasBattery: true), columns: 5, showDetails: {}),
             size: NSSize(width: 940, height: 70), dark: dark)
@@ -223,7 +223,7 @@ struct OverviewViewportTests {
                     process(pid: 2, name: "target-worker", bytes: 1_000),
                     process(pid: 3, name: "python3", bytes: 2_000, command: "python3 /fixture/target.py")]
         let console = ConsoleModel()
-        let window = host(OverviewProcessPreview(rows: rows, query: " TARGET ", limit: 1, console: console),
+        let window = host(OverviewProcessPreview(model: AppModel(), rows: rows, query: " TARGET ", limit: 1, console: console),
                           size: NSSize(width: 940, height: 170))
         defer { window.orderOut(nil) }
         let root = try #require(window.contentView)
