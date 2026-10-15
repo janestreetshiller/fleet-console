@@ -59,13 +59,13 @@ struct QuickView: View {
             instrument("CPU") {
                 RetroGauge(value: metrics.cpu.value, tone: metrics.cpu.tone, caption: "CPU",
                            readout: metrics.cpu.readout, diameter: Self.instrumentSize)
+                    .help(model.system.topology.brand + " · " + model.system.topology.coreSummary)
             }
-            .help(model.system.topology.brand + " · " + model.system.topology.coreSummary)
             instrument("Memory") {
                 RetroGauge(value: metrics.memory.value, tone: metrics.memory.tone, caption: "Memory",
                            readout: metrics.memory.readout, diameter: Self.instrumentSize)
+                    .help("\(ConsoleFmt.bytes(model.system.memory.usedBytes)) used · pressure \(model.system.memory.pressure.label)")
             }
-            .help("\(ConsoleFmt.bytes(model.system.memory.usedBytes)) used · pressure \(model.system.memory.pressure.label)")
             instrument("Disk") { disk(metrics) }
             instrument("Network") { network }
         }
@@ -88,14 +88,15 @@ struct QuickView: View {
                     model.investigate(.metric(title.lowercased(), model: model))
                 }
             }
-            content().frame(height: Self.instrumentSize)
+            content()
+                .frame(height: Self.instrumentSize)
+                .contextMenu {
+                    Button("Investigate \(title) with agent") {
+                        model.investigate(.metric(title.lowercased(), model: model))
+                    }
+                }
         }
         .frame(maxWidth: .infinity)
-        .contextMenu {
-            Button("Investigate \(title) with agent") {
-                model.investigate(.metric(title.lowercased(), model: model))
-            }
-        }
     }
 
     private func disk(_ metrics: QuickViewMetrics) -> some View {
