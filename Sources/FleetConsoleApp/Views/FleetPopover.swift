@@ -45,6 +45,7 @@ struct FleetPopover: View {
                     openSource: { model.openURL("https://github.com/janestreetshiller/fleet-console") }
                 )
                 .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
+                .accessibilityLabel("Configuration and links")
             }
             .padding(.horizontal, FleetMetrics.gutter)
             .padding(.top, 8)
