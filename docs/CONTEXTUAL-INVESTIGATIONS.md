@@ -53,7 +53,7 @@ containment, runtime validation coordination and canonical app updating.
 
 | Surface | Source hook | Status |
 | --- | --- | --- |
-| Dropdown CPU, memory, disk, network | QuickView instrument modifier | Implemented, runtime unverified |
+| Dropdown CPU, memory, disk, network | Visible Agent control on each QuickView instrument | The column is not a focus hit target |
 | CPU/memory charts and core grid | OverviewModule primary card modifiers | Implemented; core grid uses CPU context |
 | Disk/GPU/sensors/battery details | OverviewModule detail card modifiers | Implemented; each card shares its diagnostic context |
 | Secondary metric glance | OverviewMetricGlance metric modifier | Implemented, runtime unverified |
@@ -71,6 +71,8 @@ containment, runtime validation coordination and canonical app updating.
 
 The shared modifier provides right-click “Investigate with agent”, double-click,
 focused Return/Space, a visible focus outline and a named accessibility action.
+The menu-bar dropdown does not use that modifier. Each instrument has a visible
+Agent control, and the column does not take a focus rectangle.
 Native table actions preserve table selection and its existing context verbs.
 A group represents multiple processes and explicitly investigates its heaviest
 member. Nonprocess storage heatmap tiles keep their existing Finder actions.

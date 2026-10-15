@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import FleetCore
 
@@ -37,16 +38,13 @@ struct FleetPopover: View {
                                  tone: model.fleetTint) { FleetBadgeMark(size: $0) }
                 Spacer(minLength: 8)
                 IconButton(symbol: "square.grid.2x2", help: "Open dashboard and services (⌘0)", action: openDashboard)
-                Menu {
-                    Button("Refresh") { model.reEvidence() }
-                    Button("Edit Configuration…") { model.openConfigFile() }
-                    Button("Ouros Account…") { showingAccount = true }
-                    Button("Source & Support") { model.openURL("https://github.com/janestreetshiller/fleet-console") }
-                } label: { Image(systemName: "ellipsis.circle") }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("Configuration and links")
+                ConfigurationMenuButton(
+                    refresh: { model.reEvidence() },
+                    editConfiguration: { model.openConfigFile() },
+                    showAccount: { showingAccount = true },
+                    openSource: { model.openURL("https://github.com/janestreetshiller/fleet-console") }
+                )
+                .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
             }
             .padding(.horizontal, FleetMetrics.gutter)
             .padding(.top, 8)
@@ -72,5 +70,97 @@ struct FleetPopover: View {
             userInfo: [ConsoleCommand.userInfoModule: requested == .processes
                 ? ConsoleModule.processes.rawValue : ConsoleModule.services.rawValue,
                        "operationsSection": requested == .connections ? "Network" : requested == .agents ? "Agents" : "Services"])
+    }
+}
+
+/// Pull-down with the bezel and the hover plate turned off. SwiftUI's
+/// borderless menu button still draws a hit-box border while the pointer is
+/// over it, and that border stays up in the menu-bar dropdown.
+private struct ConfigurationMenuButton: NSViewRepresentable {
+    var refresh: () -> Void
+    var editConfiguration: () -> Void
+    var showAccount: () -> Void
+    var openSource: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverButton {
+        let button = HoverButton()
+        let symbol = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 13, weight: .medium))
+        symbol?.isTemplate = true
+        button.image = symbol
+        button.imagePosition = .imageOnly
+        button.imageScaling = .scaleProportionallyDown
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+        button.bezelStyle = .shadowlessSquare
+        button.setButtonType(.momentaryChange)
+        button.contentTintColor = .secondaryLabelColor
+        button.setAccessibilityLabel("Configuration and links")
+        button.toolTip = "Configuration and links"
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.pop(_:))
+        return button
+    }
+
+    func updateNSView(_ button: HoverButton, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.refresh = refresh
+        coordinator.editConfiguration = editConfiguration
+        coordinator.showAccount = showAccount
+        coordinator.openSource = openSource
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+    }
+
+    final class Coordinator: NSObject {
+        var refresh: () -> Void = {}
+        var editConfiguration: () -> Void = {}
+        var showAccount: () -> Void = {}
+        var openSource: () -> Void = {}
+
+        @objc func pop(_ sender: NSButton) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            let entries: [(String, Selector)] = [
+                ("Refresh", #selector(didRefresh)),
+                ("Edit Configuration…", #selector(didEdit)),
+                ("Ouros Account…", #selector(didAccount)),
+                ("Source & Support", #selector(didSource)),
+            ]
+            for (title, action) in entries {
+                let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                item.target = self
+                menu.addItem(item)
+            }
+            // Non-flipped view: y = 0 is the button's bottom edge, so the menu opens downward.
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
+        }
+
+        @objc func didRefresh() { refresh() }
+        @objc func didEdit() { editConfiguration() }
+        @objc func didAccount() { showAccount() }
+        @objc func didSource() { openSource() }
+    }
+}
+
+/// Template image, tint on hover, no bezel. `showsBorderOnlyWhileMouseInside`
+/// is the plate the dropdown was keeping around this control.
+private final class HoverButton: NSButton {
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: bounds,
+                                       options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+                                       owner: self))
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        contentTintColor = .labelColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        contentTintColor = .secondaryLabelColor
     }
 }

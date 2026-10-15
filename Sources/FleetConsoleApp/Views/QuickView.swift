@@ -77,11 +77,25 @@ struct QuickView: View {
 
     private func instrument<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 12) {
-            Text(title).font(FleetFont.sectionLabel).foregroundStyle(.secondary)
+            HStack(spacing: 6) {
+                Text(title)
+                    .font(FleetFont.sectionLabel)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Spacer(minLength: 4)
+                AgentHookButton(title: title) {
+                    model.investigate(.metric(title.lowercased(), model: model))
+                }
+            }
             content().frame(height: Self.instrumentSize)
         }
         .frame(maxWidth: .infinity)
-        .investigatable(.metric(title.lowercased(), model: model), model: model)
+        .contextMenu {
+            Button("Investigate \(title) with agent") {
+                model.investigate(.metric(title.lowercased(), model: model))
+            }
+        }
     }
 
     private func disk(_ metrics: QuickViewMetrics) -> some View {
@@ -137,5 +151,26 @@ struct QuickView: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(metric.bytesPerSecond == nil ? "Unavailable" : metric.readout)
+    }
+}
+
+/// A named control for one dropdown instrument. The column itself stays out of
+/// the focus system: a focusable rectangle there strokes a hit box around the
+/// meter as soon as the menu-bar dropdown is on screen.
+private struct AgentHookButton: View {
+    let title: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Text("Agent")
+                .font(FleetFont.sectionLabel)
+                .foregroundStyle(hovering ? Color.primary : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("Investigate \(title) with agent")
+        .accessibilityLabel("Investigate \(title) with agent")
     }
 }

@@ -54,5 +54,8 @@ struct MenuBarMetersTests {
             return own + children.flatMap(labels)
         }
         #expect(labels(host).contains { $0.contains("Dashboard") })
+        for title in ["CPU", "Memory", "Disk", "Network"] {
+            #expect(labels(host).contains("Investigate \(title) with agent"))
+        }
     }
 }
