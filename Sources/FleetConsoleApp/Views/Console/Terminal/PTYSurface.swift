@@ -395,7 +395,6 @@ final class PTYSession {
         var argv0: String?
         var workingDirectory: URL
         var environment: [String]
-        var banner: String? = nil
     }
 
     private(set) var phase: Phase = .idle
@@ -509,9 +508,6 @@ final class PTYSession {
         // `startProcess` reports failure by simply not running: `forkpty` failed,
         // or `execve` did and the child already `_exit(127)`ed.
         phase = process?.running == true ? .running : .exited(nil)
-        if let banner = launch.banner {
-            host.terminal.feed(text: "\r\n" + banner.replacingOccurrences(of: "\n", with: "\r\n") + "\r\n")
-        }
         if phase == .running, !pendingInput.isEmpty {
             let queued = pendingInput
             pendingInput = []

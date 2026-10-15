@@ -8,11 +8,11 @@ import FleetCore
 struct OperationsWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
-    @State private var section = "Services"
+    private var section: String { console.operationsSection }
     private let sections = ["Services", "Network", "Agents", "Storage", "Events", "Launch Services", "Account"]
     var body: some View {
         VStack(spacing: 8) {
-            Picker("Operations", selection: $section) {
+            Picker("Operations", selection: Binding(get: { console.operationsSection }, set: { console.operationsSection = $0 })) {
                 ForEach(sections, id: \.self) { Text($0).tag($0) }
             }.pickerStyle(.menu).padding(.horizontal, ConsoleMetrics.gutter)
             switch section {

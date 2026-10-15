@@ -243,7 +243,7 @@ struct CloudAgentCard: View {
                 .foregroundStyle(SurfaceInk.secondary)
             VStack(alignment: .leading, spacing: 1) {
                 Text("Cloud Agent").font(FleetFont.rowTitleCompact.weight(.semibold))
-                Text("Fix reports go to an Ouros-hosted agent, so fixes keep going when this Mac sleeps.")
+                Text("Cloud-agent subscriptions appear here when offered by Ouros. Snapshot investigation access is verified separately by the agent gateway.")
                     .font(FleetFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
                     .fixedSize(horizontal: false, vertical: true)

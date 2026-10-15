@@ -120,9 +120,9 @@ final class ChromeTools {
         return (registry.surface(for: .terminal) as? TerminalPanel)?.run(commandLine) ?? false
     }
 
-    func investigate(_ starter: String, executable: URL, subject: String) -> Bool {
+    func investigate(_ starter: String, billing: OurosBilling, subject: String, validation: @escaping @MainActor () -> Bool) -> Bool {
         guard let terminal = registry.surface(for: .terminal) as? TerminalPanel,
-              terminal.investigate(starter, executable: executable) else { return false }
+              terminal.investigate(starter, billing: billing, validation: validation) else { return false }
         let context = ToolContext(subject: "Investigate · " + subject)
         if revealed == .terminal { update(context: context) } else { toggle(.terminal, context: context) }
         return true

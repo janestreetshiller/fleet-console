@@ -71,57 +71,113 @@ Native table actions preserve table selection and its existing context verbs.
 A group represents multiple processes and explicitly investigates its heaviest
 member. Nonprocess storage heatmap tiles keep their existing Finder actions.
 
-## Starter and safety contract
+## Starter, entitlement and transport contract (source-review correction)
 
-`InvestigationRequest` encodes schema version, subject, kind, actual observation
-time, numeric values/units, diagnostic context and bounded process evidence.
-JSONEncoder escapes controls and shell syntax is never evaluated: the bundled
-`fleet-agent` launches directly with argv `propose`, starter in a separate PTY
-inside FleetConsole. The terminal displays that same starter. It never types
-into, restarts or terminates an existing shell or agent session. Concurrent
-investigation requests are refused until the previous session exits; normal
-terminal commands are refused while the investigation surface is selected.
+The first candidate `03076aa` incorrectly treated Fleet multi-device membership
+as an inference gate and dispatched the starter to a CLI that requires explicit
+loopback model setup. That path is superseded by the follow-up source correction.
+No local agent executable is launched by contextual investigation.
 
-Every surface uses the existing `OurosBilling.signedIn` and `active` checks;
-no account IDs or customer exceptions are hardcoded. Gate checks run before
-serialization/dispatch and again at the terminal observer. The current billing
-contract exposes active account membership through the existing multi-device
-entitlement response; it does not expose a distinct agent entitlement. This
-change grants no cloud-agent SKU or paid inference permission. Product/backend
-confirmation of the intended premium SKU remains necessary if it differs from
-that existing account membership contract.
+`InvestigationRequest` encodes schema version, subject, kind, original observation
+time, numeric values/units, bounded diagnostic context and process evidence.
+The existing embedded SwiftTerm surface displays the JSON starter, availability
+result and reply as an output-only investigation transcript. It preserves the
+user's shell and scrollback; it never types into a live shell or executes provider
+output. Escape/control characters and directional overrides are removed from
+untrusted output before rendering. Concurrent investigation requests are refused.
 
-The agent executable must exist in this app's resource bundle; no PATH fallback
-or arbitrary configured fixer receives these requests. Its existing read-only
-proposal dispatcher, model-endpoint configuration requirement, headroom and
-inference-lease guards stay unchanged. No model server is started by this path.
-Clicking investigation does not enable `allowProcessTermination`, signal a PID,
-call a service mutation or authorize remediation. Existing destructive actions
-retain their own controller/confirmation policy.
+Every surface requires the existing Fleet Ouros account session. That same
+private bearer credential stays inside `OurosBilling`'s HTTPS transport; it is
+never put in argv, environment, starter JSON or terminal output. A fresh
+`GET /ouros/v1/models` must return a runnable catalog for this account. The model
+comes from the server catalog, not a local grant. The final
+`POST /v1/chat/completions` uses the existing Ouros Agent request contract and
+again passes through server entitlement, usage reservation and settlement.
+Fleet's `/hvy/v1/fleet-console/entitlement` response authorizes multi-device
+membership only and is no longer used to grant inference. No account exceptions,
+new subscription SKU, purchase, fallback endpoint or local model setup is added.
+
+The request contains one system instruction and the selected evidence, with no
+tools or function execution permissions. This provides remote analysis of the
+snapshot; it does not provide live inspection, remediation or a background job.
+The complete completion envelope must fit 16 KiB. Response collection is capped
+at 64 KiB and reply text at 32 KiB. The model catalog preflight does not spend
+inference usage. No network request or paid call was made during implementation.
+
+An idempotency key is saved before dispatch. Ambiguous completion failures retain
+the outstanding request ID across relaunch and block another investigation until
+explicit receipt-review acknowledgement; the request is never automatically
+replayed. Confirmed pre-dispatch refusals use the same classification as the
+existing Ouros Agent client. Unknown 400/422 errors, 429, upstream errors and
+transport failures remain uncertain. Response/rejection handling is source-only
+and still needs isolated transport-fixture tests after coordination.
 
 Current requests older than 30 seconds, future timestamps, absent samples and
-missing/reused process identities are refused. Unmanaged and detected-session references
-also require an exact command-line match with the current inventory; argv is
-compared locally and is never serialized. Selected rows carry PID and
-start signature; the inventory must still match at dispatch. This is snapshot
-identity validation, not a fresh kernel probe; an exit between capture and
-investigation remains possible. The starter instructs the agent to revalidate
-before live inspection. Historical requests retain their timestamp, explicitly
-say the PID is not current and expire after one hour.
+missing/reused process identities are refused. Freshness and PID/start signature
+are checked again after catalog verification, immediately before submission.
+Unmanaged and session references require a matching command line in the current
+inventory; that comparison stays local. These are inventory checks, not a fresh
+kernel probe: an exit after capture remains possible. Historical requests retain
+their original timestamp and explicit historical scope, and expire after one hour.
 
-Raw argv, environment, usernames, filesystem paths, addresses, transcripts and
-log bodies are excluded from process evidence. Executable basename is limited
-to 80 safe characters; token/secret-looking labels are redacted. Ports cap at
-16, metric process context at five, JSON at 16 KiB. Nonfinite metrics become
-unknown or fail serialization; unknown is not fabricated as zero. Context is
-untrusted data, not agent instructions. CPU/memory rankings and job associations
-are labeled correlation rather than proof of a cause.
+Raw argv, environment, usernames, paths, addresses, transcripts and log bodies are
+excluded from process evidence. Executable basename is limited to 80 safe
+characters; token/secret-looking labels are redacted. Ports cap at 16, metric
+process context at five. Nonfinite metrics become unknown or fail serialization.
+CPU/memory rankings and job associations are correlation, not demonstrated cause.
+Clicking investigation changes no termination setting and grants no process,
+service or file mutation tools. Existing destructive actions retain their policy.
+
+## Source contract evidence
+
+- Existing entitled gateway: `/Users/main/Code/ouros-md-landing/gateway/legacy-completion.mjs`
+  handles `/ouros/v1/models` and `/v1/chat/completions`, filters the catalog by
+  account entitlement, and forwards completions to the reservation/settlement route.
+- Existing native caller: `/Users/main/Code/ouros-x/apps/desktop/ouros/Sources/OurosBar/EveChatSession.swift`,
+  `completionPayload`, `beginGatewayCompletion` and `completionRejectedBeforeDispatch`.
+- Multi-device-only membership contract: `/Users/main/Code/ouros-md-landing/gateway/fleet-console-billing.mjs`,
+  `fleetConsoleOffer` and the `/hvy/v1/fleet-console/entitlement` handler.
+- The source exists; deployed gateway behavior, Fleet-token scopes and end-to-end
+  account interoperability have not been exercised. They must be checked with
+  isolated fixtures before an authorized live acceptance action. A failed scope
+  check must stay a refusal, not trigger credential borrowing or broader permissions.
+
+## Exact Fleet provenance for the sole updater
+
+- Canonical repository: `/Users/main/Metal/Code/Fleet/fleet-console`.
+- Candidate worktree: `/Users/main/Documents/Codex/2026-10-15/task/fleet-context`.
+- Baseline commit: `b1ae71e29a25853ab4843d3bc5fca0ca90ebae81`.
+- Installed app: `/Applications/FleetConsole.app`, `com.fleetconsole.app`,
+  version `1.1.0`, build `4`, executable `Contents/MacOS/FleetConsole`.
+- Installed executable: 11,907,680 bytes, SHA-256
+  `8a97b7da2c5a1e50788db5beb61bbee2d24fa0b8606da443b910bef1c42d8e1b`.
+- Canonical checkout's built executable: 11,887,056 bytes, SHA-256
+  `83d57490ea39e7230d3600b5ff6b96034fdd948ed4f39cf1e0c921f4264344a8`.
+- `fleet-terminal-output` worktree's built executable SHA-256:
+  `03720ca63d9919c3682045d5f508a04389d00f84381595eae9dec95b52a89ba1`.
+- The installed plist has no embedded FleetSourceRevision. None of the checked
+  artifacts matches its executable hash, so its exact source revision remains
+  unproven. Hash differences alone do not identify the source delta.
+- Fleet build 4 is a separate app and identity from Ouros X build 508. This work
+  neither reconciles nor updates Ouros X. Frozen Ouros build 507 was untouched.
+
+Proposed first low-load, non-UI validation command (not executed; needs the sole
+owner's single-slot coordination):
+
+```sh
+xcrun swiftc -frontend -parse Sources/FleetConsoleApp/Investigation.swift Sources/FleetConsoleApp/OurosBilling.swift Sources/FleetConsoleApp/Views/Console/Terminal/TerminalPanel.swift
+```
+
+This is one syntax-only compiler process, without dependency resolution, code
+generation, test execution or app launch. It cannot establish type correctness,
+server entitlement or UI behavior. Focused single-job mocked-transport tests and
+UI acceptance remain separately deferred.
 
 ## Acceptance checklist
 
 - [x] Locate source and inventory meter/process surfaces through bounded reads.
 - [x] Prepare isolated source edits; preserve canonical checkout and frozen Ouros snapshot.
-- [x] Shared investigation request/action path and separate embedded PTY source implemented.
+- [x] Shared investigation request/action path and separate embedded terminal transcript source implemented.
 - [x] Compact dropdown, consolidated navigation, relationship graph and real telemetry views source implemented.
 - [x] `git diff --check` passed (source whitespace check only).
 - [x] Add source regression cases for serialization, sensitive argv omission, bounds, unknown metrics and stale/historical timestamps.
@@ -129,8 +185,8 @@ are labeled correlation rather than proof of a cause.
 - [ ] Reconcile installed build 4 executable with source revision before updating.
 - [ ] Measure dropdown height, verify no clipped meters/network and compare existing styling.
 - [ ] Exercise right-click, double-click, keyboard and VoiceOver on every inventory row.
-- [ ] Verify signed-out, inactive, expired and active entitlement states with isolated fixtures, not paid requests.
-- [ ] Verify local endpoint absent, agent missing, low-memory and concurrent-investigation refusal states.
-- [ ] Verify terminal output contains starter JSON and existing shell/scrollback survives investigation switching.
+- [ ] Verify signed-out, expired-session, runnable/nonrunnable catalog, server-denied entitlement, insufficient credit and account-change states with isolated fixtures, not paid requests.
+- [ ] Verify gateway unavailable, response limits, preflight staleness, concurrent refusal and ambiguous-operation persistence/review states.
+- [ ] Verify terminal output contains starter JSON and existing shell/scrollback survives transcript switching.
 - [ ] Verify graph selection, PID reuse/exit, interval selection, retention caps and missing-history states.
 - [ ] Obtain independent UI review of the candidate and let the sole updater owner package/install the approved result.
