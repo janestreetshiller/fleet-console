@@ -71,6 +71,21 @@ final class ConsoleWindowController {
     /// window to be late for.
     private func observeNavigationCommands() {
         let centre = NotificationCenter.default
+        navigationObservers.append(centre.addObserver(forName: ConsoleCommand.investigate, object: nil, queue: .main) { [weak self] note in
+            guard let starter = note.userInfo?["starter"] as? String,
+                  let subject = note.userInfo?["subject"] as? String,
+                  starter.utf8.count <= 17 * 1024 else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let block = self.model.investigationBlock { self.model.actionError = block; return }
+                guard let executable = Bundle.main.resourceURL?.appendingPathComponent("bin/fleet-agent"),
+                      FileManager.default.isExecutableFile(atPath: executable.path) else { return }
+                self.show()
+                if !self.tools.investigate(starter, executable: executable, subject: subject) {
+                    self.model.actionError = "An investigation is already running. Finish it before starting another."
+                }
+            }
+        })
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.selectModule, object: nil, queue: .main) {
                 [console] note in
@@ -87,13 +102,15 @@ final class ConsoleWindowController {
         // window up, so it is observed here for the same reason as the two above.
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.runInTerminal, object: nil, queue: .main) {
-                [tools] note in
+                [weak self] note in
                 guard let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String else { return }
                 let directory = (note.userInfo?[ConsoleCommand.userInfoDirectory] as? String) ?? NSHomeDirectory()
                 let subject = (note.userInfo?[ConsoleCommand.userInfoSubject] as? String) ?? "Terminal"
                 MainActor.assumeIsolated {
-                    tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory),
-                                                       subject: subject))
+                    guard let self else { return }
+                    if !self.tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory), subject: subject)) {
+                        self.model.actionError = "Return to the shell after the investigation before starting another terminal command."
+                    }
                 }
             })
     }

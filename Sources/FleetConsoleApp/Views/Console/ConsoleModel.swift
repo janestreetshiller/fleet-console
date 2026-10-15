@@ -42,6 +42,7 @@ enum ConsoleCommand {
     static let toggleSidebar = Notification.Name("com.fleetconsole.console.toggleSidebar")
     /// Runs a command line in the window's terminal panel. Carries
     /// `userInfoCommand`, `userInfoDirectory` and `userInfoSubject`.
+    static let investigate = Notification.Name("com.fleetconsole.console.investigate")
     static let runInTerminal = Notification.Name("com.fleetconsole.console.runInTerminal")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
@@ -61,7 +62,7 @@ final class ConsoleModel {
     /// were, and every inspector that switches exhaustively over
     /// `ConsoleModule` keeps compiling. `module` still remembers where you were,
     /// so leaving home and coming back does not reset it.
-    var atHome = false
+    var atHome = true
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
@@ -177,7 +178,7 @@ final class ConsoleModel {
             return "Select something that needs attention to inspect it here."
         }
         switch module {
-        case .overview: return "Select View All to inspect processes."
+        case .overview: return "Select an interval to inspect retained process and agent observations."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."

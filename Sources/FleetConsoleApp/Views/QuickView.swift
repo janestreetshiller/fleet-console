@@ -70,7 +70,8 @@ struct QuickView: View {
             instrument("Network") { network }
         }
         .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.vertical, 22)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
         .accessibilityElement(children: .contain)
     }
 
@@ -80,6 +81,7 @@ struct QuickView: View {
             content().frame(height: Self.instrumentSize)
         }
         .frame(maxWidth: .infinity)
+        .investigatable(.metric(title.lowercased(), model: model), model: model)
     }
 
     private func disk(_ metrics: QuickViewMetrics) -> some View {

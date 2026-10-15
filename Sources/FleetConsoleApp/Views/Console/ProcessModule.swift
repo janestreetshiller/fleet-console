@@ -156,9 +156,21 @@ struct ProcessModule: View {
                 .width(min: 60, ideal: 90, max: 160)
             } rows: {
                 ForEach(filtered) { row in
+                    let request = InvestigationRequest.process(row, model: model)
                     TableRow(row)
-                        .contextMenu { contextMenu(for: row) }
+                        .contextMenu { contextMenu(for: row, request: request) }
                 }
+            }
+            .contextMenu(forSelectionType: Int32.self) { pids in
+                if let pid = pids.first, let row = model.processes.row(pid) {
+                    Button("Investigate with agent") { model.investigate(.process(row, model: model)) }
+                }
+            } primaryAction: { pids in
+                if let pid = pids.first, let row = model.processes.row(pid) { model.investigate(.process(row, model: model)) }
+            }
+            .onKeyPress(.return) {
+                guard let pid = console.selectedPID, let row = model.processes.row(pid) else { return .ignored }
+                model.investigate(.process(row, model: model)); return .handled
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
             // The table sits on the page like every other surface: without
@@ -208,7 +220,9 @@ struct ProcessModule: View {
     // MARK: - Context menu
 
     @ViewBuilder
-    private func contextMenu(for row: ProcessRow) -> some View {
+    private func contextMenu(for row: ProcessRow, request: InvestigationRequest) -> some View {
+        Button("Investigate with agent") { model.investigate(request) }
+        Divider()
         if let serviceID = managedByPID[row.pid],
            let service = model.service(id: serviceID) {
             managedMenu(row: row, service: service)

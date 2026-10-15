@@ -196,6 +196,7 @@ struct ProcessInspector: View {
         }
         .padding(.leading, CGFloat(depth) * 14)
         .contentShape(Rectangle())
+        .investigatable(.process(row, model: model), model: model)
         .onTapGesture {
             if !isCurrent { select(pid: row.pid) }
         }
@@ -293,6 +294,7 @@ struct ProcessInspector: View {
 
     private func actionsCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Actions") {
+            Button("Investigate with agent") { model.investigate(.process(row, model: model)) }
             if let service = owningService, let refusal = service.signalRefusal {
                 // Claimed: supervised, reported on, and deliberately without a
                 // single control. The sentence is the card's whole content, which

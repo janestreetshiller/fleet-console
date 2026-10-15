@@ -99,7 +99,7 @@ enum MainMenu {
         // Home is the landing surface, so it sits above the modules — but it is
         // not one of them, which is why it takes a shifted equivalent and leaves
         // ⌘1…⌘n bound to exactly the module indices, whatever their count.
-        let home = submenu.addItem(withTitle: "Home",
+        let home = submenu.addItem(withTitle: "Overview",
                                    action: #selector(MenuActionTarget.showHome),
                                    keyEquivalent: "h")
         home.keyEquivalentModifierMask = [.command, .shift]
@@ -186,7 +186,7 @@ enum MainMenu {
     /// anything anyway.
     static func moduleItems() -> [NSMenuItem] {
         ConsoleModule.allCases.map { module in
-            let entry = NSMenuItem(title: module.rawValue,
+            let entry = NSMenuItem(title: module.title,
                                    action: #selector(MenuActionTarget.selectModule(_:)),
                                    keyEquivalent: "\(module.shortcutIndex)")
             entry.keyEquivalentModifierMask = [.command]
