@@ -1,14 +1,16 @@
 # Contextual investigations and compact Fleet navigation
 
-Source candidate: branch `codex/fleet-context-actions-20261015`, based on `b1ae71e`.
+Source candidate: branch `codex/fleet-context-actions-20261015`, based on `2d7b41b`.
 This document records implementation and deferred acceptance separately.
 
 ## Baseline and containment
 
 The installed `/Applications/FleetConsole.app/Contents/Info.plist` reports version
 1.1.0, build 4 and executable `FleetConsole`. It contains no FleetSourceRevision
-key. Matching its executable to this checkout remains unverified; the updater
-must reconcile that before replacing the app. Current source was located at
+key. Follow-up provenance reads found an exact matching release artifact in
+`/Users/main/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
+The candidate has been rebased onto that checkout's `2d7b41b` commit to preserve
+its installed terminal-output behavior. Source was initially located at
 `/Users/main/Metal/Code/Fleet/fleet-console` through the Fleet donor reference in
 `/Users/main/Code/ouros-x/apps/desktop/ouros/docs/plugin-boundary-working-record.md`.
 
@@ -146,7 +148,14 @@ service or file mutation tools. Existing destructive actions retain their policy
 
 - Canonical repository: `/Users/main/Metal/Code/Fleet/fleet-console`.
 - Candidate worktree: `/Users/main/Documents/Codex/2026-10-15/task/fleet-context`.
-- Baseline commit: `b1ae71e29a25853ab4843d3bc5fca0ca90ebae81`.
+- Revised baseline commit: `2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01`.
+  It is the sole commit after the initially assumed `b1ae71e` baseline and adds
+  readable Fleet Agent terminal output. The task commits have been rebased onto
+  it; FixAgent.swift, the Rust agent and its terminal-output tests are unchanged
+  by the candidate relative to this revised baseline.
+- Matching artifact checkout: `/Users/main/Metal/Code/Fleet/fleet-terminal-output`,
+  HEAD `2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01`, no tracked differences;
+  only its `build-release-1.1.0/` artifact directory is untracked.
 - Installed app: `/Applications/FleetConsole.app`, `com.fleetconsole.app`,
   version `1.1.0`, build `4`, executable `Contents/MacOS/FleetConsole`.
 - Installed executable: 11,907,680 bytes, SHA-256
@@ -155,9 +164,20 @@ service or file mutation tools. Existing destructive actions retain their policy
   `83d57490ea39e7230d3600b5ff6b96034fdd948ed4f39cf1e0c921f4264344a8`.
 - `fleet-terminal-output` worktree's built executable SHA-256:
   `03720ca63d9919c3682045d5f508a04389d00f84381595eae9dec95b52a89ba1`.
-- The installed plist has no embedded FleetSourceRevision. None of the checked
-  artifacts matches its executable hash, so its exact source revision remains
-  unproven. Hash differences alone do not identify the source delta.
+- Exact matching signed release artifact:
+  `/Users/main/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
+  Installed and release copies are byte-identical for Info.plist, the executable,
+  all three helper binaries, `_CodeSignature/CodeResources` and `CodeResources`.
+  Both executable SHA-256 values are
+  `8a97b7da2c5a1e50788db5beb61bbee2d24fa0b8606da443b910bef1c42d8e1b`.
+  Both Mach-O UUIDs are `66515B41-7F1D-335D-B775-E30E9D6DDD55`.
+- The unsigned/development terminal-output build has that same Mach-O UUID;
+  its differing full-file hash reflects a different artifact, not evidence that
+  the terminal-output source should be discarded. The canonical root build has
+  a different UUID (`5E1B8EB7-D4AA-381F-9E1D-68DDA7F9B2A1`).
+- The plist still contains no embedded revision or signed source attestation.
+  The baseline selection is grounded in the exact installed release artifact's
+  matching checkout and history, rather than the canonical root's HEAD alone.
 - Fleet build 4 is a separate app and identity from Ouros X build 508. This work
   neither reconciles nor updates Ouros X. Frozen Ouros build 507 was untouched.
 
@@ -182,7 +202,7 @@ UI acceptance remain separately deferred.
 - [x] `git diff --check` passed (source whitespace check only).
 - [x] Add source regression cases for serialization, sensitive argv omission, bounds, unknown metrics and stale/historical timestamps.
 - [ ] Compile and execute focused regression tests after containment owner authorizes validation.
-- [ ] Reconcile installed build 4 executable with source revision before updating.
+- [x] Match installed build 4 to the terminal-output release artifact and rebase onto its matching checkout/history; preserve the lack of embedded revision attestation.
 - [ ] Measure dropdown height, verify no clipped meters/network and compare existing styling.
 - [ ] Exercise right-click, double-click, keyboard and VoiceOver on every inventory row.
 - [ ] Verify signed-out, expired-session, runnable/nonrunnable catalog, server-denied entitlement, insufficient credit and account-change states with isolated fixtures, not paid requests.
@@ -190,3 +210,33 @@ UI acceptance remain separately deferred.
 - [ ] Verify terminal output contains starter JSON and existing shell/scrollback survives transcript switching.
 - [ ] Verify graph selection, PID reuse/exit, interval selection, retention caps and missing-history states.
 - [ ] Obtain independent UI review of the candidate and let the sole updater owner package/install the approved result.
+
+## Coordinated validation preflight
+
+The syntax-only command was authorized subject to a safe single-slot preflight.
+It has not run: the first two bounded checks found another compiler tree,
+`xcodebuild` PID 94708 and `swift-frontend` PID 94944 (about 81–83% CPU), while
+kernel memory pressure was `2`; reported free memory fell from 42% to 32%.
+The final readiness check still found `xcodebuild` PID 94708, now with `clang`
+PID 96392, and pressure remained `2`. The prerequisite was not met: syntax was
+NOT RUN, rather than passing or failing. No process belonging
+to that other task was stopped or altered. This task has no active compiler,
+UI automation, app launch or polling process.
+
+The final source review also renamed the nested process snapshot record to
+`CapturedProcesses`, avoiding shadowing of the Observation module used by the
+`@Observable` macro. This is a source correction, not a reported compiler result.
+
+After the coordinator clears the conflicting tree and confirms memory headroom,
+run the already-proposed syntax command first. The minimal subsequent build is
+one target with one job, no indexing or dependency updates:
+
+```sh
+swift build --jobs 1 --target FleetConsoleApp --disable-index-store --skip-update --disable-automatic-resolution
+```
+
+Do not run that build yet. The isolated worktree currently has no `.build`.
+An existing SwiftTerm checkout is present under the canonical repository's
+`.build/checkouts/SwiftTerm`; arrange an isolated, offline dependency cache before
+building. Do not download dependencies or reuse the installed app as a build
+output. Backend execution, mocked transport tests and UI acceptance remain deferred.

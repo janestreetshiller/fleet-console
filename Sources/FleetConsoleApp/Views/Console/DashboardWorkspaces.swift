@@ -175,7 +175,7 @@ struct TrendsWorkspace: View {
     let console: ConsoleModel
     @State private var selection: ClosedRange<Date>?
     @State private var instruments = false
-    private var observations: [ProcessInventory.Observation] {
+    private var observations: [ProcessInventory.CapturedProcesses] {
         guard let selection else { return [] }
         return model.processes.observations.filter { selection.contains($0.time) }
     }
