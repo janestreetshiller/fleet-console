@@ -183,12 +183,21 @@ struct OverviewWorkspace: View {
     private static let instrumentHeight: CGFloat = 640
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
-                OverviewModule(model: model, console: console)
-                    .frame(height: Self.instrumentHeight)
-                ConsolidatedProcessMap(model: model, console: console)
-                TrendsWorkspace(model: model, console: console, scrolls: false, showsInstruments: false)
+        GeometryReader { geometry in
+            // Same cap and centering as the instrument cards. Without it the map
+            // and the interval chart run to the column edges on a wide window.
+            let contentWidth = DashboardContentGeometry.width(
+                available: geometry.size.width - OverviewViewportGeometry.horizontalPadding * 2)
+            ScrollView {
+                VStack(alignment: .center, spacing: OverviewViewportGeometry.gap) {
+                    OverviewModule(model: model, console: console)
+                        .frame(height: Self.instrumentHeight)
+                    ConsolidatedProcessMap(model: model, console: console)
+                        .frame(width: contentWidth)
+                    TrendsWorkspace(model: model, console: console, scrolls: false, showsInstruments: false)
+                        .frame(width: contentWidth)
+                }
+                .frame(maxWidth: .infinity)
             }
         }
     }
@@ -250,7 +259,6 @@ private struct ConsolidatedProcessMap: View {
             }
         }
         .elevatedCard()
-        .padding(.horizontal, OverviewViewportGeometry.horizontalPadding)
         .accessibilityIdentifier("overview.process-map")
     }
 }
@@ -351,7 +359,8 @@ struct TrendsWorkspace: View {
                     Text("Select an interval to inspect contemporaneous evidence.").font(ConsoleFont.caption)
                 }
         }
-        .padding(ConsoleMetrics.gutter)
+        .padding(.vertical, ConsoleMetrics.gutter)
+        .padding(.horizontal, scrolls ? ConsoleMetrics.gutter : 0)
     }
 }
 
