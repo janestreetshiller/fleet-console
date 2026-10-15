@@ -51,7 +51,7 @@ class ScriptFixture(unittest.TestCase):
         mock = self.tools / "mock-tool.py"
         shutil.copyfile(SCRIPTS / "release-policy-mock-tool.py", mock)
         mock.chmod(0o755)
-        for name in ("swift", "cargo", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto"):
+        for name in ("swift", "cargo", "git", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto"):
             (self.tools / name).symlink_to(mock)
         (self.tools / "python3").symlink_to(sys.executable)
         scripts = self.root / "Scripts"
@@ -91,7 +91,7 @@ class ScriptFixture(unittest.TestCase):
         bash_env.write_text("\n".join(
             f'{prefix}/{name}() {{ "$FLEET_TEST_ROOT/mock-tools/{name}" "$@"; }}'
             for prefix in ("/usr/bin", "/usr/sbin", "/bin")
-            for name in ("swift", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto")
+            for name in ("swift", "git", "xcrun", "codesign", "security", "launchctl", "lsof", "spctl", "ditto")
         ) + "\n")
         self.env = os.environ.copy()
         self.env.update({
@@ -136,6 +136,41 @@ class ScriptFixture(unittest.TestCase):
 
 
 class PackagingTests(ScriptFixture):
+    def test_offline_build_uses_one_job_and_the_selected_dependency_license(self):
+        scratch = self.root / "offline-scratch"
+        license_dir = scratch / "checkouts" / "SwiftTerm"
+        license_dir.mkdir(parents=True)
+        (license_dir / "LICENSE").write_text("TEST DATA: selected offline license\n")
+        result = self.run_script("build-app.sh", "release", FLEETCONSOLE_OFFLINE="1",
+                                 FLEETCONSOLE_SCRATCH_PATH=str(scratch))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = self.calls()
+        swift_calls = [call for call in calls if call["tool"] == "swift"]
+        self.assertTrue(swift_calls)
+        for call in swift_calls:
+            args = call["args"]
+            self.assertEqual(args[args.index("--jobs") + 1], "1")
+            self.assertIn("--disable-automatic-resolution", args)
+            self.assertIn("--skip-update", args)
+            self.assertEqual(args[args.index("--scratch-path") + 1], str(scratch))
+        cargo_calls = [call for call in calls if call["tool"] == "cargo"]
+        self.assertTrue(cargo_calls)
+        for call in cargo_calls:
+            self.assertEqual(call["args"][call["args"].index("--jobs") + 1], "1")
+        notice = self.app / "Contents/Resources/licenses/SwiftTerm-LICENSE.txt"
+        self.assertEqual(notice.read_text(), "TEST DATA: selected offline license\n")
+        import plistlib
+        with (self.app / "Contents/Info.plist").open("rb") as stream:
+            info = plistlib.load(stream)
+        self.assertEqual(info["CFBundleVersion"], "5")
+        self.assertEqual(info["FleetSourceRevision"], "unrecorded")
+        self.assertTrue(info["FleetSourceDirty"])
+
+    def test_relative_scratch_is_refused_before_building(self):
+        result = self.run_script("build-app.sh", "release", FLEETCONSOLE_SCRATCH_PATH="relative")
+        self.expect_failure(result, "must be absolute")
+        self.assertFalse(any(call["tool"] in ("swift", "cargo") for call in self.calls()))
+
     def test_model_weights_are_rejected_before_signing(self):
         (self.bin / "SwiftTerm.bundle/unexpected.gguf").write_bytes(b"model fixture")
         result = self.run_script("build-app.sh", "release")
