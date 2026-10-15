@@ -38,6 +38,11 @@ struct FleetPopover: View {
                                  tone: model.fleetTint) { FleetBadgeMark(size: $0) }
                 Spacer(minLength: 8)
                 IconButton(symbol: "square.grid.2x2", help: "Open dashboard and services (⌘0)", action: openDashboard)
+                AgentMenuButton { metric in
+                    model.investigate(.metric(metric, model: model))
+                }
+                .frame(height: FleetMetrics.iconButtonSize)
+                .fixedSize(horizontal: true, vertical: false)
                 ConfigurationMenuButton(
                     refresh: { model.reEvidence() },
                     editConfiguration: { model.openConfigFile() },
@@ -71,6 +76,59 @@ struct FleetPopover: View {
             userInfo: [ConsoleCommand.userInfoModule: requested == .processes
                 ? ConsoleModule.processes.rawValue : ConsoleModule.services.rawValue,
                        "operationsSection": requested == .connections ? "Network" : requested == .agents ? "Agents" : "Services"])
+    }
+}
+
+/// One Agent menu for the four meters. A label on every instrument repeated
+/// the same word across the dropdown.
+private struct AgentMenuButton: NSViewRepresentable {
+    var investigate: (String) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> HoverButton {
+        let button = HoverButton()
+        button.title = "Agent"
+        button.imagePosition = .noImage
+        button.font = .systemFont(ofSize: 12, weight: .semibold)
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+        button.bezelStyle = .shadowlessSquare
+        button.setButtonType(.momentaryChange)
+        button.contentTintColor = .secondaryLabelColor
+        button.setAccessibilityLabel("Agent")
+        button.toolTip = "Investigate a meter"
+        button.target = context.coordinator
+        button.action = #selector(Coordinator.pop(_:))
+        return button
+    }
+
+    func updateNSView(_ button: HoverButton, context: Context) {
+        context.coordinator.investigate = investigate
+        button.isBordered = false
+        button.showsBorderOnlyWhileMouseInside = false
+    }
+
+    final class Coordinator: NSObject {
+        var investigate: (String) -> Void = { _ in }
+        private let meters = [("CPU", "cpu"), ("Memory", "memory"), ("Disk", "disk"), ("Network", "network")]
+
+        @objc func pop(_ sender: NSButton) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for (title, metric) in meters {
+                let item = NSMenuItem(title: title, action: #selector(didPick(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = metric
+                menu.addItem(item)
+            }
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
+        }
+
+        @objc func didPick(_ sender: NSMenuItem) {
+            guard let metric = sender.representedObject as? String else { return }
+            investigate(metric)
+        }
     }
 }
 

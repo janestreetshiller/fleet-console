@@ -57,8 +57,6 @@ struct MenuBarMetersTests {
         let preview = found.prefix(40).joined(separator: " | ")
         #expect(found.contains { $0.localizedCaseInsensitiveContains("dashboard") }, "\(preview)")
         #expect(found.contains("Configuration and links"), "\(preview)")
-        for title in ["CPU", "Memory", "Disk", "Network"] {
-            #expect(found.contains("Investigate \(title) with agent"), "\(preview)")
-        }
+        #expect(found.filter { $0 == "Agent" }.count == 1, "\(preview)")
     }
 }
