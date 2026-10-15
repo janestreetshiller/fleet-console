@@ -1,0 +1,44 @@
+{
+  "recordedAt": "2026-10-15T11:41:14.792209+00:00",
+  "baseline": "2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01",
+  "startingCandidate": "ee056fa0b7c58f6873882a409108c302a95e754d",
+  "syntax": {
+    "exitCode": 0,
+    "command": "xcrun swiftc -frontend -parse Sources/FleetConsoleApp/Investigation.swift Sources/FleetConsoleApp/OurosBilling.swift Sources/FleetConsoleApp/Views/Console/Terminal/TerminalPanel.swift"
+  },
+  "build": {
+    "exitCode": 0,
+    "target": "FleetConsoleApp",
+    "configuration": "debug",
+    "jobs": 1,
+    "scratch": "/tmp/fleet-context-ee056fa-validation",
+    "reportedSeconds": 31.51,
+    "offline": true,
+    "artifact": "/tmp/fleet-context-ee056fa-validation/out/Products/Debug/FleetConsoleApp",
+    "artifactBytes": 25511120,
+    "artifactSHA256": "6db73e736db140105c509c6e329639f00b35c9ed28cc66fb3b01e94d9202cd39"
+  },
+  "sourceSHA256": {
+    "Sources/FleetConsoleApp/Investigation.swift": "ac83e34bde1fc6418484a01376b043e7f55bfe051a25ff146ef0dcdccb80d3b4",
+    "Sources/FleetConsoleApp/OurosBilling.swift": "d2a72170f5eb52fadfb99aaddd77ade255dbdc2660762baff9f15573843effaf",
+    "Sources/FleetConsoleApp/Views/Console/Terminal/TerminalPanel.swift": "e1c88fb2804592e6eb446f7db767235c982e74887181c808426aa87b13c1564e"
+  },
+  "finalResourcePreflight": {
+    "compilersObserved": [],
+    "kernelMemoryPressure": 1
+  },
+  "notRun": [
+    "tests",
+    "app launch",
+    "UI automation",
+    "backend requests",
+    "paid inference",
+    "packaging",
+    "installation"
+  ],
+  "remaining": [
+    "mocked transport and policy tests",
+    "deployed Fleet token scope compatibility",
+    "UI acceptance"
+  ]
+}

@@ -120,8 +120,8 @@ final class TerminalPanel: PTYBackedSurface {
                     Text("Read-only investigation").font(ConsoleFont.caption)
                     Spacer()
                     Button("Return to shell") {
-                        investigationSession = nil
-                        activate(context: currentContext)
+                        self.investigationSession = nil
+                        self.activate(context: self.currentContext)
                     }
                         .disabled(investigationBusy)
                 }

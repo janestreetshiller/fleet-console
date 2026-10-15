@@ -14,9 +14,11 @@ its installed terminal-output behavior. Source was initially located at
 `/Users/main/Metal/Code/Fleet/fleet-console` through the Fleet donor reference in
 `/Users/main/Code/ouros-x/apps/desktop/ouros/docs/plugin-boundary-working-record.md`.
 
-All changes were prepared in an isolated worktree. No builds, package installs,
+All changes were prepared in an isolated worktree. The initial implementation
+was source-only. After the coordinator granted the non-UI slot, syntax validation
+and a serial offline FleetConsoleApp target build passed. No dependency downloads,
 test executions, app launches, UI automation, screenshots, model requests or
-background pollers were run for this work. Ouros build 507 was not changed.
+background pollers were run. Ouros build 507 was not changed.
 The native containment task `01a137a4-495f-7202-907c-5938b789c006` owns process
 containment, runtime validation coordination and canonical app updating.
 
@@ -181,8 +183,7 @@ service or file mutation tools. Existing destructive actions retain their policy
 - Fleet build 4 is a separate app and identity from Ouros X build 508. This work
   neither reconciles nor updates Ouros X. Frozen Ouros build 507 was untouched.
 
-Proposed first low-load, non-UI validation command (not executed; needs the sole
-owner's single-slot coordination):
+Coordinated syntax-only command (now executed successfully, exit 0):
 
 ```sh
 xcrun swiftc -frontend -parse Sources/FleetConsoleApp/Investigation.swift Sources/FleetConsoleApp/OurosBilling.swift Sources/FleetConsoleApp/Views/Console/Terminal/TerminalPanel.swift
@@ -201,7 +202,9 @@ UI acceptance remain separately deferred.
 - [x] Compact dropdown, consolidated navigation, relationship graph and real telemetry views source implemented.
 - [x] `git diff --check` passed (source whitespace check only).
 - [x] Add source regression cases for serialization, sensitive argv omission, bounds, unknown metrics and stale/historical timestamps.
-- [ ] Compile and execute focused regression tests after containment owner authorizes validation.
+- [x] Syntax-only validation passed (exit 0) on the final corrected source.
+- [x] Single-job offline FleetConsoleApp target build passed (exit 0).
+- [ ] Execute focused non-UI regression and mocked transport tests after coordination; none ran in this slot.
 - [x] Match installed build 4 to the terminal-output release artifact and rebase onto its matching checkout/history; preserve the lack of embedded revision attestation.
 - [ ] Measure dropdown height, verify no clipped meters/network and compare existing styling.
 - [ ] Exercise right-click, double-click, keyboard and VoiceOver on every inventory row.
@@ -211,15 +214,15 @@ UI acceptance remain separately deferred.
 - [ ] Verify graph selection, PID reuse/exit, interval selection, retention caps and missing-history states.
 - [ ] Obtain independent UI review of the candidate and let the sole updater owner package/install the approved result.
 
-## Coordinated validation preflight
+## Coordinated validation record
 
 The syntax-only command was authorized subject to a safe single-slot preflight.
-It has not run: the first two bounded checks found another compiler tree,
+It was initially held: the first two bounded checks found another compiler tree,
 `xcodebuild` PID 94708 and `swift-frontend` PID 94944 (about 81–83% CPU), while
 kernel memory pressure was `2`; reported free memory fell from 42% to 32%.
 The final readiness check still found `xcodebuild` PID 94708, now with `clang`
 PID 96392, and pressure remained `2`. The prerequisite was not met: syntax was
-NOT RUN, rather than passing or failing. No process belonging
+NOT RUN at that stage, rather than passing or failing. Later safe execution is recorded below. No process belonging
 to that other task was stopped or altered. This task has no active compiler,
 UI automation, app launch or polling process.
 
@@ -227,16 +230,39 @@ The final source review also renamed the nested process snapshot record to
 `CapturedProcesses`, avoiding shadowing of the Observation module used by the
 `@Observable` macro. This is a source correction, not a reported compiler result.
 
-After the coordinator clears the conflicting tree and confirms memory headroom,
-run the already-proposed syntax command first. The minimal subsequent build is
-one target with one job, no indexing or dependency updates:
+After the competing build finished, preflight found no compiler tree, pressure
+`1` and 43% free memory. Syntax validation passed. Existing pinned checkouts were
+copied into isolated caches without downloads: SwiftTerm revision
+`dd2fb8ac5b861e7bf617c872895e338f38165648` and swift-argument-parser revision
+`6a52f3251125d74daf04fcbd5e6f08a75d074382`, matching Package.resolved.
+
+The first target build was blocked by nested manifest sandbox restrictions.
+The approved tool-level retry reached compilation, but Documents file-provider
+metadata caused resource-bundle signing to reject Finder information. Cleaning
+only the isolated copy did not prevent metadata reappearing. Moving the build
+scratch/cache to `/tmp` resolved that infrastructure failure without disabling
+resource signing or changing installed files.
+
+The full target compile then found three explicit-self errors in the Return to
+shell closure. The closure now uses `self.investigationSession` and
+`self.activate(context: self.currentContext)`. Syntax was rechecked successfully,
+and the incremental target build passed: exit `0`, `Build complete! (31.51 sec)`.
+
+Exact successful build command (environment variables restrict Git to local
+protocols and keep caches in scratch):
 
 ```sh
-swift build --jobs 1 --target FleetConsoleApp --disable-index-store --skip-update --disable-automatic-resolution
+GIT_ALLOW_PROTOCOL=file GIT_TERMINAL_PROMPT=0 SWIFTPM_MODULECACHE_OVERRIDE=/tmp/fleet-context-ee056fa-validation/module-cache CLANG_MODULE_CACHE_PATH=/tmp/fleet-context-ee056fa-validation/module-cache swift build --scratch-path /tmp/fleet-context-ee056fa-validation --jobs 1 --target FleetConsoleApp --disable-index-store --skip-update --disable-automatic-resolution --cache-path /tmp/fleet-context-ee056fa-validation/offline-cache --config-path /tmp/fleet-context-ee056fa-validation/swiftpm-config --security-path /tmp/fleet-context-ee056fa-validation/swiftpm-security
 ```
 
-Do not run that build yet. The isolated worktree currently has no `.build`.
-An existing SwiftTerm checkout is present under the canonical repository's
-`.build/checkouts/SwiftTerm`; arrange an isolated, offline dependency cache before
-building. Do not download dependencies or reuse the installed app as a build
-output. Backend execution, mocked transport tests and UI acceptance remain deferred.
+Debug executable, built but never launched:
+`/tmp/fleet-context-ee056fa-validation/out/Products/Debug/FleetConsoleApp`.
+The builder emitted nonfatal warnings about deprecated `--skip-update` and a
+SwiftTerm resource-bundle creator node. The final preflight after completion
+found no compiler process and pressure `1`; the slot is released.
+
+Machine-readable results and hashes are in
+`docs/validation/fleet-context-nonui-20261015.json`. No test suite, backend call,
+application launch, UI acceptance, packaging or installation was performed.
+Remaining work is mocked transport and policy tests, deployed token/scope
+compatibility, and separately authorized UI acceptance by the sole updater.
