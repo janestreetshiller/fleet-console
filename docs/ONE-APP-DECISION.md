@@ -72,22 +72,28 @@ the machine is going to keep having an operations console at all.
   component; do not port it". Until someone signs that, the directory stays.
   Its working tree also carries two uncommitted edits that should not be
   committed as-is — see *Loose ends* below.
-- **The paywall direction is self-contradictory.** §5 / D4 say the free build
-  gates `PremiumFeature`s and Polar issues the key. `docs/FREEMIUM.md`
-  (2026-10-05) now says the opposite: "the current MIT build permanently unlocks
-  every feature … There is no checkout or donation requirement", and it is
-  labelled *legacy reference only*. The paywall cannot be built until one of
-  those is deleted.
+- **Stage 5's money model is superseded, not open.** §5 / D4 plan a Polar paywall
+  gating `PremiumFeature`s. What actually shipped is the opposite and it is
+  already public: `Release/PUBLIC-README.md` ("Local monitoring and service
+  management are free. Optional multi-device access costs $10 USD/month through
+  Ouros … MIT rights for this source do not depend on a subscription") and
+  `docs/PRODUCT-SPEC.md` §2.6 ("Features are permanently unlocked in the source
+  build … No activation, purchase or trial is required"), with
+  `docs/FREEMIUM.md` labelled *legacy reference only*. The remaining work is to
+  delete §5/D4 from `WORK-PLAN.md` so nobody builds the retired gate, not to
+  choose between them.
 - **D5 is still open**: what an "agent" is (the default assumption is Claude
   Code / Codex / opencode sessions) is a data-model decision, and the Agents tab
   already ships a shape for it.
-- **Stage 6 (public repo) is not blocked by signing.** §6 records a
-  `fleetd` codesign failure (`errSecInternalComponent`); the 2026-10-11 release
-  assessment records the opposite — Developer ID signed, hardened runtime,
-  submission accepted, ticket stapled, Gatekeeper `Notarized Developer ID`
-  verified after unzipping the download. The remaining blocker is the GitHub
-  account (`janestreetshiller`, both tokens invalid), which is an owner action,
-  not a code change.
+- **Stage 6's blockers are already cleared.** §6 records a `fleetd` codesign
+  failure (`errSecInternalComponent`) and "`git init`/push to a public GitHub
+  repo — re-auth needed; both current tokens invalid". Re-checked here: the
+  notarized artifact is real — `spctl -a -v -t install developer-id/FleetConsole.app`
+  → `accepted, source=Notarized Developer ID` and `xcrun stapler validate` →
+  `The validate action worked!` — and the public repository already exists at
+  `https://github.com/janestreetshiller/fleet-console` (MIT, created 2026-10-11,
+  default branch `main`), with `origin` in this checkout already pointing at it.
+  What is actually left in Stage 6 is release/CI upkeep, not creation.
 
 ## Loose ends in `fleet-agent-menu` (left uncommitted, deliberately)
 
