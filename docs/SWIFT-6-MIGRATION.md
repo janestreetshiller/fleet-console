@@ -111,6 +111,31 @@ app and one in the daemon needed it, so the replacement lives in FleetCore as
 `String(nulTerminated:)` rather than once per target. Only the array overload is
 affected; the pointer overload used elsewhere is fine.
 
+## Re-verified 2026-10-16
+
+Re-ran this document's own evidence against the current tree (`b1ae71e`) rather
+than trusting the summary above. No source file changed; this section is the
+record.
+
+| Claim above | Observed 2026-10-16 |
+|---|---|
+| clean debug build | `swift build` → exit 0, 0 errors; the only `warning:` line the build emits is SwiftPM's own advisory about the SwiftTerm resource bundle, not a diagnostic from our sources |
+| clean release build | `swift build -c release` → exit 0, `Build complete! (62.09 sec)`, 0 warnings |
+| "42 tests passing" | `swift test` → exit 0, **299 cases**: `FleetCoreTests` 189 XCTest + 21 Swift Testing (5 suites), `FleetConsoleAppTests` 89 Swift Testing (22 suites). The 42 was the count at the time; the suite has grown, not drifted |
+| `Scripts/design-audit.sh` clean | exit 0 — every *hard* rule passes (literal font sizes 0/0, ConsoleMetrics on the Fibonacci ladder, mirrored constants, documented token tables matching `Design/Theme.swift`, the documented popover sections and menu-bar items matching what the app builds). **One budget is exceeded**: literal frame dimensions 40 against a budget of 25 |
+| all four targets in language mode 6 | confirmed on the compiler invocation itself: `Package.swift` declares `.swiftLanguageMode(.v6)` on `FleetCore`, `fleetd`, `fleetctl` and `FleetConsoleApp`, and `swift build -v --build-tests` shows both test targets — which declare nothing — compiling with `-swift-version 6` as well, inherited from `swift-tools-version: 6.0` |
+
+Two things this re-verification does not close:
+
+- **the frame-dimension budget**. Drift, not a regression: the audit exits 0 and
+  treats budgets as "this got worse", not "this must be zero". The 40 hits are
+  30 distinct literal `.frame(width|height:)` values across 15 view files, so
+  tokenising them is a design pass — several values (560 ×4, 480, 420, 300, 144,
+  92, 90, 86, 34) are not on `ConsoleMetrics`' Fibonacci ladder and would need
+  `FleetMetrics` tokens or a value change — and not the mechanical edit the
+  budget's wording invites.
+- **the `HealthChecker.httpGet` semaphore**, below — unchanged.
+
 ## Not done
 
 `HealthChecker.httpGet` still blocks a `workQueue` thread on a semaphore for the
