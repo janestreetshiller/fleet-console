@@ -58,7 +58,7 @@ final class AppModel {
     /// it (`system` reads its answer every sample), so property order is also
     /// the dependency order. See FleetCore/License.swift.
     let license = LicenseManager()
-    let ourosBilling = OurosBilling()
+    let ourosBilling: OurosBilling
     let system: SystemMonitor
     let storage = StorageScanner()
     let breakdown = StorageBreakdown()
@@ -80,7 +80,8 @@ final class AppModel {
     @ObservationIgnored nonisolated(unsafe) private var clockTimer: Timer?
     private var didInitialLoad = false
 
-    init() {
+    init(billing: OurosBilling? = nil) {
+        ourosBilling = billing ?? OurosBilling()
         // Cadences come from config, clamped there. Read once at construction:
         // a live interval change would mean tearing down and rebuilding the two
         // timers, and the honest cost of editing a sampling rate is a relaunch.
@@ -115,6 +116,8 @@ final class AppModel {
     // MARK: - Snapshot application
 
     func apply(_ snapshot: Snapshot) {
+        connected = true
+        connectionError = nil
         daemon = snapshot.daemon
         lastSnapshotAt = snapshot.generatedAt
         lastSnapshotReceivedUptime = ProcessInfo.processInfo.systemUptime

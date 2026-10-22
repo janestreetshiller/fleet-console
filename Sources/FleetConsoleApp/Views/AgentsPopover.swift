@@ -20,12 +20,15 @@ struct AgentsContent: View {
                            messages: latestMessages,
                            problemCount: model.attention.count,
                            fixer: fixer, billing: model.ourosBilling,
+                           reviewProblems: { sheet = .ouros },
                            register: { sheet = .register }, mailbox: { sheet = .mailbox },
                            manage: { sheet = .manage },
                            dismiss: { model.dismissMessages($0) },
                            sendToFixer: { fixerProblem = model.sendToFixer(model.attention, openDashboard: openDashboard) })
             .sheet(item: $sheet) { destination in
-                if destination == .mailbox {
+                if destination == .ouros {
+                    OurosAgentSheet(model: model)
+                } else if destination == .mailbox {
                     AgentsMailboxSheet(model: model)
                 } else {
                     AgentsManagerSheet(model: model, registration: registration,
@@ -51,7 +54,7 @@ struct AgentsContent: View {
     }
 
     private enum AgentSheet: String, Identifiable {
-        case register, manage, mailbox
+        case register, manage, mailbox, ouros
         var id: String { rawValue }
     }
 }
@@ -70,6 +73,7 @@ struct AgentGlanceContent: View {
     var problemCount: Int = 0
     var fixer: FixAgentSettings?
     var billing: OurosBilling?
+    var reviewProblems: () -> Void = {}
     var register: () -> Void
     var mailbox: () -> Void
     var manage: () -> Void
@@ -139,7 +143,7 @@ struct AgentGlanceContent: View {
             }
 
             Spacer(minLength: 0)
-            if let billing { CloudAgentCard(billing: billing) }
+            if let billing { CloudAgentCard(billing: billing, review: reviewProblems) }
         }
         .padding(.horizontal, FleetMetrics.gutter)
         .padding(.vertical, 10)
@@ -231,10 +235,10 @@ struct AgentMessageLine: View {
     }
 }
 
-/// The hosted fixer, priced by the Ouros catalog. Each state says the one next
-/// step: connect, start, or that this account is not offered it yet.
+/// Credit-funded review through the connected Ouros account.
 struct CloudAgentCard: View {
     @Bindable var billing: OurosBilling
+    var review: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 10) {
@@ -242,8 +246,8 @@ struct CloudAgentCard: View {
                 .font(FleetFont.title)
                 .foregroundStyle(SurfaceInk.secondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Cloud Agent").font(FleetFont.rowTitleCompact.weight(.semibold))
-                Text("Cloud-agent subscriptions appear here when offered by Ouros. Snapshot investigation access is verified separately by the agent gateway.")
+                Text("Ouros Agent").font(FleetFont.rowTitleCompact.weight(.semibold))
+                Text("Review problems using your Ouros usage credits. Approve repairs on this Mac.")
                     .font(FleetFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -267,18 +271,10 @@ struct CloudAgentCard: View {
         } else if !billing.signedIn {
             Button("Connect Ouros…") { billing.connect() }
                 .controlSize(.small)
-        } else if let offer = billing.cloudAgentOffer {
-            Button("Start · \(offer.priceLabel)") {
-                Task { await billing.subscribe(offerID: offer.id) }
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
         } else {
-            Text("Not offered on\nyour account yet")
-                .font(FleetFont.caption)
-                .foregroundStyle(SurfaceInk.secondary)
-                .multilineTextAlignment(.trailing)
-                .fixedSize()
+            Button("Review…", action: review)
+                .controlSize(.small)
+                .accessibilityIdentifier("ouros-agent.open")
         }
     }
 }

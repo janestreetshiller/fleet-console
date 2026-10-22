@@ -19,9 +19,19 @@ cp "$BIN/fleetd"          "$APP/Contents/Resources/bin/fleetd"
 cp "$BIN/fleetctl"        "$APP/Contents/Resources/bin/fleetctl"
 # The resident operations agent ships beside the controller and CLI. Build it
 # from the Rust workspace (release profile to match a release bundle).
+<<<<<<< HEAD
 if [ "$CONFIG" = "release" ]; then RUST_PROFILE="release"; else RUST_PROFILE="debug"; fi
 (cd "$ROOT/rust" && cargo build --locked --jobs 1 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
 cp "$ROOT/rust/target/$RUST_PROFILE/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
+=======
+if [ "$CONFIG" = "release" ]; then
+    RUST_PROFILE="release"; RUST_OUTPUT="release"
+else
+    RUST_PROFILE="dev"; RUST_OUTPUT="debug"
+fi
+(cd "$ROOT/rust" && cargo build --locked --jobs 2 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
+cp "$ROOT/rust/target/$RUST_OUTPUT/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
+>>>>>>> origin/main
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
 # Keep debug symbols in SwiftPM's build outputs, not the shipping release bundle.

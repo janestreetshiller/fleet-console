@@ -1,18 +1,20 @@
 # FleetConsole
 
-FleetConsole puts CPU and memory dials one click from your Mac's menu bar, with a
-full dashboard for a closer look. Check the load in **Quick View**, then follow it
-through timed charts, processes and service logs in the **Dashboard**. A local
-controller and `fleetctl` keep track of the work your coding agents start.
-Requires macOS 14 or later.
+<img width="552" height="318" alt="image" src="https://github.com/user-attachments/assets/2f653aa7-6c6a-4df6-8225-9c1a920917c7" />
 
-The complete source — core, controller, CLI, Rust protocol and native app —
-is published under MIT. Local monitoring and service control are free.
+
+
+
+FleetConsole places CPU and memory dials one click from your Mac’s menu bar, offering a full dashboard for deeper review. You can review load in Quick View, then trace it through timed charts, processes, and service logs in the Dashboard. A local controller and fleetctl monitor the tasks your coding agents initiate. The system requires macOS 14 or later.
+
+The complete source—core, controller, CLI, Rust protocol, and native app—is available under the MIT license. Local monitoring and service control continue to be free.
+
+d service control are free.
 The source and downloads live at
 https://github.com/janestreetshiller/fleet-console.
-Optional multi-device access costs $10 USD/month through Ouros, operated by Ouros AI, LLC. Connect your Ouros
-account in Devices, refresh the subscription options, and complete secure checkout;
-refresh your subscription to link additional computers.
+Optional multi-device access costs $10 USD/month through Ouros, operated by
+Ouros AI, LLC. Choose **Link a Device…**, sign in to Ouros, and complete secure
+checkout. Refresh the subscription after payment to link additional computers.
 SwiftTerm retains its own MIT notices.
 
 CPU and memory lead the Overview with taller plots. Choose CPU or Memory to focus
@@ -102,6 +104,11 @@ on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 
 ## Tools and keyboard access
 
+The interface uses macOS fonts, appearance colors and native controls. The sidebar
+toggle stays at the left edge; the inspector toggle stays at the right edge.
+Device fields retain their labels, selectable process rows work with the keyboard,
+and shared surfaces honor Reduce Motion and Increase Contrast.
+
 The dashboard's **Tools** menu opens Terminal and Files. Terminal is
 your shell; commands entered there become supervised only when launched through
 `fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi).
@@ -125,9 +132,7 @@ inventory. The controller probes reachability and reads metrics through your
 existing SSH configuration. Remote processes are read-only. Unlinking removes
 only the configuration entry. First-run setup creates no example peers.
 
-The device screen links to Ouros billing for prepaid AI credits. FleetConsole
-credit-funded inference, supervised repair agents and an MCP server are planned;
-this build does not spend credits or perform AI repairs. The $10/month FleetConsole
+The device screen links to Ouros billing for prepaid AI credits. The Agents tab opens Ouros Agent for a credit-funded review of current problems and service records. It uses the connected Ouros account and the gateway's model catalog. Each model round is metered; a stopped or uncertain request is not retried automatically. The agent reads the supplied service snapshot and can propose a restart. You approve it separately, and the existing controller performs it only for a controller-launched service. This Mac must remain awake; deployable agents and FleetConsole MCP remain planned. The $10/month FleetConsole
 subscription has a separate entitlement from Ouros Pro and does not include
 AI credits. Cancellation and payment status come from Ouros billing. See the
 [multi-device integration contract](docs/MULTI-DEVICE.md).
@@ -141,8 +146,8 @@ socket. Network probes inspect connections and routing; they do not change them.
 
 **Edit Configuration** in the dropdown opens `config.json`. It controls visible
 sections, polling intervals, known computers, expected listeners, and optional
-process termination. Agent spend is off by default because its price table needs
-verification. See [CLI reference](docs/CLI.md), [source preview and agent workflow](docs/SOURCE-PREVIEW.md), and
+process termination. Local agent-spend estimates are off by default because their price table needs
+verification. Ouros Agent displays the charge returned by the gateway for each review. See [CLI reference](docs/CLI.md), [source preview and agent workflow](docs/SOURCE-PREVIEW.md), and
 [threat model](docs/THREAT-MODEL.md).
 
 ## Verification and contribution

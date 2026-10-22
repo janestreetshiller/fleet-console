@@ -224,7 +224,6 @@ struct SectionHeader<Trailing: View>: View {
             Text(title)
                 .font(FleetFont.subtitle.weight(.semibold))
                 .foregroundStyle(.secondary)
-                .kerning(0.6)
             if let subtitle {
                 Text(subtitle)
                     .font(FleetFont.subtitle)
@@ -250,18 +249,14 @@ struct IconButton: View {
     let help: String
     var action: () -> Void
 
-    @State private var hovering = false
-
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(FleetFont.body.weight(.medium))
-                .foregroundStyle(hovering ? Color.primary : Color.secondary)
                 .frame(width: FleetMetrics.iconButtonSize, height: FleetMetrics.iconButtonSize)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { hovering = $0 }
+        .buttonStyle(.borderless)
         .help(help)
         .accessibilityLabel(help)
     }

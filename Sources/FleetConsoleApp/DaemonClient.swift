@@ -16,9 +16,11 @@ final class DaemonClient: @unchecked Sendable {
     private init() {
         let arguments = ProcessInfo.processInfo.arguments
         #if FLEET_SURFACE_RENDERER
-        requestPolicy = arguments.contains(SurfaceRenderer.flag) ? .observational : RPCRequestPolicy.forArguments(arguments)
-        socketPath = RPCRequestPolicy.daemonSocketPath(forArguments: arguments,
-                                                     surfaceRenderer: true)
+        let reviewSocket = Bundle.main.object(forInfoDictionaryKey: "FleetConsoleVerificationDaemonSocket") as? String
+        requestPolicy = arguments.contains(SurfaceRenderer.flag) || reviewSocket != nil
+            ? .observational : RPCRequestPolicy.forArguments(arguments)
+        socketPath = reviewSocket ?? RPCRequestPolicy.daemonSocketPath(forArguments: arguments,
+                                                                      surfaceRenderer: true)
         #else
         requestPolicy = RPCRequestPolicy.forArguments(arguments)
         socketPath = FleetPaths.socket.path
