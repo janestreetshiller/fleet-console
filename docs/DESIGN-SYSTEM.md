@@ -127,6 +127,25 @@ shrank 20pt when you moved away.
 
 ## Native surfaces — `Design/Sketchfield.swift`
 
+The native app follows Apple’s Human Interface Guidelines: system text styles,
+adaptive AppKit backgrounds, SF Symbols, native controls, and the user’s accent
+color. Supporting console text uses `callout`; small values and badges use
+`footnote`. Popover numeric text defaults to 12 points. Field labels use sentence
+case and stay visible after entry.
+
+The shared surface respects Reduce Motion. Card outlines strengthen with
+Increase Contrast. Process and storage controls support keyboard activation.
+Native material views follow the system’s Reduce Transparency setting.
+
+The Devices sheet presents account access first. One prominent footer action
+advances through **Sign In to Ouros → Subscribe for $10/month → Link Device**.
+Device input remains unavailable until the server confirms paid access.
+Subscription management, credits, refresh, and sign-out are secondary actions.
+
+References: [Designing for macOS](https://developer.apple.com/design/human-interface-guidelines/designing-for-macos/),
+[Accessibility](https://developer.apple.com/design/human-interface-guidelines/accessibility),
+and [Fonts](https://developer.apple.com/documentation/technologyoverviews/fonts).
+
 Window and card backgrounds use AppKit’s adaptive `windowBackgroundColor` and
 `controlBackgroundColor`. Popovers retain their system material and arrow.
 Cards have one separator border. Decorative layers neither intercept input nor

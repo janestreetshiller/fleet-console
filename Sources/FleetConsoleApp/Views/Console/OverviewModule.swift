@@ -599,10 +599,9 @@ private struct MemoryFact: View {
             // one line: it holds its intrinsic width and the row distributes
             // what is left, rather than the longest label being broken to keep
             // four columns nominally equal.
-            Text(label.uppercased())
+            Text(label)
                 .font(ConsoleFont.badge)
                 .foregroundStyle(SurfaceInk.secondary)
-                .kerning(0.5)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Text(ConsoleFmt.bytes(value))

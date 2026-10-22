@@ -73,8 +73,8 @@ private enum OurosKeychain {
         if status == errSecItemNotFound {
             var q = query; q[kSecValueData as String] = data
             q[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-            guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw Failure.storage }
-        } else if status != errSecSuccess { throw Failure.storage }
+            guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw OurosFailure.storage }
+        } else if status != errSecSuccess { throw OurosFailure.storage }
     }
     static func clear() throws {
         try requireProductionContext()
@@ -103,7 +103,7 @@ private final class OurosNoRedirects: NSObject, URLSessionTaskDelegate, @uncheck
     }
 }
 
-private enum Failure: Error {
+enum OurosFailure: Error {
     case unavailable, signIn, invalidResponse, storage, server(String), gatewayRejected(Int, String)
 }
 
@@ -153,50 +153,74 @@ final class OurosBilling {
 
     private func request<T: Decodable>(_ path: String, method: String = "GET",
                                       body: [String: String]? = nil, authenticated: Bool = true,
-                                      operationKey: String? = nil, encodedBody: Data? = nil,
-                                      timeout: TimeInterval = 20, classifyGatewayRefusal: Bool = false) async throws -> T {
+                                      operationKey: String? = nil) async throws -> T {
         if let credentialStorageIssue { throw InvestigationGatewayError.refused(credentialStorageIssue) }
+        let data = try await dataRequest(path, method: method,
+            body: body.map { try JSONEncoder().encode($0) }, authenticated: authenticated,
+            operationKey: operationKey, timeout: 20, responseLimit: 65_536)
+        return try JSONDecoder().decode(T.self, from: data)
+    }
+
+    func agentRequest(_ path: String, method: String = "GET", body: Data? = nil,
+                      operationKey: String? = nil) async throws -> Data {
+        if let credentialStorageIssue { throw InvestigationGatewayError.refused(credentialStorageIssue) }
+        guard ["/ouros/v1/models", "/v1/chat/completions", "/hvy/v1/billing/credits"].contains(path) else {
+            throw OurosFailure.invalidResponse
+        }
+        if path == "/v1/chat/completions" {
+            guard method == "POST", let body, body.count <= 16_384, let operationKey,
+                  operationKey.range(of: "^[A-Za-z0-9_-]{16,128}$", options: .regularExpression) != nil else {
+                throw OurosFailure.invalidResponse
+            }
+        } else if method != "GET" || body != nil { throw OurosFailure.invalidResponse }
+        return try await dataRequest(path, method: method, body: body,
+            operationKey: operationKey, timeout: 125, responseLimit: 1_048_576,
+            classifyGatewayRefusal: true)
+    }
+
+    private func dataRequest(_ path: String, method: String, body: Data?,
+                             authenticated: Bool = true, operationKey: String?,
+                             timeout: TimeInterval, responseLimit: Int,
+                             classifyGatewayRefusal: Bool = false) async throws -> Data {
         let url = URL(string: "https://ouros.md" + path)!
         var request = URLRequest(url: url)
         request.httpMethod = method; request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if authenticated {
-            guard signedIn, let credential else { throw Failure.signIn }
+            guard signedIn, let credential else { throw OurosFailure.signIn }
             request.setValue("Bearer \(credential.token)", forHTTPHeaderField: "Authorization")
         }
         if let body {
-            request.httpBody = try JSONEncoder().encode(body)
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        }
-        if let encodedBody {
-            request.httpBody = encodedBody
+            request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
         if let operationKey { request.setValue(operationKey, forHTTPHeaderField: "Idempotency-Key") }
         guard let configuration = sessionConfiguration.copy() as? URLSessionConfiguration else {
-            throw Failure.invalidResponse
+            throw OurosFailure.invalidResponse
         }
         configuration.httpCookieStorage = nil; configuration.urlCache = nil
         let session = URLSession(configuration: configuration, delegate: OurosNoRedirects(), delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse, http.url?.host == "ouros.md" else { throw Failure.invalidResponse }
-        var data = Data()
-        for try await byte in bytes {
-            guard data.count < 65_536 else { throw Failure.invalidResponse }
-            data.append(byte)
-        }
+        defer { session.finishTasksAndInvalidate() }
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.url?.host == "ouros.md",
+              data.count <= responseLimit else { throw OurosFailure.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
             if classifyGatewayRefusal, InvestigationGatewayPayload.refusedBeforeDispatch(data: data, status: http.statusCode) {
                 let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
                 let nested = object?["error"] as? [String: Any]
-                throw Failure.gatewayRejected(http.statusCode, object?["code"] as? String ?? nested?["code"] as? String ?? "request_refused")
+                throw OurosFailure.gatewayRejected(http.statusCode, object?["code"] as? String ?? nested?["code"] as? String ?? "request_refused")
             }
-            let rejection = try? JSONDecoder().decode(OurosRejection.self, from: data)
-            if http.statusCode == 401 { throw Failure.signIn }
-            throw Failure.server(rejection?.code ?? rejection?.error ?? "unavailable")
+            if http.statusCode == 401 { handle(OurosFailure.signIn); throw OurosFailure.signIn }
+            let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+            let nested = value?["error"] as? [String: Any]
+            let code = value?["code"] as? String
+                ?? value?["error"] as? String
+                ?? nested?["code"] as? String
+                ?? nested?["message"] as? String
+                ?? "unavailable"
+            throw OurosFailure.server(code)
         }
-        return try JSONDecoder().decode(T.self, from: data)
+        return data
     }
 
     /// The existing Ouros Agent gateway rechecks account entitlement and reserves
@@ -220,8 +244,8 @@ final class OurosBilling {
         }
         let catalog: Catalog
         do { catalog = try await request("/ouros/v1/models") }
-        catch Failure.signIn {
-            handle(Failure.signIn)
+        catch OurosFailure.signIn {
+            handle(OurosFailure.signIn)
             throw InvestigationGatewayError.refused("The Ouros account session is no longer valid. Connect again; no analysis request was sent.")
         }
         catch { throw InvestigationGatewayError.refused("Ouros could not verify investigation availability. No analysis request was sent.") }
@@ -252,16 +276,17 @@ final class OurosBilling {
             let choices: [Choice]
         }
         do {
-            let completion: Completion = try await request("/v1/chat/completions", method: "POST",
-                operationKey: operationID, encodedBody: payload, timeout: 125, classifyGatewayRefusal: true)
-            guard let reply = completion.choices.first?.message.content, !reply.isEmpty, reply.utf8.count <= 32_768 else {
-                throw Failure.invalidResponse
+            let completionData = try await agentRequest("/v1/chat/completions", method: "POST",
+                body: payload, operationKey: operationID)
+            guard let reply = (try? JSONDecoder().decode(Completion.self, from: completionData))?.choices.first?.message.content,
+                  !reply.isEmpty, reply.utf8.count <= 32_768 else {
+                throw OurosFailure.invalidResponse
             }
             clearUnconfirmedInvestigation()
             return reply
-        } catch Failure.gatewayRejected(let status, let code) {
+        } catch OurosFailure.gatewayRejected(let status, let code) {
             clearUnconfirmedInvestigation()
-            if status == 401 { handle(Failure.signIn) }
+            if status == 401 { handle(OurosFailure.signIn) }
             throw InvestigationGatewayError.refused("The Ouros gateway refused this investigation: " + InvestigationRequest.label(code) + ". No local agent was started.")
         } catch {
             // Failure after dispatch may already have incurred usage. No blind replay.
@@ -288,16 +313,22 @@ final class OurosBilling {
         do {
             try await loadOffers()
             if signedIn {
-                membership = try await request("/hvy/v1/fleet-console/entitlement")
+                membership = try await request("/ouros/v1/fleet-console/entitlement")
                 if active { checkoutKey = nil }
             } else { membership = nil }
-            message = available ? nil : "Ouros billing is unavailable. Try again."
+            if !available {
+                message = "Ouros billing is unavailable. Try again."
+            } else if !signedIn && userInitiated {
+                message = "Sign in to check your subscription. If you already paid, use the same Ouros account."
+            } else {
+                message = nil
+            }
         } catch { handle(error) }
     }
 
     private func loadOffers() async throws {
         struct Catalog: Decodable { let configured: Bool; let offers: [OurosOffer] }
-        let catalog: Catalog = try await request("/hvy/v1/fleet-console/offers", authenticated: false)
+        let catalog: Catalog = try await request("/ouros/v1/fleet-console/offers", authenticated: false)
         offers = catalog.configured ? catalog.offers : []
         available = catalog.configured && catalog.offers.contains(where: \.matchesMultiDevice)
     }
@@ -321,7 +352,7 @@ final class OurosBilling {
                       grant.user_code.range(of: "^[A-Z2-9]{4}-[A-Z2-9]{4}$", options: .regularExpression) != nil,
                       let url = URL(string: grant.verification_uri_complete), url.scheme == "https",
                       url.host == "ouros.md", url.path == "/auth/device/verify",
-                      url.user == nil, url.password == nil else { throw Failure.invalidResponse }
+                      url.user == nil, url.password == nil else { throw OurosFailure.invalidResponse }
                 userCode = grant.user_code; verificationURL = url; message = nil
                 openBrowser(url)
                 let deadline = Date().addingTimeInterval(Double(grant.expires_in))
@@ -335,17 +366,17 @@ final class OurosBilling {
                             body: ["client_id": "ouros-desktop", "device_code": grant.device_code,
                                    "grant_type": "urn:ietf:params:oauth:grant-type:device_code"], authenticated: false)
                         guard token.token_type == "Bearer", token.expires_in > 0,
-                              token.access_token.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else { throw Failure.invalidResponse }
+                              token.access_token.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else { throw OurosFailure.invalidResponse }
                         let value = OurosCredential(token: token.access_token,
                                                     expires: Date().addingTimeInterval(Double(token.expires_in)))
                         try credentialStore.save(value)
                         credential = value
-                        membership = try await request("/hvy/v1/fleet-console/entitlement")
+                        membership = try await request("/ouros/v1/fleet-console/entitlement")
                         try await loadOffers()
                         message = available ? nil : "Ouros billing is unavailable. Try again."
                         return
-                    } catch Failure.server("authorization_pending") { continue }
-                    catch Failure.server("slow_down") { interval = min(60, interval + 5) }
+                    } catch OurosFailure.server("authorization_pending") { continue }
+                    catch OurosFailure.server("slow_down") { interval = min(60, interval + 5) }
                 }
                 message = "Connection expired. Connect to Ouros again."
             } catch is CancellationError { message = nil }
@@ -381,18 +412,18 @@ final class OurosBilling {
             if multiDevice { checkoutKey = operationKey }
             UserDefaults.standard.set(operationKey, forKey: keyName)
             struct Checkout: Decodable { var url: String?; var state: String? }
-            let value: Checkout = try await request("/hvy/v1/fleet-console/checkout", method: "POST",
+            let value: Checkout = try await request("/ouros/v1/fleet-console/checkout", method: "POST",
                 body: ["offerId": offerID], operationKey: operationKey)
             if let raw = value.url {
                 guard let url = URL(string: raw), url.scheme == "https", url.host == "checkout.stripe.com",
-                      url.user == nil, url.password == nil else { throw Failure.invalidResponse }
-                NSWorkspace.shared.open(url); message = "Finish checkout, then refresh your subscription."
+                      url.user == nil, url.password == nil else { throw OurosFailure.invalidResponse }
+                openBrowser(url); message = "Finish checkout, then refresh your subscription."
             } else if value.state == "expired" {
                 if multiDevice { checkoutKey = nil }
                 UserDefaults.standard.removeObject(forKey: keyName)
                 message = "Checkout expired. Subscribe again to start a new checkout."
             } else if multiDevice {
-                membership = try await request("/hvy/v1/fleet-console/entitlement")
+                membership = try await request("/ouros/v1/fleet-console/entitlement")
                 message = active ? nil : "Payment is not confirmed. Refresh your subscription."
             } else {
                 message = "Checkout is complete. The cloud agent appears once Ouros confirms payment."
@@ -405,10 +436,10 @@ final class OurosBilling {
         busy = true; defer { busy = false }
         do {
             struct Portal: Decodable { let url: String }
-            let value: Portal = try await request("/hvy/v1/fleet-console/portal", method: "POST", body: [:])
+            let value: Portal = try await request("/ouros/v1/fleet-console/portal", method: "POST", body: [:])
             guard let url = URL(string: value.url), url.scheme == "https", url.host == "billing.stripe.com",
-                  url.user == nil, url.password == nil else { throw Failure.invalidResponse }
-            NSWorkspace.shared.open(url)
+                  url.user == nil, url.password == nil else { throw OurosFailure.invalidResponse }
+            openBrowser(url)
         } catch { handle(error) }
     }
 
@@ -426,15 +457,15 @@ final class OurosBilling {
     }
 
     private func handle(_ error: Error) {
-        if case Failure.signIn = error {
+        if case OurosFailure.signIn = error {
             membership = nil; credential = nil
             try? credentialStore.clear()
             message = "Connect your Ouros account to continue."
-        } else if case Failure.server("access_denied") = error { message = "Account connection was denied. Connect again when you are ready." }
-        else if case Failure.server("expired_token") = error { message = "Connection expired. Connect to Ouros again." }
-        else if case Failure.server("checkout_expired") = error { message = "Checkout could not be recovered. Review your Ouros billing before starting another purchase." }
-        else if case Failure.storage = error { message = "Your account could not be saved securely. Try again." }
-        else if case Failure.server("already_subscribed") = error { message = "You already have multi-device access. Refresh your subscription." }
+        } else if case OurosFailure.server("access_denied") = error { message = "Account connection was denied. Connect again when you are ready." }
+        else if case OurosFailure.server("expired_token") = error { message = "Connection expired. Connect to Ouros again." }
+        else if case OurosFailure.server("checkout_expired") = error { message = "Checkout could not be recovered. Review your Ouros billing before starting another purchase." }
+        else if case OurosFailure.storage = error { message = "Your account could not be saved securely. Try again." }
+        else if case OurosFailure.server("already_subscribed") = error { message = "You already have multi-device access. Refresh your subscription." }
         else { message = "Ouros could not complete the request. Try again." }
     }
 }

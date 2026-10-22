@@ -173,33 +173,35 @@ struct ProcessInspector: View {
     }
 
     private func treeLine(_ row: ProcessRow, depth: Int, isCurrent: Bool) -> some View {
-        HStack(spacing: 6) {
-            // Filled for you-are-here, hollow for the rest. Shapes rather than
-            // ● / ○ glyphs, which sat on the text baseline and drifted with the
-            // font's own metrics.
-            Group {
-                if isCurrent {
-                    Circle().fill(Color.accentColor)
-                } else {
-                    Circle().strokeBorder(ConsoleColor.dim, lineWidth: 1)
+        Button { select(pid: row.pid) } label: {
+            HStack(spacing: 6) {
+                // Filled for you-are-here, hollow for the rest. Shapes rather than
+                // ● / ○ glyphs, which sat on the text baseline and drifted with the
+                // font's own metrics.
+                Group {
+                    if isCurrent {
+                        Circle().fill(Color.accentColor)
+                    } else {
+                        Circle().strokeBorder(ConsoleColor.dim, lineWidth: 1)
+                    }
                 }
+                .frame(width: ConsoleMetrics.treeMarker, height: ConsoleMetrics.treeMarker)
+                Text(row.name)
+                    .font(isCurrent ? ConsoleFont.subtitle.weight(.semibold) : ConsoleFont.subtitle)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Spacer()
+                Text("\(row.pid)")
+                    .font(ConsoleFont.mono(.caption2))
+                    .foregroundStyle(SurfaceInk.secondary)
             }
-            .frame(width: ConsoleMetrics.treeMarker, height: ConsoleMetrics.treeMarker)
-            Text(row.name)
-                .font(isCurrent ? ConsoleFont.subtitle.weight(.semibold) : ConsoleFont.subtitle)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
-            Text("\(row.pid)")
-                .font(ConsoleFont.mono(.caption2))
-                .foregroundStyle(SurfaceInk.secondary)
+            .padding(.leading, CGFloat(depth) * 14)
+            .contentShape(Rectangle())
         }
-        .padding(.leading, CGFloat(depth) * 14)
-        .contentShape(Rectangle())
+        .buttonStyle(.plain)
         .investigatable(.process(row, model: model), model: model)
-        .onTapGesture {
-            if !isCurrent { select(pid: row.pid) }
-        }
+        .accessibilityLabel("Inspect \(row.name), process \(row.pid)")
+        .accessibilityValue(isCurrent ? "Selected" : "")
     }
 
     private func select(pid: Int32) {
