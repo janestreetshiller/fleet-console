@@ -1,13 +1,12 @@
 {
   "artboards": [
-    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1560, "h": 980, "title": "Console — Overview" },
+    { "file": "Main.dc.html", "x": 0, "y": 0, "w": 1560, "h": 980, "title": "Console — Relational Spatial Topology" },
     { "file": "Popover.dc.html", "x": 1620, "y": 0, "w": 560, "h": 760, "title": "Menu bar + popover" },
     { "file": "Welcome.dc.html", "x": 1620, "y": 820, "w": 700, "h": 560, "title": "First run" },
     { "file": "Tokens.dc.html", "x": 0, "y": 1040, "w": 1120, "h": 1000, "title": "FleetKit sheet" }
   ],
   "annotations": [
-    { "id": "brief", "x": 0, "y": -150, "w": 620, "text": "SKETCHFIELD — the WebGL-art-sketchbook pass over FleetConsole.\n\nThe window stops being a surface and becomes a page: a drifting spectral field under graph-paper ruling and grain, with every card, popover and panel floating on it as a translucent PLATE — one hairline, a second pass 3pt down and right, and a plotted plate label struck into the top border.\n\nLayout is untouched. Every rung the console already stood on (233 columns, 21 gutter, 13 gap, 89 chart, 55 dial, 7x22 core column) is exactly where it was." },
-    { "id": "note-instruments", "x": 1160, "y": 1040, "w": 300, "text": "Instruments are drawn, not filled: the dial keeps its construction circles and tick ladder, traces are plotted strokes with a 10% wash under them, and the treemap separates tiles with the 2pt gutter rather than a stroke." }
+    { "id": "brief", "x": 0, "y": -150, "w": 620, "text": "RELATIONAL SPATIAL MAPPING (GPUI / OS-AGNOSTIC)\n\nConsolidates tabular silos into four core operational planes:\n1. Topography (Spatial & Relational Map)\n2. Brain & Agents (Ouros-X Adapter Plane)\n3. Execution & Telemetry (Processes & Resources)\n4. Substrate (Storage & Volumes)\n\nFeatures live force-directed spatial simulation, Descriptive Topology Mini-Map sidebar, Contextual Diagnostics Drawer with one-click remediations, and Right Rail Persistent Contextual Terminal." }
   ],
   "launch": { "view": "canvas" }
 }
