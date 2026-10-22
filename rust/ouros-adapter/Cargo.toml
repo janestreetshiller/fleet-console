@@ -1,0 +1,11 @@
+[package]
+name = "ouros-adapter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Ouros-X brain adapter bridge module for agent task graphs, telemetry, and state transitions"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+fleet-telemetry = { path = "../fleet-telemetry" }

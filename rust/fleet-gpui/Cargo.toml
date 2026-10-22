@@ -1,0 +1,22 @@
+[package]
+name = "fleet-gpui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "GPUI workspace and relational spatial visualizer for FleetConsole"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+gpui = "=0.2.2"
+fleet-telemetry = { path = "../fleet-telemetry" }
+ouros-adapter = { path = "../ouros-adapter" }
+fleet-spatial = { path = "../fleet-spatial" }
+
+[[bin]]
+name = "fleet-gpui"
+path = "src/main.rs"
+
+[lib]
+name = "fleet_gpui"
+path = "src/lib.rs"
