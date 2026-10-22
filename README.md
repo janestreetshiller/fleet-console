@@ -1,13 +1,15 @@
 # FleetConsole
 
-FleetConsole puts CPU and memory dials one click from your Mac's menu bar, with a
-full dashboard for a closer look. Check the load in **Quick View**, then follow it
-through timed charts, processes and service logs in the **Dashboard**. A local
-controller and `fleetctl` keep track of the work your coding agents start.
-Requires macOS 14 or later.
+<img width="552" height="318" alt="image" src="https://github.com/user-attachments/assets/2f653aa7-6c6a-4df6-8225-9c1a920917c7" />
 
-The complete source — core, controller, CLI, Rust protocol and native app —
-is published under MIT. Local monitoring and service control are free.
+
+
+
+FleetConsole places CPU and memory dials one click from your Mac’s menu bar, offering a full dashboard for deeper review. You can review load in Quick View, then trace it through timed charts, processes, and service logs in the Dashboard. A local controller and fleetctl monitor the tasks your coding agents initiate. The system requires macOS 14 or later.
+
+The complete source—core, controller, CLI, Rust protocol, and native app—is available under the MIT license. Local monitoring and service control continue to be free.
+
+d service control are free.
 The source and downloads live at
 https://github.com/janestreetshiller/fleet-console.
 Optional multi-device access costs $10 USD/month through Ouros, operated by
