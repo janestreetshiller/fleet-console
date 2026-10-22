@@ -70,7 +70,6 @@ struct BillingPrivacyTests {
         #expect(BillingRequestProbe.requests.last?.url?.path == "/ouros/v1/fleet-console/entitlement")
         #expect(BillingRequestProbe.requests.last?.value(forHTTPHeaderField: "Authorization") != nil)
     }
-
     @MainActor @Test func signedOutExplicitRefreshExplainsHowToRecoverAnExistingPurchase() async {
         let billing = OurosBilling(useKeychain: false, sessionConfiguration: configuration(), openBrowser: { _ in })
         await billing.refresh(userInitiated: true)
@@ -79,5 +78,21 @@ struct BillingPrivacyTests {
         #expect(!billing.active)
         #expect(billing.message == "Sign in to check your subscription. If you already paid, use the same Ouros account.")
         #expect(BillingRequestProbe.requests.map { $0.url!.path } == ["/ouros/v1/fleet-console/offers"])
+    }
+
+    @MainActor @Test func agentUsesTheConnectedAccountWithoutMultiDeviceEntitlement() async throws {
+        let billing = OurosBilling(useKeychain: false, sessionConfiguration: configuration(), openBrowser: { _ in })
+        do {
+            _ = try await billing.agentRequest("/v1/chat/completions", method: "POST", body: Data("{}".utf8), operationKey: "fixture-key-123456")
+            Issue.record("signed-out inference must refuse")
+        } catch { #expect(BillingRequestProbe.requests.isEmpty) }
+        let connection = try #require(billing.connect()); await connection.value
+        #expect(billing.signedIn && !billing.active)
+        _ = try await billing.agentRequest("/v1/chat/completions", method: "POST", body: Data("{}".utf8), operationKey: "fixture-key-123456")
+        let request = try #require(BillingRequestProbe.requests.last)
+        #expect(request.url?.absoluteString == "https://ouros.md/v1/chat/completions")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer " + String(repeating: "T", count: 43))
+        #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "fixture-key-123456")
+        #expect(request.value(forHTTPHeaderField: "Cookie") == nil)
     }
 }

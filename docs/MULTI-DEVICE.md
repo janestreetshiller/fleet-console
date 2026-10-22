@@ -29,6 +29,6 @@ ICMP, TCP and SSH are checked independently. Optional inventory reads use existi
 SSH configuration; passwords are never stored. Remote process control remains
 read-only. Unlinking removes only that computer's configuration entry.
 
-The device screen also opens Ouros billing for AI credits. Credit-funded inference,
-supervised repair jobs, deployable agents and FleetConsole MCP remain future work.
-No subscription credit allowance or automatic computer repair is promised.
+The device screen opens Ouros billing for prepaid AI credits. In Agents, Ouros Agent uses that same connected account to review current problems through `/ouros/v1/models` and `/v1/chat/completions`. Gateway access and balance checks govern inference; the multi-device subscription does not grant model credit or replace Ouros software access.
+
+A review sends the problem report and relevant service records to the gateway. Read-only service tools use that supplied snapshot. Restart proposals need separate operator confirmation and use the existing controller, which refuses signalling authority over claimed processes. Requests are bounded to four model rounds and eight tool calls per round; opaque provider tool metadata survives subsequent rounds. An uncertain or canceled request is not automatically retried. Charges and elapsed time appear in the review sheet. Deployable agents and FleetConsole MCP remain planned.
