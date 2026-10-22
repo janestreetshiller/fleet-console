@@ -38,7 +38,7 @@ stay local because they include actual host and process details.
 
 ## Verified behavior and repairs
 
-The integrated Swift run passed **210 tests**: 186 XCTest cases and 24 Swift
+The integrated Swift run passed **299 tests**: 189 XCTest cases and 110 Swift
 Testing cases across both test bundles. Shell syntax and Rust workspace checks passed.
 Python release-policy, artifact-identity and source-privacy suites passed all
 **54 tests** in both normal and optimized execution. The native app was assembled
