@@ -17,7 +17,7 @@ private final class BillingRequestProbe: URLProtocol, @unchecked Sendable {
             body = ["device_code": "synthetic-grant", "user_code": "ABCD-EFGH", "verification_uri_complete": "https://ouros.md/auth/device/verify?fixture=true", "expires_in": 60, "interval": 5]
         case "/auth/device/token":
             body = ["access_token": String(repeating: "T", count: 43), "token_type": "Bearer", "expires_in": 3600]
-        case "/hvy/v1/fleet-console/entitlement":
+        case "/ouros/v1/fleet-console/entitlement":
             body = ["accountID": "synthetic-account", "active": false, "periodEnd": NSNull()]
         default:
             body = ["configured": true, "offers": [["id": "fleet-console-multi-device", "priceCents": 1000, "currency": "usd", "interval": "month", "intervalCount": 1]]]
@@ -47,7 +47,7 @@ struct BillingPrivacyTests {
         #expect(!billing.available)
         await billing.refresh(userInitiated: true)
         #expect(BillingRequestProbe.requests.count == 1)
-        #expect(BillingRequestProbe.requests.first?.url?.path == "/hvy/v1/fleet-console/offers")
+        #expect(BillingRequestProbe.requests.first?.url?.path == "/ouros/v1/fleet-console/offers")
         #expect(BillingRequestProbe.requests.first?.value(forHTTPHeaderField: "Authorization") == nil)
         #expect(billing.available)
         await billing.refresh()
@@ -63,11 +63,11 @@ struct BillingPrivacyTests {
         #expect(billing.available)
         #expect(!billing.busy)
         #expect(opened.count == 1)
-        #expect(BillingRequestProbe.requests.map { $0.url!.path }.contains("/hvy/v1/fleet-console/offers"))
+        #expect(BillingRequestProbe.requests.map { $0.url!.path }.contains("/ouros/v1/fleet-console/offers"))
         let before = BillingRequestProbe.requests.count
         await billing.refresh()
         #expect(BillingRequestProbe.requests.count == before + 2)
-        #expect(BillingRequestProbe.requests.last?.url?.path == "/hvy/v1/fleet-console/entitlement")
+        #expect(BillingRequestProbe.requests.last?.url?.path == "/ouros/v1/fleet-console/entitlement")
         #expect(BillingRequestProbe.requests.last?.value(forHTTPHeaderField: "Authorization") != nil)
     }
 
@@ -78,6 +78,6 @@ struct BillingPrivacyTests {
         #expect(!billing.signedIn)
         #expect(!billing.active)
         #expect(billing.message == "Sign in to check your subscription. If you already paid, use the same Ouros account.")
-        #expect(BillingRequestProbe.requests.map { $0.url!.path } == ["/hvy/v1/fleet-console/offers"])
+        #expect(BillingRequestProbe.requests.map { $0.url!.path } == ["/ouros/v1/fleet-console/offers"])
     }
 }

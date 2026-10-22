@@ -151,7 +151,7 @@ final class OurosBilling {
         do {
             try await loadOffers()
             if signedIn {
-                membership = try await request("/hvy/v1/fleet-console/entitlement")
+                membership = try await request("/ouros/v1/fleet-console/entitlement")
                 if active { checkoutKey = nil }
             } else { membership = nil }
             if !available {
@@ -166,7 +166,7 @@ final class OurosBilling {
 
     private func loadOffers() async throws {
         struct Catalog: Decodable { let configured: Bool; let offers: [OurosOffer] }
-        let catalog: Catalog = try await request("/hvy/v1/fleet-console/offers", authenticated: false)
+        let catalog: Catalog = try await request("/ouros/v1/fleet-console/offers", authenticated: false)
         offers = catalog.configured ? catalog.offers : []
         available = catalog.configured && catalog.offers.contains(where: \.matchesMultiDevice)
     }
@@ -208,7 +208,7 @@ final class OurosBilling {
                                                     expires: Date().addingTimeInterval(Double(token.expires_in)))
                         if useKeychain { try OurosKeychain.save(value) }
                         credential = value
-                        membership = try await request("/hvy/v1/fleet-console/entitlement")
+                        membership = try await request("/ouros/v1/fleet-console/entitlement")
                         try await loadOffers()
                         message = available ? nil : "Ouros billing is unavailable. Try again."
                         return
@@ -249,7 +249,7 @@ final class OurosBilling {
             if multiDevice { checkoutKey = operationKey }
             UserDefaults.standard.set(operationKey, forKey: keyName)
             struct Checkout: Decodable { var url: String?; var state: String? }
-            let value: Checkout = try await request("/hvy/v1/fleet-console/checkout", method: "POST",
+            let value: Checkout = try await request("/ouros/v1/fleet-console/checkout", method: "POST",
                 body: ["offerId": offerID], operationKey: operationKey)
             if let raw = value.url {
                 guard let url = URL(string: raw), url.scheme == "https", url.host == "checkout.stripe.com",
@@ -260,7 +260,7 @@ final class OurosBilling {
                 UserDefaults.standard.removeObject(forKey: keyName)
                 message = "Checkout expired. Subscribe again to start a new checkout."
             } else if multiDevice {
-                membership = try await request("/hvy/v1/fleet-console/entitlement")
+                membership = try await request("/ouros/v1/fleet-console/entitlement")
                 message = active ? nil : "Payment is not confirmed. Refresh your subscription."
             } else {
                 message = "Checkout is complete. The cloud agent appears once Ouros confirms payment."
@@ -273,7 +273,7 @@ final class OurosBilling {
         busy = true; defer { busy = false }
         do {
             struct Portal: Decodable { let url: String }
-            let value: Portal = try await request("/hvy/v1/fleet-console/portal", method: "POST", body: [:])
+            let value: Portal = try await request("/ouros/v1/fleet-console/portal", method: "POST", body: [:])
             guard let url = URL(string: value.url), url.scheme == "https", url.host == "billing.stripe.com",
                   url.user == nil, url.password == nil else { throw Failure.invalidResponse }
             openBrowser(url)
