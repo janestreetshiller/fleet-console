@@ -175,6 +175,8 @@ enum SurfaceRenderer {
             renderTaskComposer(registration: registration, appearance: appearance, into: out)
             renderStandalone(AnyView(DeviceManagementView(model: model)), name: "device-management",
                              size: NSSize(width: 600, height: 650), appearance: appearance, into: out)
+            renderStandalone(AnyView(OurosAgentSheet(model: model)), name: "ouros-agent",
+                             size: NSSize(width: 620, height: 440), appearance: appearance, into: out)
             renderStandalone(AnyView(WelcomeView(model: model, dismiss: {})), name: "welcome",
                              size: NSSize(width: 560, height: 420), appearance: appearance, into: out)
         }
