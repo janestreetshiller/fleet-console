@@ -163,7 +163,12 @@ final class OurosBilling {
             if http.statusCode == 401 { handle(OurosFailure.signIn); throw OurosFailure.signIn }
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let nested = value?["error"] as? [String: Any]
-            throw OurosFailure.server(value?["code"] as? String ?? nested?["code"] as? String ?? "unavailable")
+            let code = value?["code"] as? String
+                ?? value?["error"] as? String
+                ?? nested?["code"] as? String
+                ?? nested?["message"] as? String
+                ?? "unavailable"
+            throw OurosFailure.server(code)
         }
         return data
     }
