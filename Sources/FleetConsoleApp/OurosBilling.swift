@@ -92,6 +92,17 @@ private struct ProductionOurosCredentialStore: OurosCredentialStore {
     func clear() throws { try OurosKeychain.clear() }
 }
 
+/// `useKeychain: false` isolates a billing instance from production storage
+/// entirely: credentials live in memory only, so captures and tests can connect
+/// without touching the Keychain or its permission dialogs.
+@MainActor
+private final class TransientOurosCredentialStore: OurosCredentialStore {
+    private var credential: OurosCredential?
+    func read() throws -> OurosCredential? { credential }
+    func save(_ value: OurosCredential) throws { credential = value }
+    func clear() throws { credential = nil }
+}
+
 private struct OurosRejection: Decodable { var code: String?; var error: String? }
 
 private final class OurosNoRedirects: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
@@ -128,10 +139,12 @@ final class OurosBilling {
     private(set) var unconfirmedInvestigationID: String?
     private static let pendingInvestigationKey = "fleetconsole.investigation.unconfirmed.v1"
 
-    init(credentialStore: (any OurosCredentialStore)? = nil, sessionConfiguration: URLSessionConfiguration = .ephemeral,
+    init(useKeychain: Bool = true, credentialStore: (any OurosCredentialStore)? = nil,
+         sessionConfiguration: URLSessionConfiguration = .ephemeral,
          operationDefaults: UserDefaults = .standard, openBrowser: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
-        let store = credentialStore ?? GuardedOurosCredentialStore(context: .current,
-            makeBackend: { ProductionOurosCredentialStore() })
+        let store = credentialStore ?? (useKeychain
+            ? GuardedOurosCredentialStore(context: .current, makeBackend: { ProductionOurosCredentialStore() })
+            : TransientOurosCredentialStore())
         self.credentialStore = store
         self.operationDefaults = operationDefaults
         unconfirmedInvestigationID = operationDefaults.string(forKey: Self.pendingInvestigationKey)

@@ -43,6 +43,7 @@ struct FleetPopover: View {
                 }
                 .frame(height: FleetMetrics.iconButtonSize)
                 .fixedSize(horizontal: true, vertical: false)
+                .accessibilityLabel("Agent")
                 ConfigurationMenuButton(
                     refresh: { model.reEvidence() },
                     editConfiguration: { model.openConfigFile() },
