@@ -59,7 +59,9 @@ class PublicSourceTests(unittest.TestCase):
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(content)
             subprocess.run(["git", "init", "-q", str(repo)], check=True)
-            subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+            # The fixture deliberately commits both public and private inputs.
+            # User/global ignore rules must not silently omit either category.
+            subprocess.run(["git", "-C", str(repo), "add", "--force", "--", *sorted(files)], check=True)
             subprocess.run(["git", "-C", str(repo), "-c", "user.name=Fixture",
                             "-c", "user.email=fixture@example.invalid", "commit", "-qm", "fixture"], check=True)
             (repo / "Sources/FleetCore/Models.swift").write_text("UNCOMMITTED CHANGE\n")
