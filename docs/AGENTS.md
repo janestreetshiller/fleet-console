@@ -1,45 +1,30 @@
-# The contract for agents
+# Operating Fleet-managed services
 
-Follow [/Users/main/AGENTS.md](/Users/main/AGENTS.md), the canonical working agreement. This file adds scoped project facts.
+Repository development follows [the development contract](../AGENTS.md). This
+reference covers agents using FleetConsole to manage background work. The daemon
+and protocol enforce ownership and process identity; prose is not a sandbox.
 
-FleetConsole exists because agents start background processes and forget them.
-See [the project contract](../AGENTS.md). This file describes Fleet-managed operations: what a client does instead of forking and hoping, and
-what the controller will and will not do about it. The reconciler detects selected
-unmanaged listeners/processes using filtered heuristics; the controller applies
-ownership, lease and process-identity safeguards (see `THREAT-MODEL.md`). Neither
-mechanism enforces arbitrary agent-policy prose.
+- Launch managed work through `fleetctl launch --name … --owner … --purpose …
+  --lease … -- PROGRAM ARG…`. Set an appropriate working directory, expected
+  ports and health check when needed; see [the CLI reference](CLI.md).
+- Read `fleetctl list`, `show <id>`, `logs <id>` and `events <id>` before acting.
+  Use supported `--json` output for integrations. Process existence alone does
+  not establish application health.
+- Renew a needed lease with `fleetctl renew <id> --lease 30m`; stop your launched
+  service with `fleetctl stop <id>` when its work ends. Running services expire;
+  paused services retain resources and defer expiry cleanup until resumed.
+- `fleetctl claim <pid>` records ownership and a lease for visibility. It does
+  not grant stop, restart, pause, kill or reap authority over that process.
+  Preserve the controller's start-identity recheck before signalling a launched
+  service; never replace it with a bare PID kill or an agent-side registry.
+- Optional user-initiated **End Process** is a separate, owner-only control,
+  disabled by default. Its existence does not authorize an agent to terminate
+  arbitrary observed or remote processes. Linked-device process views are
+  read-only. See [the threat model](THREAT-MODEL.md).
+- Use `fleetctl doctor` to inspect controller connectivity and local state.
+  A development build does not authorize installing or restarting the user's
+  controller, modifying live registry data, or signalling unrelated work.
 
-## Do
-
-- **Launch through the CLI.** `fleetctl launch --name … --owner … --purpose …
-  --lease … -- python3 -m hermes.api`. The controller supervises what only the CLI
-  hands it.
-- **Set a lease, then renew it.** `fleetctl renew <id> --lease 30m`. A lease
-  that expires is reaped whether or not the agent still exists — that is the
-  design, not a bug.
-- **Read before acting.** `fleetctl list`, `fleetctl show <id>`, `fleetctl
-  logs <id>`, `fleetctl events <id>`. Every read command takes `--json`.
-- **Take what you need, stop what you don't.** `fleetctl stop <id>` when the
-  work is done. Stopped and crashed records are pruned with `fleetctl prune`.
-- **Claim, don't squat.** Adopting a running process is `fleetctl claim <pid>`:
-  it files the process under an owner and a lease. Claimed processes get
-  visibility only — stop/restart/kill still refuse a claimed record, on the
-  wire and in the UI.
-
-## Don't
-
-- **Don't launch Fleet-managed services outside fleetctl.** A process the controller did
-  not start is *unmanaged*: visible, listed, and nothing more.
-- **Don't signal other people's processes.** Only the controller signals, and
-  only what `fleetctl launch` handed it. A recycled PID is never hit — start
-  time is re-checked before every signal.
-- **Don't write your own pid file or port registry.** `fleetctl` and the
-  controller own those. An agent-side registry lies within a week.
-- **Don't keep network tools open you don't need.** A dev server left listening
-  after the task is an unmanaged process the reconciler will flag.
-
-## If you're unsure
-
-`fleetctl doctor` checks the whole install: daemon answering, supervisor
-ticking, registry, config, socket permissions. Run it before assuming the
-problem is fleetd.
+Consult [runbooks](RUNBOOKS.md) when changing typed diagnosis/action behavior;
+their approval and target limits are product safeguards. Historical roadmap
+statements in runbooks do not assign implementation work to every agent task.

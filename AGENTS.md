@@ -1,79 +1,71 @@
-# FleetConsole — source of truth
+# FleetConsole development contract
 
-Follow [/Users/main/AGENTS.md](/Users/main/AGENTS.md), the canonical working agreement. This file adds scoped project facts.
+Build a useful local operations console: help a person understand machine load,
+identify the work consuming it, and safely manage background services with an
+owner, purpose, lease, logs and explicit health evidence. Use the current task's
+user outcome to choose work; old audit queues, port proposals and release receipts
+are context, not prerequisites for unrelated improvements.
 
-One local-first operations console: menu-bar app + launchd controller daemon +
-CLI. This file is the project index; source and manifests establish implementation facts.
+## Establish the working source
 
-## Project facts
+Read `README.md`, the affected manifest and code, then inspect branch, HEAD,
+worktrees and dirty files. Preserve work outside the task. The verified local
+entrypoint `/Users/main/Metal/Code/Fleet/fleet-console` resolves to
+`/Users/main/Scratch/fleet-apple-hig-e2e-20261013`. For this named repository,
+that explicit checkout is an authorized exception to the Scratch container's
+project-location rule; it does not authorize general Scratch discovery. Recheck
+the symlink before using it. Git identity and the current task establish the
+working source, not a folder's date or an installed app's version.
 
-- Swift 6, SwiftPM package, macOS 14. Everything dependency-free except
-  SwiftTerm (terminal emulation only, kept off FleetCore/fleetd/fleetctl).
-- `Scripts/build-app.sh release` packages/signs `build/FleetConsole.app`;
-  `/Applications/FleetConsole.app` is the installation target. Verify current artifacts.
-- Rust seam: `rust/fleet-proto` (protocol types) + `rust/fleet-conformance`
-  (round-trips them against the live daemon).
-- Freemium seam wired: trial clock + HMAC key gate in `FleetCore/License.swift`;
-  reconcile is a premium feature; keys are minted offline via `fleetctl license`.
-  No checkout and no network validation exist — deliberately. See
-  `docs/FREEMIUM.md`.
+## Architecture and constraints
 
-The prior 2026-10-05 status recorded 141 passing Swift tests and a clean Rust check; these are historical results, not verification of subsequent edits.
+- `Package.swift` defines the Swift 6, macOS 14+ app, `FleetCore`, `fleetd`,
+  `fleetctl`, and core/app test targets. SwiftTerm belongs to the app target.
+- `fleetd` owns the registry, event log and controller-launched service lifecycle.
+  App/CLI service actions use its protocol. Claiming an external process grants
+  visibility, not controller signalling authority. Preserve owner, lease and
+  process-identity checks; see `docs/AGENTS.md` and `docs/THREAT-MODEL.md`.
+- Keep process existence, listening ports, reachability and configured health
+  checks separate. Missing observations are unavailable, not healthy or zero.
+- `rust/Cargo.toml` defines a separate workspace, including protocol, conformance,
+  agent, telemetry, adapter, spatial and GPUI crates. Their presence does not
+  make a Rust port or replacement shell the next assignment. Inspect its local
+  GPUI path patch when resolving dependencies; do not silently repoint it.
+- Local monitoring/service control, Ouros account billing for linked devices,
+  and legacy offline licence scaffolding are distinct paths. Inspect current
+  call sites before changing entitlements; `License.swift` alone does not
+  describe the whole product. Preserve MIT and third-party notices.
 
-## Composition
+## Verification proportional to the change
 
-| Piece | Path | Role |
-|---|---|---|
-| `FleetConsole.app` | `Sources/FleetConsoleApp` | Menu-bar item, popover, console window. Client only — it never signals a process. |
-| `fleetd` | `Sources/fleetd` | The controller. Supervises, health-checks, reaps, reconciles. Owns the SQLite registry and the append-only event log. `0600` Unix socket. |
-| `fleetctl` | `Sources/fleetctl` | The operations CLI agents call instead of spawning processes themselves. |
-| `FleetCore` | `Sources/FleetCore` | Models, evidence, registry, socket protocol, license gate, layout geometry. |
-| `rust/fleet-proto` | `rust/fleet-proto` | The controller protocol in Rust — the port seam. |
-| `rust/fleet-conformance` | `rust/fleet-conformance` | Proves the Rust types agree with the live Swift daemon. |
-| Scripts | `Scripts/` | `build-app.sh`, `notarize.sh`, `install-agent.sh`, `design-audit.sh`, `surface-sheet.sh`, `churn.sh`. |
-| Resources | `Resources/` | App icon, launchd plist, Yazi theme. |
-| Tests | `Tests/FleetCoreTests` | Core behavior, including the license gate. |
+Use relevant targets/tests while iterating. The current CI reference is
+`.github/workflows/ci.yml`; commonly needed checks from this repository are:
 
-## Documents
-
-- `README.md` — what the app is, build/install, the three pieces, the rules.
-- `docs/PRODUCT-SPEC.md` — screen-by-screen spec.
-- `docs/DESIGN-SYSTEM.md` — FleetKit tokens and components.
-- `docs/CLI.md` — every `fleetctl` verb.
-- `docs/RUNBOOKS.md` — what a model is allowed to do.
-- `docs/THREAT-MODEL.md` — entropy as adversary.
-- `docs/AGENTS.md` — the contract for agents.
-- `docs/SWIFT-6-MIGRATION.md` — concurrency record.
-- `docs/TECH-DEBT-AUDIT.md` — full-repo audit (2026-08-02).
-- `docs/REFACTOR-BLUEPRINT.md` — launch overhaul record.
-- `docs/FREEMIUM.md` — trial, key format, offline mint, Ouros path.
-- `docs/RUST-PORT.md` — rustification candidates, GPUI candidacy, resize.
-
-## Decisions that shape the next work
-
-1. **Rustification order.** `fleetd` → `fleetctl` → shell. The socket contract
-   is already modeled in Rust; the daemon is ~2k lines and dependency-free, so
-   it is the cheapest honest port. There is no GPUI dependency yet — a GPUI
-   shell is a candidate, not a plan. See `docs/RUST-PORT.md`.
-2. **Freemium through Ouros.** A store webhook (or the Ouros bar on the user's
-   behalf) shells out to `fleetctl license --secret …`, the user pastes the key
-   into the app, and the gate in `FleetCore/License.swift` opens. Ouros talks to
-   the local socket already (`AgentMailClient.swift`); the license flow uses the
-   same locality — no cloud validation.
-3. **Limited source.** Not decided which targets open. Candidates: keep
-   `FleetConsoleApp` closed, open `FleetCore`/`fleetctl`/`rust`.
-4. **Resize.** The console window resizes freely on both axes (aspect lock
-   removed); layout floors are derived in `FleetCore/ConsoleLayout.swift`.
-   "Full free-form resizing within aspect-ratio views" remains unimplemented
-   per-view — the window is free-form, the card grid flows, and charts are not
-   aspect-constrained. See `docs/RUST-PORT.md`.
-
-## Component verification
-
-```bash
-swift build
-swift test
-cargo check --manifest-path rust/Cargo.toml
+```sh
+swift build --disable-index-store
+swift test --disable-index-store
+cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 ```
 
-For authorized release work, use `Scripts/build-app.sh release` and `Scripts/notarize.sh`; packaging is not required for documentation-only work. Live daemon conformance requires its own runtime evidence.
+Run Swift checks for affected Swift code and Rust checks for affected Rust code.
+Release-sensitive Swift changes also need the CI release compiler workaround:
+`swift build -c release --disable-index-store -Xswiftc -disable-cmo`. For script
+changes, run `bash -n` on changed shell scripts and the relevant policy regression
+listed in CI. Policy/prose-only edits need reference and diff checks, not app
+builds or packaging. Report pre-existing failures separately from regressions.
+
+For interface changes, inspect affected states, resizing, keyboard access and
+appearance; native surface sheets and `Scripts/benchmark.sh` have the measurement
+boundaries documented in README. A rendered sheet does not establish menu-bar or
+installed-app acceptance. Live daemon conformance needs an intentionally selected
+daemon and runtime evidence. Use isolated state; inspect captures for private data.
+
+## Delivery
+
+Finish the requested behavior and relevant checks; report what changed, actual
+results and any remaining limitation. An old passing count or signed bundle is
+not evidence for the current source. Packaging, installing/restarting a controller,
+publishing, and charging an account are separate effects requiring scope in the
+current request. For authorized distribution use `docs/RELEASE.md` and the existing
+scripts, fresh `FLEETCONSOLE_OUTPUT_DIR` staging, signing and notarization checks.
+Never build over a running installed bundle. Development does not require a release.
