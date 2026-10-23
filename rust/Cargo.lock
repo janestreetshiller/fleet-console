@@ -2124,6 +2124,8 @@ dependencies = [
 [[package]]
 name = "gpui"
 version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "979b45cfa6ec723b6f42330915a1b3769b930d02b2d505f9697f8ca602bee707"
 dependencies = [
  "anyhow",
  "as-raw-xcb-connection",
@@ -2173,7 +2175,6 @@ dependencies = [
  "naga",
  "num_cpus",
  "objc",
- "objc2-app-kit",
  "oo7",
  "open",
  "parking",

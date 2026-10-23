@@ -1,14 +1,9 @@
-//! Persistent Contextual Terminal & Inspector.
-//!
-//! Right-rail split panel dynamically bound to the selected entity in the spatial map:
-//! - Selecting an agent attaches to its agent log stream / socket REPL
-//! - Selecting a process opens process telemetry & shell context
-//! - Selecting a volume opens at that mount point
-//! - Selecting host opens system console
+//! Inspector and command preview for a captured spatial entity.
+//! This renderer does not attach to a PTY, shell, REPL, or live log stream.
 
 use crate::theme::SpatialPalette;
 use fleet_spatial::ContextualTerminalBinding;
-use gpui::{AnyElement, div, prelude::*, px};
+use gpui::{div, prelude::*, px, AnyElement};
 
 pub fn render_contextual_terminal(
     binding: &ContextualTerminalBinding,
@@ -43,7 +38,7 @@ pub fn render_contextual_terminal(
                         .font_weight(gpui::FontWeight::BOLD)
                         .text_sm()
                         .text_color(palette.text_bright)
-                        .child(binding.title.clone()),
+                        .child(format!("Inspector preview: {}", binding.title)),
                 )
                 .child(
                     div()
@@ -53,7 +48,7 @@ pub fn render_contextual_terminal(
                         .rounded_sm()
                         .bg(palette.bg_card)
                         .text_color(palette.accent_cyan)
-                        .child("PTY Bound"),
+                        .child("No PTY connected"),
                 ),
         )
         .child(
@@ -61,7 +56,10 @@ pub fn render_contextual_terminal(
                 .text_xs()
                 .font_family(".AppleSystemUIFontMonospaced")
                 .text_color(palette.text_dim)
-                .child(format!("$ {}", binding.pty_command)),
+                .child(format!(
+                    "Command preview (not run): {}",
+                    binding.pty_command
+                )),
         );
 
     container = container.child(header);
@@ -101,15 +99,11 @@ pub fn render_contextual_terminal(
         log_area = log_area.child(
             div()
                 .text_color(palette.text_dim)
-                .child(format!("[terminal] Attached to session for entity {}", binding.entity_id)),
+                .child("Live logs unavailable; no session is connected."),
         );
     } else {
         for line in logs {
-            log_area = log_area.child(
-                div()
-                    .text_color(palette.text_bright)
-                    .child(line.clone()),
-            );
+            log_area = log_area.child(div().text_color(palette.text_bright).child(line.clone()));
         }
     }
 
@@ -136,7 +130,7 @@ pub fn render_contextual_terminal(
                 .flex_1()
                 .text_xs()
                 .text_color(palette.text_muted)
-                .child("Type command or REPL instruction..."),
+                .child("Terminal input unavailable in this prototype"),
         );
 
     container.child(prompt).into_any_element()

@@ -47,7 +47,8 @@ USAGE
   fleetctl prune   [--older-than 1h]              drop old stopped/crashed records
   fleetctl config  [--path | --reload]            show or reload config.json
 
-  Every read command accepts --json for scripting.
+  JSON output: list, show, agents, events and inbox accept --json.
+  Logs, ping and doctor print human-readable diagnostics.
 
 LAUNCH OPTIONS
   --name <s>            friendly name shown in the console            (required)

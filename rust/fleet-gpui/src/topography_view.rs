@@ -9,14 +9,12 @@ use fleet_spatial::{
 };
 use gpui::{AnyElement, SharedString, div, prelude::*, px};
 
-pub fn render_topography_canvas<FNode, FAction>(
+pub fn render_topography_canvas<FAction>(
     graph: &RelationalTopologyGraph,
     palette: &SpatialPalette,
-    on_select_node: FNode,
     on_remediate: FAction,
 ) -> AnyElement
 where
-    FNode: Fn(String) + Clone + 'static,
     FAction: Fn(RemediationAction) + Clone + 'static,
 {
     let center_offset_x = 380.0 + graph.viewport.pan_x;
@@ -83,9 +81,6 @@ where
         let screen_x = center_offset_x + (node.x * zoom) - scaled_radius;
         let screen_y = center_offset_y + (node.y * zoom) - scaled_radius;
 
-        let node_id_captured = node_id.clone();
-        let select_cb = on_select_node.clone();
-
         let ring_color = if node.heat > 0.85 {
             palette.status_critical
         } else if node.heat > 0.50 {
@@ -121,11 +116,6 @@ where
             .flex_col()
             .items_center()
             .justify_center()
-            .cursor_pointer()
-            .hover(|this| this.border_color(palette.border_active))
-            .on_mouse_down(gpui::MouseButton::Left, move |_, _, _cx| {
-                select_cb(node_id_captured.clone());
-            })
             .child(
                 div()
                     .text_xs()
@@ -261,9 +251,24 @@ where
 }
 
 fn truncate_label(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}…", &s[..max_len])
-    } else {
-        s.to_string()
+    let mut chars = s.chars();
+    let mut label: String = chars.by_ref().take(max_len).collect();
+    if chars.next().is_some() {
+        label.push('…');
+    }
+    label
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate_label;
+
+    #[test]
+    fn observed_labels_support_unicode_without_slicing_inside_a_character() {
+        assert_eq!(truncate_label("éclair-worker", 1), "é…");
+        assert_eq!(truncate_label("💻-worker", 1), "💻…");
+        assert_eq!(truncate_label("東京", 2), "東京");
+        assert_eq!(truncate_label("worker", 0), "…");
+        assert_eq!(truncate_label("", 0), "");
     }
 }

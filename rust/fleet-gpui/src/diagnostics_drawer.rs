@@ -1,11 +1,9 @@
-//! Integrated Diagnostics Drawer ("Needs Attention" Overhaul).
-//!
-//! Replaces the standalone empty page with an integrated drawer and badge list
-//! attached directly to affected entities with one-click remediation triggers.
+//! Diagnostics from a captured sample. The prototype clears action lists until
+//! controller-backed remediation is connected.
 
 use crate::theme::SpatialPalette;
 use fleet_spatial::{DiagnosticBadge, DiagnosticSeverity, RemediationAction, SpatialNode};
-use gpui::{AnyElement, div, prelude::*, px};
+use gpui::{div, prelude::*, px, AnyElement};
 
 pub fn render_diagnostics_drawer<F>(
     badges: &[(&SpatialNode, &DiagnosticBadge)],
@@ -16,7 +14,9 @@ where
     F: Fn(RemediationAction) + Clone + 'static,
 {
     let count = badges.len();
-    let has_critical = badges.iter().any(|(_, b)| b.severity == DiagnosticSeverity::Critical);
+    let has_critical = badges
+        .iter()
+        .any(|(_, b)| b.severity == DiagnosticSeverity::Critical);
 
     let mut drawer = div()
         .id("diagnostics-drawer")
@@ -47,7 +47,7 @@ where
                         } else if count > 0 {
                             palette.status_warning
                         } else {
-                            palette.status_nominal
+                            palette.text_dim
                         }),
                 )
                 .child(
@@ -63,21 +63,18 @@ where
                 .text_xs()
                 .text_color(palette.text_dim)
                 .child(if count == 0 {
-                    "All Subsystems Nominal"
+                    "Service and agent health unavailable"
                 } else {
-                    "Contextual Remediation Available"
+                    "Captured observations; controls unavailable"
                 }),
         );
 
     drawer = drawer.child(header);
 
     if badges.is_empty() {
-        drawer = drawer.child(
-            div()
-                .text_xs()
-                .text_color(palette.text_dim)
-                .child("No system or agent anomalies detected."),
-        );
+        drawer = drawer.child(div().text_xs().text_color(palette.text_dim).child(
+            "No warnings in this captured sample. Service and agent health have not been checked.",
+        ));
     } else {
         let mut list = div()
             .id("diagnostics.badge-list")

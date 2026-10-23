@@ -9,7 +9,6 @@ FleetConsole places CPU and memory dials one click from your Mac’s menu bar, o
 
 The complete source—core, controller, CLI, Rust protocol, and native app—is available under the MIT license. Local monitoring and service control continue to be free.
 
-d service control are free.
 The source and downloads live at
 https://github.com/janestreetshiller/fleet-console.
 Optional multi-device access costs $10 USD/month through Ouros, operated by
@@ -24,13 +23,18 @@ individual spikes are preserved. Disk, GPU, network and sensors expand below.
 
 ## One place to look
 
-One menu-bar cluster shows CPU and memory use, connection state, and an attention
+One menu-bar cluster shows CPU, memory and disk use, connection state, and an attention
 count when needed. Its dropdown starts on **Quick View** and remembers your last
 tab. Quick View shows CPU and memory dials, a disk-capacity map, upload/download
-bars and an **Open Dashboard** button. **Services**, **Agents**, **Processes**
+bars; **Dashboard** is in the shared header. **Services**, **Agents**, **Processes**
 and **Network** tabs remain available. Right-click or Control-click for **Quick
 View**, the dashboard, named destinations, configuration and logs. Both views
 share the same resource probes and sampling cadence.
+
+The dropdown also opens **Needs Attention** and **Agents**, with a waiting-reply
+count when needed. **Help** links to the guide and **fleetctl Setup…**, which
+finds the CLI in the current app bundle and offers a quoted diagnostic command
+to copy into Terminal.
 
 The dashboard opens to **Overview**: CPU, GPU, memory, disk, network history, and
 large process consumers. A native sidebar leads to **Processes**, **Storage**,
@@ -163,3 +167,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), [design system](docs/DESIGN-SYSTEM.md), 
 [release guide](docs/RELEASE.md) for checks. Report sanitized bugs in
 [GitHub issues](https://github.com/janestreetshiller/fleet-console/issues) and use
 [SECURITY.md](SECURITY.md) for private security reports.
+
+For plain-language product descriptions and listing copy, see
+[launch copy](docs/LAUNCH-COPY.md). The [Rust/GPUI assessment](docs/RUST-PORT.md)
+separates the existing prototype from the native app's working features.

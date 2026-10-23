@@ -1,6 +1,24 @@
 # fleetctl — the operations toolbox
 
-The complete surface. Every read command accepts `--json`.
+Use `fleetctl` to give background work a name, an owner, a reason to exist, and
+a time limit. FleetConsole shows the same records in its menu and dashboard;
+`fleetd` starts and supervises the processes. The CLI comes inside FleetConsole,
+at `FleetConsole.app/Contents/Resources/bin/fleetctl`; a separate Rust CLI port is
+not required to use it.
+
+Start with the actual location of your app:
+
+```sh
+"/Applications/FleetConsole.app/Contents/Resources/bin/fleetctl" --help
+"/Applications/FleetConsole.app/Contents/Resources/bin/fleetctl" doctor
+```
+
+If you installed FleetConsole elsewhere, substitute that path. `doctor` inspects
+the installation; it does not install or restart the controller.
+
+`list`, `show`, `agents`, `events` and `inbox` support `--json`. Logs, ping and
+doctor print human-readable diagnostics. Mutation commands with JSON output are
+documented individually below.
 
 ```
 asking for a process      launch · renew · stop · restart · pause · resume · kill
@@ -18,8 +36,9 @@ than being shown as stopped. The supervisor leaves paused services alone: no
 health check is run against them and no lease decision is derived from silence.
 
 ### `fleetctl kill <id|name> [--reason "…"]`
-SIGKILL immediately, no grace period. If the service is paused it is woken first —
-a stopped process cannot die, so SIGKILL would otherwise just queue.
+Requests immediate SIGKILL with no grace period. The controller handles a paused
+service before signalling it and keeps the same ownership and process-identity
+checks. This is available only for services launched through the controller.
 
 ### `fleetctl notify --agent <a> --message "…" [--ask] [--problem] [--service <id>]`
 Posts to the operator's mailbox. `--ask` marks it as needing a reply (and raises a
@@ -38,7 +57,8 @@ Answers a message. Exactly once: a second attempt is refused.
 
 ### `fleetctl launch --name <n> --owner <agent> --purpose <why> [options] -- <cmd> [args…]`
 
-The only way a process enters the registry. Returns the managed service record.
+Starts a new controller-managed process and returns its service record. Existing
+processes enter through `claim`, which records visibility without control.
 
 | Option | Default | |
 |---|---|---|
@@ -91,9 +111,11 @@ claude        2        —     :8931 :8932     0.0%    48 MB     in 2m
 codex         1        —     —               0.0%    1 MB      in 2m
 ```
 
-### `fleetctl events [<id|name>] [--limit 50] [--json]`
+### `fleetctl events [<id|name>] [--limit 50] [--json] [--offline]`
 The append-only history — global, or for one service. An unknown id is an error,
 never a silent fallback to the global log.
+`--offline` opens the existing registry read-only, so recorded history remains
+available when the controller is unavailable. It does not provide live state.
 
 ### `fleetctl logs <id|name> [--err] [--bytes 64000]`
 Tail of captured stdout/stderr. Works for crashed services too — that is when you

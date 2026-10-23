@@ -5,14 +5,24 @@
 
 use crate::theme::SpatialPalette;
 use fleet_telemetry::{HardwareProfile, TelemetrySnapshot};
+use gpui::{div, prelude::*, px, AnyElement};
 use ouros_adapter::AgentTaskGraph;
-use gpui::{AnyElement, div, prelude::*, px};
+
+pub fn render_unavailable_plane(title: &str, reason: &str, palette: &SpatialPalette) -> AnyElement {
+    div()
+        .flex()
+        .flex_col()
+        .size_full()
+        .p_4()
+        .gap_3()
+        .text_color(palette.text_muted)
+        .child(div().text_lg().child(title.to_string()))
+        .child(div().text_sm().child(reason.to_string()))
+        .into_any_element()
+}
 
 /// Plane 2: Brain & Agents View (Ouros-X Adapter Plane)
-pub fn render_brain_agents_plane(
-    brain: &AgentTaskGraph,
-    palette: &SpatialPalette,
-) -> AnyElement {
+pub fn render_brain_agents_plane(brain: &AgentTaskGraph, palette: &SpatialPalette) -> AnyElement {
     let mut container = div()
         .id("brain-agents-plane")
         .flex()
@@ -73,13 +83,7 @@ pub fn render_brain_agents_plane(
                             .flex()
                             .items_center()
                             .gap_2()
-                            .child(
-                                div()
-                                    .w(px(8.0))
-                                    .h(px(8.0))
-                                    .rounded_full()
-                                    .bg(state_color),
-                            )
+                            .child(div().w(px(8.0)).h(px(8.0)).rounded_full().bg(state_color))
                             .child(
                                 div()
                                     .font_weight(gpui::FontWeight::BOLD)
@@ -170,12 +174,13 @@ pub fn render_brain_agents_plane(
             );
 
             for dec in &agent.recent_decisions {
-                decisions_box = decisions_box.child(
-                    div()
-                        .text_xs()
-                        .text_color(palette.text_muted)
-                        .child(format!("→ Action: {} (Confidence: {:.2})", dec.chosen_action, dec.confidence)),
-                );
+                decisions_box =
+                    decisions_box.child(div().text_xs().text_color(palette.text_muted).child(
+                        format!(
+                            "→ Action: {} (Confidence: {:.2})",
+                            dec.chosen_action, dec.confidence
+                        ),
+                    ));
             }
 
             card = card.child(decisions_box);
@@ -218,7 +223,10 @@ pub fn render_execution_telemetry_plane(
             div()
                 .text_xs()
                 .text_color(palette.accent_purple)
-                .child(format!("{} | {} Cores", profile.host_name, profile.logical_cores)),
+                .child(format!(
+                    "{} | {} Cores",
+                    profile.host_name, profile.logical_cores
+                )),
         );
 
     container = container.child(header);
@@ -227,13 +235,28 @@ pub fn render_execution_telemetry_plane(
     let metrics_row = div()
         .flex()
         .gap_3()
-        .child(render_stat_card("Global CPU Usage", &format!("{:.1}%", telemetry.cpu_cpu_pct()), palette.accent_cyan, palette))
-        .child(render_stat_card("Memory Utilized", &format!("{:.1} / {:.1} GB", (telemetry.used_memory_bytes as f32 / (1024.0*1024.0*1024.0)), (telemetry.total_memory_bytes as f32 / (1024.0*1024.0*1024.0))), palette.accent_purple, palette))
-        .child(render_stat_card("Thermal Pressure", &format!("{:?}", telemetry.thermal_level), match telemetry.thermal_level {
-            fleet_telemetry::ThermalLevel::Nominal => palette.status_nominal,
-            fleet_telemetry::ThermalLevel::Fair => palette.status_warning,
-            _ => palette.status_critical,
-        }, palette));
+        .child(render_stat_card(
+            "Global CPU Usage",
+            &format!("{:.1}%", telemetry.cpu_cpu_pct()),
+            palette.accent_cyan,
+            palette,
+        ))
+        .child(render_stat_card(
+            "Memory Utilized",
+            &format!(
+                "{:.1} / {:.1} GB",
+                (telemetry.used_memory_bytes as f32 / (1024.0 * 1024.0 * 1024.0)),
+                (telemetry.total_memory_bytes as f32 / (1024.0 * 1024.0 * 1024.0))
+            ),
+            palette.accent_purple,
+            palette,
+        ))
+        .child(render_stat_card(
+            "Thermal Pressure",
+            "Unavailable",
+            palette.text_dim,
+            palette,
+        ));
 
     container = container.child(metrics_row);
 
@@ -259,7 +282,7 @@ pub fn render_execution_telemetry_plane(
             .font_weight(gpui::FontWeight::BOLD)
             .text_color(palette.text_muted)
             .child(div().w(px(80.0)).child("PID"))
-            .child(div().flex_1().child("Process / Agent Owner"))
+            .child(div().flex_1().child("Process"))
             .child(div().w(px(70.0)).child("CPU %"))
             .child(div().w(px(90.0)).child("Memory RSS")),
     );
@@ -272,11 +295,19 @@ pub fn render_execution_telemetry_plane(
                 .justify_between()
                 .py_1()
                 .text_xs()
-                .text_color(if is_heavy { palette.status_critical } else { palette.text_bright })
+                .text_color(if is_heavy {
+                    palette.status_critical
+                } else {
+                    palette.text_bright
+                })
                 .child(div().w(px(80.0)).child(format!("{}", proc.pid)))
                 .child(div().flex_1().child(proc.name.clone()))
                 .child(div().w(px(70.0)).child(format!("{:.1}%", proc.cpu_pct)))
-                .child(div().w(px(90.0)).child(format!("{} MB", proc.memory_rss_bytes / (1024 * 1024)))),
+                .child(
+                    div()
+                        .w(px(90.0))
+                        .child(format!("{} MB", proc.memory_rss_bytes / (1024 * 1024))),
+                ),
         );
     }
 
@@ -363,13 +394,13 @@ pub fn render_substrate_plane(
                     .text_color(palette.text_muted)
                     .child(format!(
                         "{:.1} GB used / {:.1} GB total ({:.1}%)",
-                        used_bytes as f32 / (1024.0*1024.0*1024.0),
-                        store.total_bytes as f32 / (1024.0*1024.0*1024.0),
+                        used_bytes as f32 / (1024.0 * 1024.0 * 1024.0),
+                        store.total_bytes as f32 / (1024.0 * 1024.0 * 1024.0),
                         used_ratio * 100.0
                     ))
                     .child(format!(
                         "{:.1} GB headroom remaining",
-                        store.available_bytes as f32 / (1024.0*1024.0*1024.0)
+                        store.available_bytes as f32 / (1024.0 * 1024.0 * 1024.0)
                     )),
             )
             .child(
@@ -412,8 +443,19 @@ fn render_stat_card(
         .bg(palette.bg_card)
         .border_1()
         .border_color(palette.border_subtle)
-        .child(div().text_xs().text_color(palette.text_muted).child(label.to_string()))
-        .child(div().text_lg().font_weight(gpui::FontWeight::BOLD).text_color(accent).child(value.to_string()))
+        .child(
+            div()
+                .text_xs()
+                .text_color(palette.text_muted)
+                .child(label.to_string()),
+        )
+        .child(
+            div()
+                .text_lg()
+                .font_weight(gpui::FontWeight::BOLD)
+                .text_color(accent)
+                .child(value.to_string()),
+        )
         .into_any_element()
 }
 
