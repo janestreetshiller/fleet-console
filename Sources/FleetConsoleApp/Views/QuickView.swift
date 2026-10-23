@@ -59,25 +59,36 @@ struct QuickView: View {
             instrument("CPU") {
                 RetroGauge(value: metrics.cpu.value, tone: metrics.cpu.tone, caption: "CPU",
                            readout: metrics.cpu.readout, diameter: Self.instrumentSize)
+                    .help(model.system.topology.brand + " · " + model.system.topology.coreSummary)
             }
-            .help(model.system.topology.brand + " · " + model.system.topology.coreSummary)
             instrument("Memory") {
                 RetroGauge(value: metrics.memory.value, tone: metrics.memory.tone, caption: "Memory",
                            readout: metrics.memory.readout, diameter: Self.instrumentSize)
+                    .help("\(ConsoleFmt.bytes(model.system.memory.usedBytes)) used · pressure \(model.system.memory.pressure.label)")
             }
-            .help("\(ConsoleFmt.bytes(model.system.memory.usedBytes)) used · pressure \(model.system.memory.pressure.label)")
             instrument("Disk") { disk(metrics) }
             instrument("Network") { network }
         }
         .padding(.horizontal, FleetMetrics.gutter)
-        .padding(.vertical, 22)
+        .padding(.top, 6)
+        .padding(.bottom, 10)
         .accessibilityElement(children: .contain)
     }
 
     private func instrument<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 12) {
-            Text(title).font(FleetFont.sectionLabel).foregroundStyle(.secondary)
-            content().frame(height: Self.instrumentSize)
+            Text(title)
+                .font(FleetFont.sectionLabel)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            content()
+                .frame(height: Self.instrumentSize)
+                .contextMenu {
+                    Button("Investigate") {
+                        model.investigate(.metric(title.lowercased(), model: model))
+                    }
+                }
         }
         .frame(maxWidth: .infinity)
     }
@@ -137,3 +148,5 @@ struct QuickView: View {
         .accessibilityValue(metric.bytesPerSecond == nil ? "Unavailable" : metric.readout)
     }
 }
+
+

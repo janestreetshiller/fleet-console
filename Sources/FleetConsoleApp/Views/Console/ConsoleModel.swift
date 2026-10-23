@@ -42,6 +42,7 @@ enum ConsoleCommand {
     static let toggleSidebar = Notification.Name("com.fleetconsole.console.toggleSidebar")
     /// Runs a command line in the window's terminal panel. Carries
     /// `userInfoCommand`, `userInfoDirectory` and `userInfoSubject`.
+    static let investigate = Notification.Name("com.fleetconsole.console.investigate")
     static let runInTerminal = Notification.Name("com.fleetconsole.console.runInTerminal")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
@@ -56,15 +57,25 @@ final class ConsoleModel {
     /// "self" or a `DeviceRecord.id`. The first column's selection.
     var selectedDeviceID = "self"
 
-    /// The landing surface. Home is a *destination*, not another module: the
-    /// module indices and their ⌘1…⌘n equivalents stay exactly where they
-    /// were, and every inspector that switches exhaustively over
-    /// `ConsoleModule` keeps compiling. `module` still remembers where you were,
-    /// so leaving home and coming back does not reset it.
+    /// Home is a *destination*, not another module: the module indices and
+    /// their ⌘1…⌘n equivalents stay exactly where they were, and every
+    /// inspector that switches exhaustively over `ConsoleModule` keeps
+    /// compiling. The window opens on Overview. `module` still remembers where
+    /// you were, so leaving home and coming back does not reset it.
     var atHome = false
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
+    var operationsSection = "Services"
+    private var effectiveModule: ConsoleModule {
+        guard module == .services else { return module }
+        switch operationsSection {
+        case "Storage": return .storage
+        case "Events": return .events
+        case "Launch Services": return .plists
+        default: return .services
+        }
+    }
 
     /// Toolbar search. Applies to the module in view — processes, services and
     /// events each decide what fields it matches.
@@ -155,7 +166,7 @@ final class ConsoleModel {
     var searchPrompt: String {
         guard isLocalDeviceSelected else { return "Local only" }
         guard !atHome else { return "Search attention" }
-        switch module {
+        switch effectiveModule {
         case .overview: return "Search processes"
         case .processes: return "Search processes"
         case .storage: return "Search volumes"
@@ -176,8 +187,8 @@ final class ConsoleModel {
         if atHome {
             return "Select something that needs attention to inspect it here."
         }
-        switch module {
-        case .overview: return "Select View All to inspect processes."
+        switch effectiveModule {
+        case .overview: return "Tap a map tile to inspect its process, or select an interval for retained observations."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."
@@ -246,7 +257,7 @@ final class ConsoleModel {
             if let id = selectedUnmanagedID { return .unmanaged(id) }
             return .none
         }
-        switch module {
+        switch effectiveModule {
         case .overview, .events, .plists:
             return .none
         case .processes:
@@ -319,7 +330,7 @@ final class ConsoleModel {
         // own to clear — clearing the module's selection here would silently
         // undo a choice you cannot see.
         if atHome { return false }
-        switch module {
+        switch effectiveModule {
         case .processes where selectedPID != nil: selectedPID = nil; return true
         case .storage where selectedVolumeID != nil || selectedSegmentID != nil:
             selectedVolumeID = nil; selectedSegmentID = nil; return true

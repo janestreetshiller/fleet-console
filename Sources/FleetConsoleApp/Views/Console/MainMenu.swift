@@ -200,7 +200,7 @@ enum MainMenu {
     /// anything anyway.
     static func moduleItems() -> [NSMenuItem] {
         ConsoleModule.allCases.map { module in
-            let entry = NSMenuItem(title: module.rawValue,
+            let entry = NSMenuItem(title: module.title,
                                    action: #selector(MenuActionTarget.selectModule(_:)),
                                    keyEquivalent: "\(module.shortcutIndex)")
             entry.keyEquivalentModifierMask = [.command]

@@ -30,6 +30,7 @@ enum ProcessHeatmap {
             var count: Int = 0
             var heaviestPID: Int32 = 0
             var heaviestBytes: Int64 = 0
+            var startSignature: String?
         }
 
         var groups: [String: Group] = [:]
@@ -43,6 +44,7 @@ enum ProcessHeatmap {
             if row.residentBytes > group.heaviestBytes {
                 group.heaviestBytes = row.residentBytes
                 group.heaviestPID = row.pid
+                group.startSignature = row.startSignature
             }
             groups[name] = group
             totalBytes += row.residentBytes
@@ -72,7 +74,7 @@ enum ProcessHeatmap {
                 bytes: group.bytes,
                 color: tone.color,
                 labelColor: tone.tileLabelColor,
-                action: .selectPID(group.heaviestPID))
+                action: .selectPID(group.heaviestPID), processStartSignature: group.startSignature)
         }
 
         let remainder = totalBytes - counted

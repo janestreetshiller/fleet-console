@@ -53,6 +53,10 @@ struct MenuBarMetersTests {
                 ? node.value(forKey: "accessibilityChildren") as? [Any] : nil) ?? []
             return own + children.flatMap(labels)
         }
-        #expect(labels(host).contains { $0.contains("Dashboard") })
+        let found = labels(host)
+        let preview = found.prefix(40).joined(separator: " | ")
+        #expect(found.contains { $0.localizedCaseInsensitiveContains("dashboard") }, "\(preview)")
+        #expect(found.contains("Configuration and links"), "\(preview)")
+        #expect(found.filter { $0 == "Agent" }.count == 1, "\(preview)")
     }
 }
