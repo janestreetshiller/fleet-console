@@ -1,5 +1,10 @@
 # Contextual investigations and compact Fleet navigation
 
+Historical implementation record. Example paths below use `/Users/demo`;
+substitute your checkout locations. Follow [RELEASE.md](RELEASE.md) for current
+release and installation instructions.
+
+
 Source candidate: branch `codex/fleet-context-actions-20261015`, based on `2d7b41b`.
 This document records implementation and deferred acceptance separately.
 
@@ -8,11 +13,11 @@ This document records implementation and deferred acceptance separately.
 The installed `/Applications/FleetConsole.app/Contents/Info.plist` reports version
 1.1.0, build 4 and executable `FleetConsole`. It contains no FleetSourceRevision
 key. Follow-up provenance reads found an exact matching release artifact in
-`/Users/main/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
+`/Users/demo/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
 The candidate has been rebased onto that checkout's `2d7b41b` commit to preserve
 its installed terminal-output behavior. Source was initially located at
-`/Users/main/Metal/Code/Fleet/fleet-console` through the Fleet donor reference in
-`/Users/main/Code/ouros-x/apps/desktop/ouros/docs/plugin-boundary-working-record.md`.
+`/Users/demo/Metal/Code/Fleet/fleet-console` through the Fleet donor reference in
+`/Users/demo/Code/ouros-x/apps/desktop/ouros/docs/plugin-boundary-working-record.md`.
 
 All changes were prepared in an isolated worktree. The initial implementation
 was source-only. After the coordinator granted the non-UI slot, syntax validation
@@ -142,12 +147,12 @@ service or file mutation tools. Existing destructive actions retain their policy
 
 ## Source contract evidence
 
-- Existing entitled gateway: `/Users/main/Code/ouros-md-landing/gateway/legacy-completion.mjs`
+- Existing entitled gateway: `/Users/demo/Code/ouros-md-landing/gateway/legacy-completion.mjs`
   handles `/ouros/v1/models` and `/v1/chat/completions`, filters the catalog by
   account entitlement, and forwards completions to the reservation/settlement route.
-- Existing native caller: `/Users/main/Code/ouros-x/apps/desktop/ouros/Sources/OurosBar/EveChatSession.swift`,
+- Existing native caller: `/Users/demo/Code/ouros-x/apps/desktop/ouros/Sources/OurosBar/EveChatSession.swift`,
   `completionPayload`, `beginGatewayCompletion` and `completionRejectedBeforeDispatch`.
-- Multi-device-only membership contract: `/Users/main/Code/ouros-md-landing/gateway/fleet-console-billing.mjs`,
+- Multi-device-only membership contract: `/Users/demo/Code/ouros-md-landing/gateway/fleet-console-billing.mjs`,
   `fleetConsoleOffer` and the `/hvy/v1/fleet-console/entitlement` handler.
 - The source exists; deployed gateway behavior, Fleet-token scopes and end-to-end
   account interoperability have not been exercised. They must be checked with
@@ -156,14 +161,14 @@ service or file mutation tools. Existing destructive actions retain their policy
 
 ## Exact Fleet provenance for the sole updater
 
-- Canonical repository: `/Users/main/Metal/Code/Fleet/fleet-console`.
-- Candidate worktree: `/Users/main/Documents/Codex/2026-10-15/task/fleet-context`.
+- Canonical repository: `/Users/demo/Metal/Code/Fleet/fleet-console`.
+- Candidate worktree: `/Users/demo/Documents/Codex/2026-10-15/task/fleet-context`.
 - Revised baseline commit: `2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01`.
   It is the sole commit after the initially assumed `b1ae71e` baseline and adds
   readable Fleet Agent terminal output. The task commits have been rebased onto
   it; FixAgent.swift, the Rust agent and its terminal-output tests are unchanged
   by the candidate relative to this revised baseline.
-- Matching artifact checkout: `/Users/main/Metal/Code/Fleet/fleet-terminal-output`,
+- Matching artifact checkout: `/Users/demo/Metal/Code/Fleet/fleet-terminal-output`,
   HEAD `2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01`, no tracked differences;
   only its `build-release-1.1.0/` artifact directory is untracked.
 - Installed app: `/Applications/FleetConsole.app`, `com.fleetconsole.app`,
@@ -175,7 +180,7 @@ service or file mutation tools. Existing destructive actions retain their policy
 - `fleet-terminal-output` worktree's built executable SHA-256:
   `03720ca63d9919c3682045d5f508a04389d00f84381595eae9dec95b52a89ba1`.
 - Exact matching signed release artifact:
-  `/Users/main/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
+  `/Users/demo/Metal/Code/Fleet/fleet-terminal-output/build-release-1.1.0/FleetConsole.app`.
   Installed and release copies are byte-identical for Info.plist, the executable,
   all three helper binaries, `_CodeSignature/CodeResources` and `CodeResources`.
   Both executable SHA-256 values are

@@ -1,16 +1,21 @@
 # Fleet contextual actions: delivery handoff
 
+Historical implementation record. Example paths below use `/Users/demo`;
+substitute your checkout locations. Follow [RELEASE.md](RELEASE.md) for current
+release and installation instructions.
+
+
 This is the delivery route for the sole native updater. No command in this
 file has been used to install, launch, notarize or publish this candidate.
 Backend execution and live inference remain outside this work.
 
 ## Verified source and installed baseline
 
-- Shared repository: `/Users/main/Metal/Code/Fleet/fleet-console`.
-- Matching installed-artifact checkout: `/Users/main/Metal/Code/Fleet/fleet-terminal-output`.
+- Shared repository: `/Users/demo/Metal/Code/Fleet/fleet-console`.
+- Matching installed-artifact checkout: `/Users/demo/Metal/Code/Fleet/fleet-terminal-output`.
 - Baseline: `2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01`.
 - Candidate branch: `codex/fleet-context-actions-20261015` in the same Git object
-  store, isolated at `/Users/main/Documents/Codex/2026-10-15/task/fleet-context`.
+  store, isolated at `/Users/demo/Documents/Codex/2026-10-15/task/fleet-context`.
 - The installed build 4 and the matching checkout's
   `build-release-1.1.0/FleetConsole.app` are byte-identical for the executable,
   helpers, plist and signature resources. Preserve that signed artifact and the
@@ -41,8 +46,8 @@ store already contains the candidate commits. The sole updater should verify
 these read-only predicates using the final reviewed tip from the task handoff:
 
 ```sh
-git -C /Users/main/Metal/Code/Fleet/fleet-console rev-parse --verify '<candidate-tip>^{commit}'
-git -C /Users/main/Metal/Code/Fleet/fleet-console merge-base --is-ancestor 2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01 '<candidate-tip>'
+git -C /Users/demo/Metal/Code/Fleet/fleet-console rev-parse --verify '<candidate-tip>^{commit}'
+git -C /Users/demo/Metal/Code/Fleet/fleet-console merge-base --is-ancestor 2d7b41b58b0de62758eed2ba5b97dc6cb1c74a01 '<candidate-tip>'
 ```
 
 Then create the clean detached source tree from that exact tip. Do not merge or
@@ -94,7 +99,7 @@ Do not invoke the old canonical checkout's launcher with new flags. Exact form,
 not executed here:
 
 ```sh
-cd /Users/main/Documents/Codex/2026-10-15/task/fleet-context
+cd /Users/demo/Documents/Codex/2026-10-15/task/fleet-context
 FLEETCONSOLE_OFFLINE=1 \
 FLEETCONSOLE_DEPENDENCY_CACHE=/tmp/fleet-context-ee056fa-validation \
 Scripts/update-installed.sh '<final-reviewed-tip>' --no-launch
