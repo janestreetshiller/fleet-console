@@ -39,6 +39,9 @@ struct HomeModule: View {
             // sidebar's identity card already says who and how the fleet is.
             QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
                 priorityCard
+                AgentsContent(model: model, openDashboard: {})
+                    .elevatedCard()
+                LaterTasksView()
                 modulesCard
             }
             .padding(ConsoleMetrics.gutter)
@@ -143,7 +146,7 @@ struct HomeModule: View {
                 // makes the user map an invented phrase onto a vocabulary the
                 // rest of the window already taught them. A section label names
                 // its contents; it is not an instruction to the reader.
-                Text("Modules")
+                Text("Explore")
                     .font(ConsoleFont.cardTitle)
                 Spacer()
                 // Derived, not written out: the list under this label is
@@ -154,7 +157,7 @@ struct HomeModule: View {
                     .foregroundStyle(SurfaceInk.secondary)
             }
 
-            ForEach(ConsoleModule.allCases) { module in
+            ForEach([ConsoleModule.overview, .processes, .services]) { module in
                 ModuleLink(module: module, detail: detail(for: module)) {
                     console.open(module)
                 }
@@ -295,7 +298,7 @@ private struct ModuleLink: View {
                     .symbolRenderingMode(.hierarchical)
                     .frame(width: ConsoleToolMetrics.toggleSize)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(module.rawValue)
+                    Text(module.title)
                         .font(ConsoleFont.rowTitle)
                         .lineLimit(1)
                     Text(detail)
@@ -320,7 +323,7 @@ private struct ModuleLink: View {
         .buttonStyle(.plain)
         .hoverHighlight()
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(module.rawValue). \(detail)")
+        .accessibilityLabel("\(module.title). \(detail)")
         .accessibilityAddTraits(.isButton)
     }
 }

@@ -40,7 +40,7 @@ struct BillingPrivacyTests {
     }
 
     @MainActor @Test func cloudRequestsStartWithExplicitBillingInteraction() async {
-        let billing = OurosBilling(useKeychain: false, sessionConfiguration: configuration(), openBrowser: { _ in })
+        let billing = OurosBilling(credentialStore: TestOurosCredentialStore(), sessionConfiguration: configuration(), openBrowser: { _ in })
         await billing.refresh()
         await billing.refresh()
         #expect(BillingRequestProbe.requests.isEmpty)
@@ -56,7 +56,7 @@ struct BillingPrivacyTests {
 
     @MainActor @Test func firstAccountConnectionLoadsOffersAndEnablesSignedInRefresh() async throws {
         var opened: [URL] = []
-        let billing = OurosBilling(useKeychain: false, sessionConfiguration: configuration(), openBrowser: { opened.append($0) })
+        let billing = OurosBilling(credentialStore: TestOurosCredentialStore(), sessionConfiguration: configuration(), openBrowser: { opened.append($0) })
         let task = try #require(billing.connect())
         await task.value
         #expect(billing.signedIn)

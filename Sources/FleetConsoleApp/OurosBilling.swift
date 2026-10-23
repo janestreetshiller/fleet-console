@@ -32,26 +32,41 @@ struct OurosMembership: Decodable, Sendable {
     let cancelAtPeriodEnd: Bool?
 }
 
-private struct OurosCredential: Codable {
-    let token: String
-    let expires: Date
-}
-
 private enum OurosKeychain {
     static let service = "com.fleetconsole.ouros"
     static var query: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
          kSecAttrService as String: service, kSecAttrAccount as String: "account-session"]
     }
-    static func read() -> OurosCredential? {
+    private static func requireProductionContext() throws {
+        guard OurosCredentialContext.current.permitsProductionStorage else {
+            throw OurosCredentialStorageError.developmentRequiresExplicitStore
+        }
+        // Release app identity is verified without querying an account item.
+        // An ad-hoc/development app cannot provoke a Keychain permission dialog.
+        var code: SecCode?
+        var requirement: SecRequirement?
+        let rule = #"identifier "com.fleetconsole.app" and anchor apple generic and certificate leaf[subject.OU] = "47R2YVAFA2""#
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code,
+              SecRequirementCreateWithString(rule as CFString, [], &requirement) == errSecSuccess,
+              let requirement, SecCodeCheckValidity(code, [], requirement) == errSecSuccess else {
+            throw OurosCredentialStorageError.unavailable
+        }
+    }
+    static func read() throws -> OurosCredential? {
+        try requireProductionContext()
         var q = query
         q[kSecReturnData as String] = true; q[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(q as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data else { return nil }
-        return try? JSONDecoder().decode(OurosCredential.self, from: data)
+        let status = SecItemCopyMatching(q as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess, let data = item as? Data else {
+            throw OurosCredentialStorageError.unavailable
+        }
+        return try JSONDecoder().decode(OurosCredential.self, from: data)
     }
     static func save(_ credential: OurosCredential) throws {
+        try requireProductionContext()
         let data = try JSONEncoder().encode(credential)
         let status = SecItemUpdate(query as CFDictionary,
                                   [kSecValueData as String: data] as CFDictionary)
@@ -61,7 +76,31 @@ private enum OurosKeychain {
             guard SecItemAdd(q as CFDictionary, nil) == errSecSuccess else { throw OurosFailure.storage }
         } else if status != errSecSuccess { throw OurosFailure.storage }
     }
-    static func clear() { SecItemDelete(query as CFDictionary) }
+    static func clear() throws {
+        try requireProductionContext()
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw OurosCredentialStorageError.unavailable
+        }
+    }
+}
+
+@MainActor
+private struct ProductionOurosCredentialStore: OurosCredentialStore {
+    func read() throws -> OurosCredential? { try OurosKeychain.read() }
+    func save(_ credential: OurosCredential) throws { try OurosKeychain.save(credential) }
+    func clear() throws { try OurosKeychain.clear() }
+}
+
+/// `useKeychain: false` isolates a billing instance from production storage
+/// entirely: credentials live in memory only, so captures and tests can connect
+/// without touching the Keychain or its permission dialogs.
+@MainActor
+private final class TransientOurosCredentialStore: OurosCredentialStore {
+    private var credential: OurosCredential?
+    func read() throws -> OurosCredential? { credential }
+    func save(_ value: OurosCredential) throws { credential = value }
+    func clear() throws { credential = nil }
 }
 
 private struct OurosRejection: Decodable { var code: String?; var error: String? }
@@ -76,7 +115,7 @@ private final class OurosNoRedirects: NSObject, URLSessionTaskDelegate, @uncheck
 }
 
 enum OurosFailure: Error {
-    case unavailable, signIn, invalidResponse, storage, server(String)
+    case unavailable, signIn, invalidResponse, storage, server(String), gatewayRejected(Int, String)
 }
 
 @Observable @MainActor
@@ -91,17 +130,32 @@ final class OurosBilling {
     var message: String?
     @ObservationIgnored private var credential: OurosCredential?
     @ObservationIgnored private let sessionConfiguration: URLSessionConfiguration
-    @ObservationIgnored private let useKeychain: Bool
+    @ObservationIgnored private let credentialStore: any OurosCredentialStore
+    private(set) var credentialStorageIssue: String?
+    @ObservationIgnored private let operationDefaults: UserDefaults
     @ObservationIgnored private let openBrowser: (URL) -> Void
     @ObservationIgnored private var connectionTask: Task<Void, Never>?
     @ObservationIgnored private var checkoutKey: String?
+    private(set) var unconfirmedInvestigationID: String?
+    private static let pendingInvestigationKey = "fleetconsole.investigation.unconfirmed.v1"
 
-    init(useKeychain: Bool = true, sessionConfiguration: URLSessionConfiguration = .ephemeral,
-         openBrowser: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
-        credential = useKeychain ? OurosKeychain.read() : nil
-        self.useKeychain = useKeychain
+    init(useKeychain: Bool = true, credentialStore: (any OurosCredentialStore)? = nil,
+         sessionConfiguration: URLSessionConfiguration = .ephemeral,
+         operationDefaults: UserDefaults = .standard, openBrowser: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+        let store = credentialStore ?? (useKeychain
+            ? GuardedOurosCredentialStore(context: .current, makeBackend: { ProductionOurosCredentialStore() })
+            : TransientOurosCredentialStore())
+        self.credentialStore = store
+        self.operationDefaults = operationDefaults
+        unconfirmedInvestigationID = operationDefaults.string(forKey: Self.pendingInvestigationKey)
         self.sessionConfiguration = sessionConfiguration
         self.openBrowser = openBrowser
+        do { credential = try store.read() }
+        catch {
+            credential = nil
+            credentialStorageIssue = error.localizedDescription
+            message = credentialStorageIssue
+        }
     }
 
     var signedIn: Bool { credential.map { $0.expires > Date() } ?? false }
@@ -113,6 +167,7 @@ final class OurosBilling {
     private func request<T: Decodable>(_ path: String, method: String = "GET",
                                       body: [String: String]? = nil, authenticated: Bool = true,
                                       operationKey: String? = nil) async throws -> T {
+        if let credentialStorageIssue { throw InvestigationGatewayError.refused(credentialStorageIssue) }
         let data = try await dataRequest(path, method: method,
             body: body.map { try JSONEncoder().encode($0) }, authenticated: authenticated,
             operationKey: operationKey, timeout: 20, responseLimit: 65_536)
@@ -121,6 +176,7 @@ final class OurosBilling {
 
     func agentRequest(_ path: String, method: String = "GET", body: Data? = nil,
                       operationKey: String? = nil) async throws -> Data {
+        if let credentialStorageIssue { throw InvestigationGatewayError.refused(credentialStorageIssue) }
         guard ["/ouros/v1/models", "/v1/chat/completions", "/hvy/v1/billing/credits"].contains(path) else {
             throw OurosFailure.invalidResponse
         }
@@ -131,12 +187,14 @@ final class OurosBilling {
             }
         } else if method != "GET" || body != nil { throw OurosFailure.invalidResponse }
         return try await dataRequest(path, method: method, body: body,
-            operationKey: operationKey, timeout: 125, responseLimit: 1_048_576)
+            operationKey: operationKey, timeout: 125, responseLimit: 1_048_576,
+            classifyGatewayRefusal: true)
     }
 
     private func dataRequest(_ path: String, method: String, body: Data?,
                              authenticated: Bool = true, operationKey: String?,
-                             timeout: TimeInterval, responseLimit: Int) async throws -> Data {
+                             timeout: TimeInterval, responseLimit: Int,
+                             classifyGatewayRefusal: Bool = false) async throws -> Data {
         let url = URL(string: "https://ouros.md" + path)!
         var request = URLRequest(url: url)
         request.httpMethod = method; request.timeoutInterval = timeout
@@ -160,6 +218,11 @@ final class OurosBilling {
         guard let http = response as? HTTPURLResponse, http.url?.host == "ouros.md",
               data.count <= responseLimit else { throw OurosFailure.invalidResponse }
         guard (200..<300).contains(http.statusCode) else {
+            if classifyGatewayRefusal, InvestigationGatewayPayload.refusedBeforeDispatch(data: data, status: http.statusCode) {
+                let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+                let nested = object?["error"] as? [String: Any]
+                throw OurosFailure.gatewayRejected(http.statusCode, object?["code"] as? String ?? nested?["code"] as? String ?? "request_refused")
+            }
             if http.statusCode == 401 { handle(OurosFailure.signIn); throw OurosFailure.signIn }
             let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             let nested = value?["error"] as? [String: Any]
@@ -171,6 +234,88 @@ final class OurosBilling {
             throw OurosFailure.server(code)
         }
         return data
+    }
+
+    /// The existing Ouros Agent gateway rechecks account entitlement and reserves
+    /// usage on POST. Fleet's multi-device membership does not authorize inference.
+    func investigate(starter: String, validateObservation: @MainActor () -> Bool) async throws -> String {
+        if let issue = credentialStorageIssue { throw InvestigationGatewayError.refused(issue) }
+        guard signedIn, let accountSession = credential?.token else {
+            throw InvestigationGatewayError.refused("Connect your Ouros account to investigate.")
+        }
+        guard !busy else { throw InvestigationGatewayError.refused("The account is busy. Try again when it finishes.") }
+        if let outstanding = unconfirmedInvestigationID { throw InvestigationGatewayError.uncertain(outstanding) }
+        busy = true
+        defer { busy = false }
+        struct Model: Decodable { let id: String }
+        struct Catalog: Decodable {
+            let ok: Bool
+            let runnable: Bool
+            let code: String?
+            let defaultModelId: String?
+            let models: [Model]
+        }
+        let catalog: Catalog
+        do { catalog = try await request("/ouros/v1/models") }
+        catch OurosFailure.signIn {
+            handle(OurosFailure.signIn)
+            throw InvestigationGatewayError.refused("The Ouros account session is no longer valid. Connect again; no analysis request was sent.")
+        }
+        catch { throw InvestigationGatewayError.refused("Ouros could not verify investigation availability. No analysis request was sent.") }
+        guard catalog.ok, catalog.runnable,
+              let model = catalog.models.first(where: { $0.id == catalog.defaultModelId }) ?? catalog.models.first else {
+            throw InvestigationGatewayError.refused("The Ouros gateway has not authorized a runnable agent model for this account. A Fleet multi-device subscription does not grant agent access.")
+        }
+        guard signedIn, credential?.token == accountSession else {
+            throw InvestigationGatewayError.refused("The connected account changed. Select the observation again.")
+        }
+        guard validateObservation() else {
+            throw InvestigationGatewayError.refused("The selected observation became stale or its process changed while verifying access. Select it again.")
+        }
+        let payload = try InvestigationGatewayPayload.make(model: model.id, starter: starter)
+        let operationID = UUID().uuidString
+        // Persist before dispatch. Never retry an ambiguous paid operation, even after relaunch.
+        unconfirmedInvestigationID = operationID
+        operationDefaults.set(operationID, forKey: Self.pendingInvestigationKey)
+        guard operationDefaults.synchronize() else {
+            clearUnconfirmedInvestigation()
+            throw InvestigationGatewayError.refused("The request identity could not be saved before dispatch. No analysis request was sent.")
+        }
+        struct Completion: Decodable {
+            struct Choice: Decodable {
+                struct Message: Decodable { let content: String? }
+                let message: Message
+            }
+            let choices: [Choice]
+        }
+        do {
+            let completionData = try await agentRequest("/v1/chat/completions", method: "POST",
+                body: payload, operationKey: operationID)
+            guard let reply = (try? JSONDecoder().decode(Completion.self, from: completionData))?.choices.first?.message.content,
+                  !reply.isEmpty, reply.utf8.count <= 32_768 else {
+                throw OurosFailure.invalidResponse
+            }
+            clearUnconfirmedInvestigation()
+            return reply
+        } catch OurosFailure.gatewayRejected(let status, let code) {
+            clearUnconfirmedInvestigation()
+            if status == 401 { handle(OurosFailure.signIn) }
+            throw InvestigationGatewayError.refused("The Ouros gateway refused this investigation: " + InvestigationRequest.label(code) + ". No local agent was started.")
+        } catch {
+            // Failure after dispatch may already have incurred usage. No blind replay.
+            throw InvestigationGatewayError.uncertain(operationID)
+        }
+    }
+
+    /// Explicit acknowledgement only; never resends the old request.
+    func acknowledgeUnconfirmedInvestigation() {
+        guard !busy else { return }
+        clearUnconfirmedInvestigation()
+    }
+
+    private func clearUnconfirmedInvestigation() {
+        unconfirmedInvestigationID = nil
+        operationDefaults.removeObject(forKey: Self.pendingInvestigationKey)
     }
 
     /// Automatic refresh follows an account connection; unsigned-in requests
@@ -202,6 +347,7 @@ final class OurosBilling {
     }
 
     @discardableResult func connect() -> Task<Void, Never>? {
+        guard credentialStorageIssue == nil else { message = credentialStorageIssue; return nil }
         guard !busy else { return nil }
         connectionTask?.cancel()
         connectionTask = Task {
@@ -236,7 +382,7 @@ final class OurosBilling {
                               token.access_token.range(of: "^[A-Za-z0-9_-]{43}$", options: .regularExpression) != nil else { throw OurosFailure.invalidResponse }
                         let value = OurosCredential(token: token.access_token,
                                                     expires: Date().addingTimeInterval(Double(token.expires_in)))
-                        if useKeychain { try OurosKeychain.save(value) }
+                        try credentialStore.save(value)
                         credential = value
                         membership = try await request("/ouros/v1/fleet-console/entitlement")
                         try await loadOffers()
@@ -320,13 +466,13 @@ final class OurosBilling {
             message = nil
         } catch { message = "Account disconnected from this Mac. Ouros could not confirm server sign-out." }
         credential = nil; membership = nil; checkoutKey = nil
-        if useKeychain { OurosKeychain.clear() }
+        try? credentialStore.clear()
     }
 
     private func handle(_ error: Error) {
         if case OurosFailure.signIn = error {
             membership = nil; credential = nil
-            if useKeychain { OurosKeychain.clear() }
+            try? credentialStore.clear()
             message = "Connect your Ouros account to continue."
         } else if case OurosFailure.server("access_denied") = error { message = "Account connection was denied. Connect again when you are ready." }
         else if case OurosFailure.server("expired_token") = error { message = "Connection expired. Connect to Ouros again." }

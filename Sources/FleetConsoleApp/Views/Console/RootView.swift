@@ -67,6 +67,7 @@ struct ConsoleRootView: View {
                     .onChange(of: geometry.size.width) { _, width in contentWidth = width }
             }
         }
+        .actionErrorAlert(model: model)
         .onExitCommand { console.handleEscape() }
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.focusSearch)) { _ in
             Self.focusToolbarSearchField()
@@ -210,10 +211,10 @@ struct ConsoleRootView: View {
                 HomeModule(model: model, console: console)
             } else {
                 switch console.module {
-                case .overview: OverviewModule(model: model, console: console)
-                case .processes: ProcessModule(model: model, console: console)
+                case .overview: OverviewWorkspace(model: model, console: console)
+                case .processes: ProcessWorkspace(model: model, console: console)
                 case .storage: StorageModule(model: model, console: console)
-                case .services: ServicesModule(model: model, console: console)
+                case .services: OperationsWorkspace(model: model, console: console)
                 case .events: EventsModule(model: model, console: console)
                 case .plists: PlistsModule(console: console)
                 }

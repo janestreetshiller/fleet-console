@@ -60,6 +60,7 @@ struct ServicesModule: View {
                             console.selectedServiceID = nil
                         } label: { UnmanagedRow(process: process) }
                         .buttonStyle(.plain)
+                        .investigatable(.reference(pid: process.pid, expectedCommandLine: process.commandLine, model: model), model: model)
                         .accessibilityLabel("Inspect \(process.command), process \(process.pid)")
                     }
                 } label: {

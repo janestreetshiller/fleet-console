@@ -47,6 +47,7 @@ struct HeatmapItem: Identifiable, Equatable {
     /// Roll-up tile: small entries, the capped tail. Drawn dimmed.
     var isRemainder = false
     var action: Action = .none
+    var processStartSignature: String?
 }
 
 // MARK: - Squarified layout
@@ -141,6 +142,7 @@ struct HeatmapView: View {
     var summary: String?
     /// Live process samples should not animate dozens of tile frames each tick.
     var animatesLayout = true
+    var investigationModel: AppModel?
 
     @State private var hovered: HeatmapItem?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -201,6 +203,11 @@ struct HeatmapView: View {
     // MARK: Tile
 
     private func tile(_ item: HeatmapItem, frame: CGRect) -> some View {
+        let request: InvestigationRequest? = {
+            guard let model = investigationModel, case .selectPID(let pid) = item.action,
+                  let row = model.processes.row(pid), row.startSignature == item.processStartSignature else { return nil }
+            return .process(row, model: model)
+        }()
         let isHovered = hovered?.id == item.id
         let shape = RoundedRectangle(cornerRadius: ConsoleMetrics.mapTileCorner, style: .continuous)
         // The tile is drawn inside its computed rectangle, not on it. Neighbours
@@ -259,7 +266,16 @@ struct HeatmapView: View {
         .onHover { inside in
             hovered = inside ? item : (hovered?.id == item.id ? nil : hovered)
         }
+        .onTapGesture(count: 2) { if let model = investigationModel, let request { model.investigate(request) } }
         .onTapGesture { activate(item) }
+        .contextMenu {
+            if let model = investigationModel, let request {
+                Button("Investigate heaviest process with agent") { model.investigate(request) }
+            }
+        }
+        .accessibilityAction(named: "Investigate heaviest process with agent") {
+            if let model = investigationModel, let request { model.investigate(request) }
+        }
         .focusable(item.action != .none)
         .onKeyPress(keys: [.return, .space], phases: .down) { _ in
             guard item.action != .none else { return .ignored }

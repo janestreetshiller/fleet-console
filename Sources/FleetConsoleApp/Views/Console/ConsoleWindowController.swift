@@ -71,12 +71,35 @@ final class ConsoleWindowController {
     /// window to be late for.
     private func observeNavigationCommands() {
         let centre = NotificationCenter.default
+        navigationObservers.append(centre.addObserver(forName: ConsoleCommand.investigate, object: nil, queue: .main) { [weak self] note in
+            guard let starter = note.userInfo?["starter"] as? String,
+                  let subject = note.userInfo?["subject"] as? String,
+                  starter.utf8.count <= 17 * 1024,
+                  let request = note.object as? InvestigationRequest else { return }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let block = self.model.investigationBlock { self.model.actionError = block; return }
+                self.show()
+                if !self.tools.investigate(starter, billing: self.model.ourosBilling, subject: subject, validation: { [weak self] in
+                    guard let self, request.isFresh(at: Date()) else { return false }
+                    guard request.kind == "process" else { return true }
+                    guard let selected = request.processes.first, let current = self.model.processes.row(selected.pid) else { return false }
+                    return !selected.startSignature.isEmpty && current.startSignature == selected.startSignature
+                }) {
+                    self.model.actionError = "An investigation is already running. Finish it before starting another."
+                }
+            }
+        })
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.selectModule, object: nil, queue: .main) {
                 [console] note in
                 guard let raw = note.userInfo?[ConsoleCommand.userInfoModule] as? String,
                       let module = ConsoleModule(rawValue: raw) else { return }
-                MainActor.assumeIsolated { console.open(module) }
+                let operationsSection = note.userInfo?["operationsSection"] as? String
+                MainActor.assumeIsolated {
+                    if let operationsSection { console.operationsSection = operationsSection }
+                    console.open(module)
+                }
             })
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.showHome, object: nil, queue: .main) {
@@ -87,13 +110,15 @@ final class ConsoleWindowController {
         // window up, so it is observed here for the same reason as the two above.
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.runInTerminal, object: nil, queue: .main) {
-                [tools] note in
+                [weak self] note in
                 guard let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String else { return }
                 let directory = (note.userInfo?[ConsoleCommand.userInfoDirectory] as? String) ?? NSHomeDirectory()
                 let subject = (note.userInfo?[ConsoleCommand.userInfoSubject] as? String) ?? "Terminal"
                 MainActor.assumeIsolated {
-                    tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory),
-                                                       subject: subject))
+                    guard let self else { return }
+                    if !self.tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory), subject: subject)) {
+                        self.model.actionError = "Return to the shell after the investigation before starting another terminal command."
+                    }
                 }
             })
     }

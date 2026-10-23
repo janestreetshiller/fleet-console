@@ -35,6 +35,7 @@ struct ServicesSection: View {
                         .padding(.vertical, 4)
                     ForEach(model.unmanaged) { process in
                         UnmanagedRowView(process: process, model: model, expanded: $expanded)
+                            .investigatable(.reference(pid: process.pid, expectedCommandLine: process.commandLine, model: model), model: model)
                     }
                 } label: {
                     HStack {

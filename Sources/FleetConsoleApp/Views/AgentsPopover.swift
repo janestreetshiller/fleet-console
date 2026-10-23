@@ -318,6 +318,7 @@ struct AgentsManagerSheet: View {
                             }
                             .padding(.horizontal, FleetMetrics.gutter)
                             .padding(.vertical, FleetMetrics.rowVerticalPadding)
+                            .investigatable(.reference(pid: session.pid, expectedCommandLine: session.commandLine, model: model), model: model)
                         }
                     } else {
                         EmptyLine(text: "No sessions detected.")
