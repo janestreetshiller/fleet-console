@@ -361,7 +361,10 @@ class PackagingTests(ScriptFixture):
         self.assertTrue((self.app / "Contents/Resources/SwiftTerm.bundle/shaders.metallib").is_file())
         self.assertTrue((self.app / "Contents/Frameworks/Test.framework/inner.dylib").is_file())
         calls = self.calls()
-        self.assertTrue(all(call["tool"] in ("swift", "cargo", "xcrun", "codesign") for call in calls))
+        self.assertTrue(all(call["tool"] in ("swift", "cargo", "git", "xcrun", "codesign") for call in calls))
+        git_calls = [call for call in calls if call["tool"] == "git"]
+        self.assertEqual([call["args"] for call in git_calls],
+                         [["-C", str(self.root), "rev-parse", "--verify", "HEAD"]])
         stripping = [index for index, call in enumerate(calls) if call["tool"] == "xcrun"]
         signing = [index for index, call in enumerate(calls) if call["tool"] == "codesign"]
         self.assertEqual(len(stripping), 4)
