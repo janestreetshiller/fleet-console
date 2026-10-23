@@ -24,21 +24,19 @@ individual spikes are preserved. Disk, GPU, network and sensors expand below.
 ## One place to look
 
 One menu-bar cluster shows CPU, memory and disk use, connection state, and an attention
-count when needed. Its dropdown starts on **Quick View** and remembers your last
-tab. Quick View shows CPU and memory dials, a disk-capacity map, upload/download
-bars; **Dashboard** is in the shared header. **Services**, **Agents**, **Processes**
-and **Network** tabs remain available. Right-click or Control-click for **Quick
-View**, the dashboard, named destinations, configuration and logs. Both views
+count when needed. Its dropdown shows **Quick View**: CPU and memory dials,
+a disk-capacity map, upload/download bars and a dashboard action. The **Agent**
+menu starts an account-backed investigation of CPU, Memory, Disk or Network.
+Right-click or Control-click for **Needs Attention**, **Agents**, the dashboard,
+named destinations, configuration, logs and Help. **fleetctl Setup…** explains
+where the bundled CLI lives and can copy a controller-check command. Both views
 share the same resource probes and sampling cadence.
-
-The dropdown also opens **Needs Attention** and **Agents**, with a waiting-reply
-count when needed. **Help** links to the guide and **fleetctl Setup…**, which
-finds the CLI in the current app bundle and offers a quoted diagnostic command
-to copy into Terminal.
 
 The dashboard opens to **Overview**: CPU, GPU, memory, disk, network history, and
 large process consumers. A native sidebar leads to **Processes**, **Storage**,
-**Needs Attention**, **Services**, **Events**, and **Launch Services**. Other
+**Needs Attention**, **Operations**, **Events**, and **Launch Services**.
+Operations groups Services, Network, Agents, Storage, Events, Launch Services
+and Account in one workspace. Other
 computers appear separately with their reachability evidence.
 
 Search matches the current destination. Changing destinations clears the previous
@@ -113,7 +111,7 @@ toggle stays at the left edge; the inspector toggle stays at the right edge.
 Device fields retain their labels, selectable process rows work with the keyboard,
 and shared surfaces honor Reduce Motion and Increase Contrast.
 
-The dashboard's **Tools** menu opens Terminal and Files. Terminal is
+The dashboard's **View** menu opens Terminal and Files. Terminal is
 your shell; commands entered there become supervised only when launched through
 `fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi).
 
@@ -136,7 +134,7 @@ inventory. The controller probes reachability and reads metrics through your
 existing SSH configuration. Remote processes are read-only. Unlinking removes
 only the configuration entry. First-run setup creates no example peers.
 
-The device screen links to Ouros billing for prepaid AI credits. The Agents tab opens Ouros Agent for a credit-funded review of current problems and service records. It uses the connected Ouros account and the gateway's model catalog. Each model round is metered; a stopped or uncertain request is not retried automatically. The agent reads the supplied service snapshot and can propose a restart. You approve it separately, and the existing controller performs it only for a controller-launched service. This Mac must remain awake; deployable agents and FleetConsole MCP remain planned. The $10/month FleetConsole
+The device screen links to Ouros billing for prepaid AI credits. The Agents section in Operations opens Ouros Agent for a credit-funded review of current problems and service records. It uses the connected Ouros account and the gateway's model catalog. Each model round is metered; a stopped or uncertain request is not retried automatically. The agent reads the supplied service snapshot and can propose a restart. You approve it separately, and the existing controller performs it only for a controller-launched service. This Mac must remain awake; deployable agents and FleetConsole MCP remain planned. The $10/month FleetConsole
 subscription has a separate entitlement from Ouros Pro and does not include
 AI credits. Cancellation and payment status come from Ouros billing. See the
 [multi-device integration contract](docs/MULTI-DEVICE.md).

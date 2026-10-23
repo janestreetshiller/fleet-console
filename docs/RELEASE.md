@@ -39,7 +39,7 @@ Removing data from the current tree does not remove it from history. If history 
 
 ## Verify the release revision
 
-Use macOS 14 or later, a Swift 6 toolchain with the macOS SDK, Rust 1.80 or later, and Python 3.9 or later for staging and script checks. Run these checks on the exact source revision you plan to publish:
+Use macOS 14 or later, a Swift 6 toolchain with the macOS SDK, a current stable Rust toolchain (this release uses Rust 1.99.1), and Python 3.9 or later for staging and script checks. Run these checks on the exact source revision you plan to publish:
 
 ```bash
 for script in Scripts/*.sh; do bash -n "$script"; done

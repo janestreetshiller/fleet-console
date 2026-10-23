@@ -40,8 +40,9 @@ Source: https://github.com/janestreetshiller/fleet-console
 ## Release announcement
 
 FleetConsole keeps CPU, memory and disk-capacity meters in your menu bar. Open
-Quick View for resource dials and upload/download bars. Its five tabs share a
-compact frame; the header holds Dashboard, refresh, and configuration links.
+Quick View for resource dials and upload/download bars. The compact
+header opens the dashboard, an Agent investigation menu, and configuration links.
+Operations groups service, network, agent and account tools in the dashboard.
 
 Name and color-tag services so you can recognize them. Register agent IDs, see detected sessions and handle requests without turning the menu into a resource table. The dashboard opens to a contained overview, with a sidebar you can tuck away when you want more room for the charts.
 

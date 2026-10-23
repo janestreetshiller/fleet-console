@@ -1,7 +1,9 @@
 # Release notes
 
-## Unreleased
+## 1.2.0 — 2026-10-23
 
+- Preserve the installed metric investigation menu and consolidated Operations
+  workspace, with account-backed transport and isolated development credentials.
 - Add direct menu access to Needs Attention, Agents with waiting-reply counts,
   and Help with bundle-aware fleetctl setup. Keep the existing dashboard
   shortcuts and controller actions.
@@ -12,6 +14,8 @@
 - Restore Rust workspace builds using pinned published GPUI 0.2.2 instead of
   a removed local checkout. Make the GPUI prototype's missing integrations
   explicit, bound its diagnostic history and fix Unicode label truncation.
+
+App bundle: 1.2.0 (6), arm64. The existing controller protocol remains 1.1.0.
 
 ## 1.1.0 — the resident agent
 
