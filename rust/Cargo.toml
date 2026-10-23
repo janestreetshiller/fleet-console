@@ -27,6 +27,3 @@ fleet-proto = { path = "fleet-proto" }
 fleet-telemetry = { path = "fleet-telemetry" }
 ouros-adapter = { path = "ouros-adapter" }
 fleet-spatial = { path = "fleet-spatial" }
-
-[patch.crates-io]
-gpui = { path = "/Users/main/Code/ouros/ouros-x-terminal-release-repairs-20261018/experiments/gpui/vendor/gpui" }

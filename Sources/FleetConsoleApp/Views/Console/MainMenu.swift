@@ -9,9 +9,8 @@ import SwiftUI
 // contract expressed in AppKit: named commands, standard key equivalents,
 // routed through `ConsoleCommand` notifications the console window observes.
 //
-// Menu commands are no-ops when the console is closed — the notifications
-// simply have no observer — which is exactly how a menu-bar utility should
-// behave.
+// Navigation opens the dashboard before posting its destination command. The
+// window controller installs those observers at init, before SwiftUI renders.
 
 /// `@MainActor` on the enum rather than each member: every function here touches
 /// `NSApp`, `NSMenu` or `NSMenuItem`. The isolation was always required.
@@ -26,6 +25,7 @@ enum MainMenu {
         installEditMenu(into: mainMenu)
         installViewMenu(into: mainMenu, openConsole: openConsole)
         installWindowMenu(into: mainMenu)
+        installHelpMenu(into: mainMenu)
     }
 
     // MARK: Application
@@ -96,14 +96,10 @@ enum MainMenu {
 
         submenu.addItem(.separator())
 
-        // Home is the landing surface, so it sits above the modules — but it is
+        // Attention is the landing surface, so it sits above the modules — but it is
         // not one of them, which is why it takes a shifted equivalent and leaves
         // ⌘1…⌘n bound to exactly the module indices, whatever their count.
-        let home = submenu.addItem(withTitle: "Home",
-                                   action: #selector(MenuActionTarget.showHome),
-                                   keyEquivalent: "h")
-        home.keyEquivalentModifierMask = [.command, .shift]
-        home.target = actions
+        submenu.addItem(needsAttentionItem())
 
         for entry in moduleItems() { submenu.addItem(entry) }
 
@@ -169,6 +165,24 @@ enum MainMenu {
 
     // MARK: Shared items
 
+    static func needsAttentionItem() -> NSMenuItem {
+        let item = NSMenuItem(title: "Needs Attention",
+                              action: #selector(MenuActionTarget.showHome), keyEquivalent: "h")
+        item.keyEquivalentModifierMask = [.command, .shift]
+        item.target = MenuActionTarget.shared
+        return item
+    }
+
+    static func helpItems() -> [NSMenuItem] {
+        let guide = NSMenuItem(title: "FleetConsole Guide",
+                               action: #selector(MenuActionTarget.showGuide), keyEquivalent: "")
+        guide.target = MenuActionTarget.shared
+        let setup = NSMenuItem(title: "fleetctl Setup…",
+                               action: #selector(MenuActionTarget.showFleetctlSetup), keyEquivalent: "")
+        setup.target = MenuActionTarget.shared
+        return [guide, setup]
+    }
+
     /// The console modules as menu items, generated from `ConsoleModule.allCases`
     /// and targeted at the shared action object.
     ///
@@ -212,6 +226,59 @@ enum MainMenu {
         item.submenu = submenu
         NSApp.windowsMenu = submenu
     }
+
+    private static func installHelpMenu(into menu: NSMenu) {
+        let item = menu.addItem(withTitle: "Help", action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: "Help")
+        for entry in helpItems() { submenu.addItem(entry) }
+        item.submenu = submenu
+        NSApp.helpMenu = submenu
+    }
+}
+
+/// Setup reads the current bundle rather than assuming an installation path or
+/// modifying the person's shell. Copying the quoted command never executes it.
+@MainActor
+enum FleetctlHelp {
+    static let guideURL = URL(string: "https://github.com/janestreetshiller/fleet-console#readme")!
+    static let referenceURL = URL(string: "https://github.com/janestreetshiller/fleet-console/blob/main/docs/CLI.md")!
+
+    static func executable(resourceURL: URL?) -> URL? {
+        guard let candidate = resourceURL?.appendingPathComponent("bin/fleetctl") else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDirectory),
+              !isDirectory.boolValue,
+              FileManager.default.isExecutableFile(atPath: candidate.path) else { return nil }
+        return candidate
+    }
+
+    static func doctorCommand(executable: URL) -> String {
+        "'" + executable.path.replacingOccurrences(of: "'", with: "'\\''") + "' doctor"
+    }
+
+    static func showSetup() {
+        let alert = NSAlert()
+        let executable = executable(resourceURL: Bundle.main.resourceURL)
+        alert.messageText = "Use fleetctl from Terminal"
+        if let executable {
+            alert.informativeText = "fleetctl is included with this copy of FleetConsole. It records who started background work, why it is running, and when its lease expires.\n\nPaste this command into Terminal to check the controller:\n\n"
+                + doctorCommand(executable: executable)
+                + "\n\nUse this full path until fleetctl is on your PATH."
+            alert.addButton(withTitle: "Copy Doctor Command")
+        } else {
+            alert.informativeText = "This copy does not contain an executable fleetctl at Resources/bin/fleetctl. Packaged FleetConsole apps include it; when running from source, build the fleetctl product with Swift. The CLI reference explains commands and controller setup."
+        }
+        alert.addButton(withTitle: "CLI Reference")
+        alert.addButton(withTitle: "Close")
+        NSApp.activate(ignoringOtherApps: true)
+        let response = alert.runModal()
+        if let executable, response == .alertFirstButtonReturn {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(doctorCommand(executable: executable), forType: .string)
+        } else if response == (executable == nil ? .alertFirstButtonReturn : .alertSecondButtonReturn) {
+            NSWorkspace.shared.open(referenceURL)
+        }
+    }
 }
 
 /// Obj-C reachable target for menu items. Menus outlive any one window, so the
@@ -227,6 +294,14 @@ enum MainMenu {
 
     @objc func showConsole() {
         openConsole?()
+    }
+
+    @objc func showGuide() {
+        NSWorkspace.shared.open(FleetctlHelp.guideURL)
+    }
+
+    @objc func showFleetctlSetup() {
+        FleetctlHelp.showSetup()
     }
 
     @objc func focusSearch() {

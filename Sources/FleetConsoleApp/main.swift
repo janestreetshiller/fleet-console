@@ -183,6 +183,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         quickView.image = NSImage(systemSymbolName: "gauge.with.dots.needle.67percent", accessibilityDescription: nil)
         menu.addItem(quickView)
 
+        let attention = MainMenu.needsAttentionItem()
+        attention.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: nil)
+        menu.addItem(attention)
+
+        if FleetSection.agents.isEnabled(model.settings) {
+            let title = model.awaitingReplyCount > 0
+                ? "Agents — \(model.awaitingReplyCount) awaiting your answer" : "Agents"
+            let agents = NSMenuItem(title: title, action: #selector(showAgents), keyEquivalent: "")
+            agents.target = self
+            agents.image = NSImage(systemSymbolName: "person.2", accessibilityDescription: nil)
+            menu.addItem(agents)
+        }
+
         let dashboard = NSMenuItem(title: "Open Dashboard",
                                    action: #selector(showDashboard), keyEquivalent: "0")
         dashboard.keyEquivalentModifierMask = [.command]
@@ -236,12 +249,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(welcome)
 
         menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "Help"))
+        for item in MainMenu.helpItems() { menu.addItem(item) }
+
+        menu.addItem(.separator())
         menu.addItem(NSMenuItem(title: "Quit FleetConsole",
                                 action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return menu
     }
 
-    /// Named Quick View and Network actions select their popover section before
+    /// Named Quick View, Network and Agents actions select their section before
     /// opening it; dashboard commands keep their existing window route.
     @objc private func showQuickView() {
         model.requestedSection = .quickView
@@ -250,6 +267,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showNetwork() {
         model.requestedSection = .connections
+        fleetItem?.showPopover()
+    }
+
+    @objc private func showAgents() {
+        model.requestedSection = .agents
         fleetItem?.showPopover()
     }
 

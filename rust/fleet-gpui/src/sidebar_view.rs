@@ -1,23 +1,18 @@
 //! Descriptive Topology Map Sidebar.
 //!
-//! Replaces static tab buttons with a live, zoomable structural tree:
-//! Cluster / Host -> Runtime Core -> Active Agents -> Worker Processes -> Memory & IPC Links
-//! with telemetry-driven status glow and direct spatial focus navigation.
+//! Displays captured entities. Interactive selection is not connected in the
+//! prototype, so rows intentionally have no click or hover affordances.
 
 use crate::theme::SpatialPalette;
 use fleet_spatial::{SubsystemCategory, TopologyHierarchyNode};
 use gpui::{AnyElement, SharedString, div, prelude::*, px};
 
-pub fn render_sidebar_tree<F>(
+pub fn render_sidebar_tree(
     node: &TopologyHierarchyNode,
     depth: usize,
     selected_id: Option<&str>,
     palette: &SpatialPalette,
-    on_select: F,
-) -> AnyElement
-where
-    F: Fn(String) + Clone + 'static,
-{
+) -> AnyElement {
     let is_selected = selected_id == Some(node.id.as_str());
     let indent = px((depth as f32) * 14.0);
 
@@ -45,9 +40,6 @@ where
         SubsystemCategory::SocketEndpoint => "⇌",
     };
 
-    let node_id_for_click = node.id.clone();
-    let click_cb = on_select.clone();
-
     let mut row = div()
         .id(SharedString::from(format!("sidebar.node.{}", node.id)))
         .flex()
@@ -57,13 +49,8 @@ where
         .px_2()
         .ml(indent)
         .rounded_md()
-        .cursor_pointer()
         .when(is_selected, |this| {
             this.bg(palette.bg_card).border_1().border_color(palette.border_active)
-        })
-        .hover(|this| this.bg(palette.bg_card))
-        .on_mouse_down(gpui::MouseButton::Left, move |_, _, _cx| {
-            click_cb(node_id_for_click.clone());
         })
         .child(
             div()
@@ -99,7 +86,6 @@ where
             depth + 1,
             selected_id,
             palette,
-            on_select.clone(),
         ));
     }
 

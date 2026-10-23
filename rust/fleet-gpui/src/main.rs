@@ -1,10 +1,10 @@
 //! Fleet GPUI Application Entry Point.
 //!
-//! Provides both GUI workspace execution via GPUI and deterministic headless verification
-//! modes (`--headless`, `--verify`, `--identity`).
+//! Provides the GPUI prototype and headless snapshot inspection
+//! (`--headless`, `--verify`, `--identity`). These do not prove live integration.
 
 use fleet_gpui::app::FleetWorkspaceApp;
-use gpui::{App, AppContext, Application, Bounds, WindowBounds, WindowOptions, px, size};
+use gpui::{px, size, App, AppContext, Application, Bounds, WindowBounds, WindowOptions};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -18,7 +18,8 @@ fn main() {
                 "os": std::env::consts::OS,
                 "arch": std::env::consts::ARCH,
                 "engine": "GPUI (Rust)",
-                "adapter": "ouros-x brain bridge",
+                "adapter": "unavailable (prototype)",
+                "status": "prototype; not a replacement for FleetConsole",
                 "spatial_planes": [
                     "Topography",
                     "Brain & Agents",
@@ -31,7 +32,10 @@ fn main() {
     }
 
     if args.iter().any(|a| a == "--headless" || a == "--verify") {
-        run_headless_verification();
+        if let Err(error) = run_headless_verification() {
+            eprintln!("Snapshot unavailable: {error}");
+            std::process::exit(1);
+        }
         return;
     }
 
@@ -65,53 +69,30 @@ fn main() {
     });
 }
 
-fn run_headless_verification() {
-    println!("=== FLEET GPUI WORKSPACE: RELATIONAL SPATIAL VERIFICATION ===");
-    let mut app = FleetWorkspaceApp::new();
-
-    println!("[1/5] Verifying Relational Topology Graph (Topography Plane)...");
-    assert!(!app.graph.nodes.is_empty(), "Graph nodes must not be empty");
-    assert!(!app.graph.edges.is_empty(), "Graph edges must not be empty");
+fn run_headless_verification() -> Result<(), String> {
+    let app = FleetWorkspaceApp::new();
+    let snapshot = app.current_telemetry.snapshot().ok_or_else(|| {
+        app.current_telemetry
+            .error()
+            .unwrap_or("No measured sample")
+            .to_string()
+    })?;
     println!(
-        "      Nodes: {} | Edges: {} | Selected: {:?}",
-        app.graph.nodes.len(),
-        app.graph.edges.len(),
-        app.graph.selected_node_id
+        "{}",
+        serde_json::json!({
+            "status": "captured_snapshot_only",
+            "sample_timestamp_seconds": snapshot.timestamp_seconds,
+            "observed_processes": snapshot.processes.len(),
+            "observed_storage_pools": snapshot.storage_pools.len(),
+            "continuous_sampling": "unavailable",
+            "daemon_connection": "unavailable",
+            "agent_connection": "unavailable",
+            "thermal_measurement": "unavailable",
+            "terminal": "unavailable",
+            "service_control": "unavailable",
+            "latency_benchmark": "not measured",
+            "acceptance": "This checks one system snapshot, not GUI interaction or live feature parity."
+        })
     );
-
-    println!("[2/5] Stepping Force-Directed Physics Simulation...");
-    let initial_x = app.graph.nodes.get("ouros-core").map(|n| n.x).unwrap_or(0.0);
-    for _ in 0..10 {
-        app.tick_physics();
-    }
-    let relaxed_x = app.graph.nodes.get("ouros-core").map(|n| n.x).unwrap_or(0.0);
-    println!("      Simulation relaxed ouros-core X: {initial_x:.2} -> {relaxed_x:.2}");
-
-    println!("[3/5] Verifying Ouros-X Brain Adapter & Decision Trees...");
-    let brain_node = app.current_brain_graph.nodes.get("ouros-core").expect("ouros-core not in brain");
-    println!("      Brain Agent State: {:?}", brain_node.state);
-    println!(
-        "      Context Tokens: {} / {} ({:.1}%)",
-        brain_node.context_memory.total_tokens,
-        brain_node.context_memory.max_context_tokens,
-        brain_node.context_memory.utilization_ratio() * 100.0
-    );
-    println!("      Recent Decisions: {}", brain_node.recent_decisions.len());
-
-    println!("[4/5] Verifying Integrated Diagnostics & Remediation Overhaul...");
-    let badges = app.graph.collect_all_diagnostic_badges();
-    println!("      Collected {} active diagnostic badges directly from nodes.", badges.len());
-    for (node, badge) in &badges {
-        println!("      - [{:?}] {} on node {}", badge.severity, badge.title, node.id);
-    }
-
-    println!("[5/5] Verifying Contextual Terminal Binding...");
-    app.focus_node("ouros-core");
-    let binding = app.graph.get_contextual_terminal_binding();
-    println!("      Terminal Title: {}", binding.title);
-    println!("      PTY Command: {}", binding.pty_command);
-    println!("      Metadata: {}", binding.inspection_summary);
-
-    println!("============================================================");
-    println!("STATUS: VERIFICATION_PASSED (All 4 operational planes active)");
+    Ok(())
 }

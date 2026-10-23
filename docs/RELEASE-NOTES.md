@@ -1,5 +1,18 @@
 # Release notes
 
+## Unreleased
+
+- Add direct menu access to Needs Attention, Agents with waiting-reply counts,
+  and Help with bundle-aware fleetctl setup. Keep the existing dashboard
+  shortcuts and controller actions.
+- Correct fleetctl help and its guide to name the commands that support JSON
+  output, and document read-only offline event history.
+- Replace the obsolete Rust-port assessment with the existing GPUI prototype's
+  actual scope and required verification. Prepare plain-language app/CLI copy.
+- Restore Rust workspace builds using pinned published GPUI 0.2.2 instead of
+  a removed local checkout. Make the GPUI prototype's missing integrations
+  explicit, bound its diagnostic history and fix Unicode label truncation.
+
 ## 1.1.0 — the resident agent
 
 `fleet-agent`: a dedicated operations and routing agent that lives beside the
