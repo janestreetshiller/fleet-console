@@ -24,7 +24,7 @@ if [ "$CONFIG" = "release" ]; then
 else
     RUST_PROFILE="dev"; RUST_OUTPUT="debug"
 fi
-(cd "$ROOT/rust" && cargo build --locked --jobs 2 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
+(cd "$ROOT/rust" && cargo build --locked --jobs 1 --quiet --profile "$RUST_PROFILE" --bin fleet-agent)
 cp "$ROOT/rust/target/$RUST_OUTPUT/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
