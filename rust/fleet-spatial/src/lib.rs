@@ -659,7 +659,7 @@ impl RelationalTopologyGraph {
                         selected_id,
                         node.details.socket_addr.as_deref().unwrap_or("127.0.0.1:50139")
                     ),
-                    target_directory: Some("/Users/main/Code/ouros/ouros-x".to_string()),
+                    target_directory: None,
                     inspection_summary: format!(
                         "State: {:?} | Context Tokens: {} | Heap: {} MB",
                         node.details.agent_state.unwrap_or(AgentState::Idle),
@@ -695,7 +695,7 @@ impl RelationalTopologyGraph {
                     entity_id: selected_id.to_string(),
                     title: format!("Host Console: {}", node.label),
                     pty_command: "zsh".to_string(),
-                    target_directory: Some("/Users/main".to_string()),
+                    target_directory: None,
                     inspection_summary: format!(
                         "System Cores: Active | CPU Load: {:.1}%",
                         node.details.cpu_pct
@@ -707,7 +707,7 @@ impl RelationalTopologyGraph {
                 entity_id: "host-cluster".to_string(),
                 title: "Terminal Console".to_string(),
                 pty_command: "zsh".to_string(),
-                target_directory: Some("/Users/main".to_string()),
+                target_directory: None,
                 inspection_summary: "No entity selected.".to_string(),
             }
         }

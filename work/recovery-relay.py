@@ -7,7 +7,7 @@ import time
 
 upstream = str(Path.home() / 'Library/Application Support/FleetConsole/fleetd.sock')
 owned_socket = '/private/tmp/fleet-recovery-owner-20261013.sock'
-evidence = Path('/Users/main/Documents/Codex/2026-10-11/pl/outputs/fleet-apple-ui-e2e-2026-10-13/recovery-relay.jsonl')
+evidence = Path(os.environ['FLEET_RECOVERY_EVIDENCE']).expanduser()
 lock = threading.Lock()
 fail_once = True
 
