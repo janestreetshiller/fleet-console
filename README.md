@@ -161,6 +161,10 @@ process only; it excludes collector children and WindowServer and is not an
 on-screen idle measurement. Menu-bar interactions require a separate running-app
 check. Captures can contain real machine data; review them before sharing.
 
+`Scripts/product-detail-sheet.sh` renders only the dark Quick View and Overview
+from synthetic fixtures. It uses a disposable home, avoids keychain access and
+tool/account surfaces, and fails unless exactly those two PNGs are produced.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md), [design system](docs/DESIGN-SYSTEM.md), and
 [release guide](docs/RELEASE.md) for checks. Report sanitized bugs in
 [GitHub issues](https://github.com/janestreetshiller/fleet-console/issues) and use

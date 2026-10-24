@@ -70,6 +70,21 @@ class ScannerTests(unittest.TestCase):
 
 
 class SourcePrivacyTests(unittest.TestCase):
+    def test_bounded_product_detail_renderer_is_isolated_and_exact(self):
+        renderer = (ROOT / "Sources/FleetConsoleApp/SurfaceRenderer.swift").read_text()
+        entrypoint = (ROOT / "Sources/FleetConsoleApp/main.swift").read_text()
+        script = (ROOT / "Scripts/product-detail-sheet.sh").read_text()
+
+        self.assertIn('overviewOnlyFlag = "--render-surfaces-only"', renderer)
+        self.assertIn("OurosBilling(useKeychain: false)", renderer)
+        self.assertIn('CFFIXED_USER_HOME"] == fixtureHome', renderer)
+        self.assertIn("SurfaceRenderer.overviewOnlyFlag", entrypoint)
+        self.assertIn('CFFIXED_USER_HOME="$FIXTURE_HOME"', script)
+        self.assertIn("--render-surfaces-only", script)
+        self.assertIn('COUNT" -ne 2', script)
+        self.assertNotIn("--verify-live", script)
+        self.assertNotIn("--measure-churn", script)
+
     def test_renderer_roster_is_injected_instead_of_using_live_defaults(self):
         renderer = (ROOT / "Sources/FleetConsoleApp/SurfaceRenderer.swift").read_text()
         compact = re.sub(r"\s+", " ", renderer)
