@@ -42,4 +42,17 @@ struct ConsoleNavigationTests {
         console.open(.processes)
         #expect(console.search == "FleetConsole")
     }
+
+    @Test("The process presentation survives navigation away and back")
+    @MainActor
+    func processPresentationPersists() {
+        let console = ConsoleModel()
+        console.open(.processes)
+        console.processView = .scatter
+        console.open(.services)
+        console.open(.processes)
+        #expect(console.processView == .scatter)
+        #expect(ConsoleModel.ProcessView.allCases.map(\.rawValue)
+                == ["Relationships", "Table", "Heatmap", "Scatter"])
+    }
 }

@@ -268,6 +268,21 @@ struct ConsoleRootView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        if console.isLocalDeviceSelected && !console.atHome && console.module == .processes {
+            ToolbarItem(placement: .principal) {
+                Picker("Process view", selection: $console.processView) {
+                    ForEach(ConsoleModel.ProcessView.allCases) { view in
+                        Text(view.rawValue).tag(view)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(width: ConsoleMetrics.processViewPickerWidth)
+                .accessibilityIdentifier("process.view")
+                .help("Choose how running processes are presented")
+            }
+        }
+
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 ForEach(ConsoleTool.allCases) { tool in
