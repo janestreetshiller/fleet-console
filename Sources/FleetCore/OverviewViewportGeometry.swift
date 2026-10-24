@@ -12,11 +12,6 @@ public struct OverviewViewportGeometry: Sendable {
     public static let horizontalPadding: CGFloat = 21
     public static let verticalPadding: CGFloat = 13
     public static let gap: CGFloat = 10
-    /// One segmented control row: chart focus leading, time range trailing.
-    public static let controlRowHeight: CGFloat = 24
-    public static let stackedControlSpacing: CGFloat = 8
-    /// The width the two unlabelled segmented controls need side by side.
-    public static let controlsInlineWidth: CGFloat = 480
     public static let minimumPlotHeight: CGFloat = 89
     /// A trace taller than this stops adding legibility and starts adding air.
     public static let maximumPlotHeight: CGFloat = 377
@@ -36,7 +31,6 @@ public struct OverviewViewportGeometry: Sendable {
 
     public let contentWidth: CGFloat
     public let primaryColumns: Int
-    public let controlsStacked: Bool
     public let secondaryColumns: Int
     public let plotHeight: CGFloat
     public let processLimit: Int
@@ -46,7 +40,6 @@ public struct OverviewViewportGeometry: Sendable {
         let availableHeight = max(0, viewport.height)
         contentWidth = DashboardContentGeometry.width(available: viewport.width - Self.horizontalPadding * 2)
         primaryColumns = focused || contentWidth < 600 ? 1 : 2
-        controlsStacked = contentWidth < Self.controlsInlineWidth
         let count = max(1, instrumentCount)
         // Five concise readings still fit beside the Details action with the
         // sidebar open; wrapping that glance would spend another chart's height.
@@ -56,11 +49,9 @@ public struct OverviewViewportGeometry: Sendable {
         let cellWidth = (contentWidth - CGFloat(primaryColumns - 1) * Self.gap) / CGFloat(primaryColumns)
         let primaryChrome = cellWidth >= Self.memoryFactsRowWidth
             ? Self.primaryChromeWide : Self.primaryChromeNarrow
-        let controls = controlsStacked
-            ? Self.controlRowHeight * 2 + Self.stackedControlSpacing
-            : Self.controlRowHeight
-        // Four stacked parts: controls, primary cards, glance, processes.
-        let fixedHeight = Self.verticalPadding * 2 + controls + Self.gap * 3
+        // Three stacked parts: primary cards, glance, processes. Overview's
+        // controls live in the native toolbar, outside this viewport.
+        let fixedHeight = Self.verticalPadding * 2 + Self.gap * 2
             + CGFloat(secondaryRows) * Self.glanceRowHeight + CGFloat(secondaryRows - 1) * Self.gap
             + CGFloat(primaryRows) * primaryChrome + CGFloat(primaryRows - 1) * Self.gap
             + Self.processChrome

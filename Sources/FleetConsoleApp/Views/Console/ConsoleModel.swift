@@ -66,6 +66,11 @@ final class ConsoleModel {
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
+    /// Overview controls belong to the window ribbon, not a second row inside
+    /// the module. Window-scoped state keeps those controls and the charts in
+    /// sync while preserving the selection across navigation.
+    var overviewFocus: OverviewFocus = .both
+    var overviewTimeWindow: ChartTimeWindow = .minutes2
     /// The process module's presentation belongs to window navigation state so
     /// its selector can live in the native toolbar instead of spending a second
     /// horizontal band inside the module. Keeping it here also preserves the
@@ -158,6 +163,14 @@ final class ConsoleModel {
         case table = "Table"
         case heatmap = "Heatmap"
         case scatter = "Scatter"
+
+        var id: String { rawValue }
+    }
+
+    enum OverviewFocus: String, CaseIterable, Identifiable {
+        case both = "CPU & Memory"
+        case cpu = "CPU"
+        case memory = "Memory"
 
         var id: String { rawValue }
     }

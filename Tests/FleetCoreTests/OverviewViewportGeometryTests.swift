@@ -21,7 +21,6 @@ struct OverviewViewportGeometryTests {
         #expect(layout.plotHeight >= 89)
         #expect(layout.requiredHeight <= 638)
         #expect(layout.contentWidth == 940)
-        #expect(!layout.controlsStacked)
     }
 
     @Test("A revealed sidebar still leaves both primary plots and the battery glance inside the compact height")
