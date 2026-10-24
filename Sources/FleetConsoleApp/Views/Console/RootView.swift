@@ -57,7 +57,7 @@ struct ConsoleRootView: View {
         // animation watches now — the slide is unchanged, the drag is direct.
         .animation(ConsoleAnimation.column, value: tools.revealed)
         .environment(\.isLiveResizing, console.isLiveResizing)
-        .sketchSubstrate(seed: 0.11, grainSeed: 11)
+        .opaqueLiquidGlassScene()
         .background {
             // Measured on the full frame — the inset's own width is derived from
             // this, so reading it from inside the inset would be circular.
