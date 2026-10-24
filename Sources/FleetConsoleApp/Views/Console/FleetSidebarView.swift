@@ -44,10 +44,9 @@ struct FleetSidebarView: View {
         }
         .font(ConsoleFont.rowTitle)
         .listStyle(.sidebar)
-        // The mesh sits on the page like everything else. Without this the
-        // sidebar column paints AppKit's own vibrancy over the field, and the
-        // window has one column that is not on the same sheet of paper as the
-        // other two.
+        // The mesh shares the window-wide glass field. Letting List install its
+        // own scroll backdrop would turn the sidebar into a second material
+        // layer and break the scene at the split-view seam.
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .bottom, spacing: 0) { profileCard }
         // The column width is set by `ConsoleRootView`, not here: the resting

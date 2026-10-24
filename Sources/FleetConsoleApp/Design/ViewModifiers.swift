@@ -10,9 +10,8 @@ import AppKit
 // MARK: - Vibrancy
 
 /// AppKit-backed material fill. SwiftUI's `Material` does not expose
-/// `NSVisualEffectView`'s `behindWindow` blending state in every context, so
-/// the one place that needs a guaranteed native backdrop (floating panels,
-/// titlebar accessories) goes through the real thing.
+/// `NSVisualEffectView`'s blending state in every context, so the pre-Liquid
+/// Glass scene fallback goes through the real thing.
 struct VisualEffectBackground: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .underWindowBackground
     var blendingMode: NSVisualEffectView.BlendingMode = .behindWindow
@@ -30,6 +29,67 @@ struct VisualEffectBackground: NSViewRepresentable {
         nsView.material = material
         nsView.blendingMode = blendingMode
         nsView.state = emphasized ? .active : .followsWindowActiveState
+    }
+}
+
+// MARK: - Window scene
+
+/// One continuous, opaque glass field for the console window.
+///
+/// Liquid Glass is the scene's substrate, rather than a stack of glass cards:
+/// the sidebar, module, inspector and tool chrome all share this one field. A
+/// fully opaque AppKit window colour remains behind the effect, so wallpaper
+/// and windows below FleetConsole never reduce telemetry contrast.
+struct OpaqueLiquidGlassScene: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            ZStack {
+                opaqueBase
+                Rectangle()
+                    .fill(.clear)
+                    .glassEffect(
+                        .regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.72)),
+                        in: Rectangle()
+                    )
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                // The scene is intentionally opaque: glass supplies the native
+                // light response, while this veil guarantees a stable field in
+                // screen capture, inactive windows and high-contrast desktops.
+                Color(nsColor: .windowBackgroundColor).opacity(0.90)
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                content
+            }
+        } else {
+            ZStack {
+                opaqueBase
+                VisualEffectBackground(
+                    material: .underWindowBackground,
+                    blendingMode: .withinWindow
+                )
+                Color(nsColor: .windowBackgroundColor).opacity(0.38)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                content
+            }
+        }
+    }
+
+    private var opaqueBase: some View {
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+
+extension View {
+    func opaqueLiquidGlassScene() -> some View {
+        modifier(OpaqueLiquidGlassScene())
     }
 }
 
