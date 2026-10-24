@@ -5,6 +5,23 @@ import Testing
 
 @Suite(.serialized)
 struct SurfaceDensityTests {
+    @MainActor @Test("The window-wide glass scene has an opaque system backing")
+    func opaqueGlassWindowChrome() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+            styleMask: [.titled, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+
+        ConsoleWindowController.configureSceneChrome(window)
+
+        #expect(window.isOpaque)
+        #expect(window.backgroundColor.alphaComponent == 1)
+        #expect(window.titlebarAppearsTransparent)
+        #expect(window.toolbarStyle == .unifiedCompact)
+    }
+
     @MainActor @Test("A module's control row is one quiet line, not a second toolbar")
     func quietControlRow() {
         let view = NSHostingView(rootView: ModuleControlBar {

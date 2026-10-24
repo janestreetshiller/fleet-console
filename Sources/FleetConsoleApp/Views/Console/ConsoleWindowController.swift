@@ -144,8 +144,7 @@ final class ConsoleWindowController {
             backing: .buffered, defer: false)
         window.title = "FleetConsole"
         window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.toolbarStyle = .unifiedCompact
+        Self.configureSceneChrome(window)
         installInspectorToggle(on: window)
         // The titlebar remains draggable. Treating the entire live dashboard as
         // a drag region makes AppKit walk every chart/gauge path on each update.
@@ -219,6 +218,17 @@ final class ConsoleWindowController {
         // console never opens cramped.
         window.setContentSize(defaultContentSize)
         if activate { window.center() }
+    }
+
+    /// Keep the system toolbar and the SwiftUI scene on one continuous glass
+    /// field while guaranteeing that the window itself remains opaque.
+    /// Internal so the release contract is testable without opening the live
+    /// dashboard and starting its refresh cycle.
+    static func configureSceneChrome(_ window: NSWindow) {
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
+        window.titlebarAppearsTransparent = true
+        window.toolbarStyle = .unifiedCompact
     }
 
     /// Reserve the right titlebar edge independently of SwiftUI toolbar ordering.
