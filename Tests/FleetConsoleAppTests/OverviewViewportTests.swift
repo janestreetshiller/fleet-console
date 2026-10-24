@@ -90,28 +90,35 @@ struct OverviewViewportTests {
         return boxed.rectValue
     }
 
-    @MainActor @Test("Chart focus and every time range remain live native controls")
+    @MainActor @Test("Chart controls live outside Overview in one toolbar row and remain functional")
     func focusAndTimeControls() throws {
-        let window = host(OverviewModule(model: AppModel(), console: ConsoleModel()),
-                          size: NSSize(width: 982, height: 638))
-        defer { window.orderOut(nil) }
-        let root = try #require(window.contentView)
-        let picker = try #require(element("overview.focus", in: root))
-        try click(try #require(labelled("CPU", in: picker)), in: window)
+        let model = AppModel()
+        let console = ConsoleModel()
+        let moduleWindow = host(OverviewModule(model: model, console: console),
+                                size: NSSize(width: 982, height: 638))
+        let toolbarWindow = host(OverviewToolbarControls(console: console),
+                                 size: NSSize(width: 520, height: 32))
+        defer { moduleWindow.orderOut(nil); toolbarWindow.orderOut(nil) }
+        let root = try #require(moduleWindow.contentView)
+        let toolbar = try #require(toolbarWindow.contentView)
+        #expect(element("overview.focus", in: root) == nil)
+        #expect(element("overview.time", in: root) == nil)
+        let picker = try #require(element("overview.focus", in: toolbar))
+        try click(try #require(labelled("CPU", in: picker)), in: toolbarWindow)
         settle()
         #expect(element("overview.cpu", in: root) != nil)
         #expect(element("overview.memory", in: root) == nil)
-        try click(try #require(labelled("Memory", in: picker)), in: window)
+        try click(try #require(labelled("Memory", in: picker)), in: toolbarWindow)
         settle()
         #expect(element("overview.cpu", in: root) == nil)
         #expect(element("overview.memory", in: root) != nil)
-        try click(try #require(labelled("CPU & Memory", in: picker)), in: window)
+        try click(try #require(labelled("CPU & Memory", in: picker)), in: toolbarWindow)
         settle()
         #expect(element("overview.cpu", in: root) != nil)
         #expect(element("overview.memory", in: root) != nil)
         for range in ChartTimeWindow.allCases {
-            let time = try #require(element("overview.time", in: root))
-            try click(try #require(labelled(range.label, in: time)), in: window)
+            let time = try #require(element("overview.time", in: toolbar))
+            try click(try #require(labelled(range.label, in: time)), in: toolbarWindow)
             settle()
             #expect(labels(in: root).contains { $0.contains("\(range.rawValue) seconds displayed") })
         }
