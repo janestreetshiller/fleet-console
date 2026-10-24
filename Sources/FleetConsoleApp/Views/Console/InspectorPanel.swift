@@ -14,7 +14,6 @@ struct InspectorPanel: View {
             inspectorBody
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.35))
         // Bounded like the sidebar is — under ~280pt every value truncates, and
         // past ~420pt the column stops being a margin note and starts competing
         // with the module it is annotating. The bounds themselves are applied by

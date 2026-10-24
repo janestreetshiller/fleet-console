@@ -301,7 +301,6 @@ private struct ChromeRail: View {
         .padding(.horizontal, ConsoleToolMetrics.railSpacing)
         .padding(.top, ConsoleToolMetrics.railSpacing)
         .frame(width: ChromeRailMetrics.railWidth)
-        .background(.ultraThinMaterial)
         .overlay(alignment: .leading) {
             Rectangle()
                 .fill(ConsoleColor.hairline)
@@ -372,7 +371,6 @@ private struct ChromeToolPanel: View {
             }
         }
         .frame(width: width)
-        .background(VisualEffectBackground(material: .sidebar, blendingMode: .withinWindow))
         // Nothing this panel contains may draw outside it. `frame(width:)`
         // proposes a width; it does not enforce one, so a subview that reports a
         // larger ideal size — a chip row, a terminal laid out to a stale grid —
