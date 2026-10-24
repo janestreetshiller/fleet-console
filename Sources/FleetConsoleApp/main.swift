@@ -336,6 +336,9 @@ MainActor.assumeIsolated {
     // -DFLEET_SURFACE_RENDERER. Runs the whole UI against fixtures, writes a PNG
     // per surface, and exits without ever putting an item in the menu bar.
     #if FLEET_SURFACE_RENDERER
+    // Validate the bounded fixture mode before any live-verification entrypoint.
+    if CommandLine.arguments.contains(SurfaceRenderer.overviewOnlyFlag),
+       SurfaceRenderer.runIfRequested() { exit(0) }
     if LiveVerification.runIfRequested() { exit(0) }
     if SurfaceRenderer.runIfRequested() { exit(0) }
     #endif
