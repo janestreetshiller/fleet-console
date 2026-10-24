@@ -268,7 +268,11 @@ struct ConsoleRootView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if console.isLocalDeviceSelected && !console.atHome && console.module == .processes {
+        if console.isLocalDeviceSelected && !console.atHome && console.module == .overview {
+            ToolbarItem(placement: .principal) {
+                OverviewToolbarControls(console: console)
+            }
+        } else if console.isLocalDeviceSelected && !console.atHome && console.module == .processes {
             ToolbarItem(placement: .principal) {
                 Picker("Process view", selection: $console.processView) {
                     ForEach(ConsoleModel.ProcessView.allCases) { view in
@@ -345,5 +349,40 @@ struct ConsoleRootView: View {
             if let found = findSearchField(in: subview) { return found }
         }
         return nil
+    }
+}
+
+/// Overview's complete control surface in one native-toolbar row. The module
+/// itself starts immediately with the charts; it never draws a second ribbon.
+struct OverviewToolbarControls: View {
+    @Bindable var console: ConsoleModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Picker("Chart focus", selection: $console.overviewFocus) {
+                ForEach(ConsoleModel.OverviewFocus.allCases) { focus in
+                    Text(focus.rawValue).tag(focus)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityIdentifier("overview.focus")
+            .help("Give CPU or memory the full chart width")
+
+            Picker("Time range", selection: $console.overviewTimeWindow) {
+                ForEach(ChartTimeWindow.allCases, id: \.self) { window in
+                    Text(window.label).tag(window)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityIdentifier("overview.time")
+            .help("Zoom the visible time range without averaging samples")
+        }
+        .controlSize(.small)
+        .fixedSize()
+        .accessibilityElement(children: .contain)
     }
 }
