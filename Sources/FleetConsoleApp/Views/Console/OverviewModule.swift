@@ -15,11 +15,10 @@ struct OverviewModule: View {
 
     private var system: SystemMonitor { model.system }
 
-    private enum Focus: String, CaseIterable { case both = "CPU & Memory", cpu = "CPU", memory = "Memory" }
-    @State private var focus: Focus = .both
-    @State private var timeWindow: ChartTimeWindow = .minutes2
     @State private var moreMetrics = false
-    private var timeRange: ClosedRange<Date> { timeWindow.range(endingAt: system.sampledAt) }
+    private var focus: ConsoleModel.OverviewFocus { console.overviewFocus }
+    private var timeWindow: ChartTimeWindow { console.overviewTimeWindow }
+    private var timeRange: ClosedRange<Date> { console.overviewTimeWindow.range(endingAt: system.sampledAt) }
 
     var body: some View {
         GeometryReader { geometry in
@@ -28,13 +27,6 @@ struct OverviewModule: View {
             let layout = OverviewViewportGeometry(viewport: geometry.size, focused: focus != .both,
                                                   instrumentCount: system.power.hasBattery ? 5 : 4)
             VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
-                if layout.controlsStacked {
-                    VStack(alignment: .leading, spacing: OverviewViewportGeometry.stackedControlSpacing) {
-                        focusPicker; timePicker
-                    }
-                } else {
-                    ModuleControlBar { focusPicker } trailing: { timePicker }
-                }
                 QuantizedCardGrid(
                     minimumCellWidth: (layout.contentWidth - CGFloat(layout.primaryColumns - 1) * OverviewViewportGeometry.gap) / CGFloat(layout.primaryColumns),
                     maximumColumns: layout.primaryColumns,
@@ -104,19 +96,8 @@ struct OverviewModule: View {
         .actionErrorAlert(model: model)
     }
 
-    private var focusPicker: some View {
-        Picker("Chart focus", selection: $focus) {
-            ForEach(Focus.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .fixedSize()
-        .accessibilityIdentifier("overview.focus")
-        .help("Give CPU or memory the full chart width")
-    }
-
     private var timePicker: some View {
-        Picker("Time range", selection: $timeWindow) {
+        Picker("Time range", selection: $console.overviewTimeWindow) {
             ForEach(ChartTimeWindow.allCases, id: \.self) { Text($0.label).tag($0) }
         }
         .pickerStyle(.segmented)

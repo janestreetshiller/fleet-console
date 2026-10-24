@@ -35,6 +35,15 @@ struct SurfaceDensityTests {
         #expect(size.width == 700)
     }
 
+    @MainActor @Test("Overview toolbar controls occupy one compact row")
+    func overviewToolbarIsOneRow() {
+        let view = NSHostingView(rootView: OverviewToolbarControls(console: ConsoleModel()))
+        let size = view.fittingSize
+        print("Overview toolbar controls: \(size)")
+        #expect(size.height <= 24)
+        #expect(size.width < 520)
+    }
+
     @MainActor @Test("The process glance is a bounded ranking rather than a scrolling table")
     func processGlanceFits() async throws {
         let model = AppModel()
