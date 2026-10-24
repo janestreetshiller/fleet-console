@@ -24,6 +24,8 @@ import FleetCore
 @MainActor
 enum SurfaceRenderer {
     nonisolated static let flag = "--render-surfaces"
+    /// A bounded product-detail export: two fixture views, no tool or account surfaces.
+    nonisolated static let overviewOnlyFlag = "--render-surfaces-only"
 
     /// The console window's canonical size, and the popover's own width.
     private static let popoverWidth: CGFloat = FleetMetrics.popoverWidth
@@ -33,6 +35,13 @@ enum SurfaceRenderer {
     static let churnFlag = "--measure-churn"
 
     static func runIfRequested() -> Bool {
+        let overviewOnly = CommandLine.arguments.contains(overviewOnlyFlag)
+        if overviewOnly && (!CommandLine.arguments.contains(flag)
+            || CommandLine.arguments.contains(churnFlag)
+            || CommandLine.arguments.contains("--verify-live")) {
+            fputs("--render-surfaces-only requires --render-surfaces <directory> and cannot run live verification or probes.\n", stderr)
+            exit(2)
+        }
         if CommandLine.arguments.contains(churnFlag) {
             measureChurn()
             return true
@@ -46,13 +55,24 @@ enum SurfaceRenderer {
         let out = URL(fileURLWithPath: arguments[index + 1], isDirectory: true)
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
+        if overviewOnly {
+            // Model construction reads settings and initializes a trial clock.
+            // Keep both in a process-local fixture home, never the operator's state.
+            let fixtureHome = out.appendingPathComponent("fixture-home").standardizedFileURL.path
+            guard ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] == fixtureHome,
+                  FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path == fixtureHome else {
+                fputs("Bounded capture requires CFFIXED_USER_HOME=<output-directory>/fixture-home.\n", stderr)
+                exit(2)
+            }
+        }
+
         // Offscreen windows still need a running NSApplication for layout,
         // fonts and appearance resolution — but not an activated one.
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         app.finishLaunching()
 
-        render(into: out)
+        render(into: out, overviewOnly: overviewOnly)
         return true
     }
 
@@ -128,8 +148,10 @@ enum SurfaceRenderer {
 
     // MARK: - The run
 
-    private static func render(into out: URL) {
-        let model = AppModel()
+    private static func render(into out: URL, overviewOnly: Bool = false) {
+        let model = overviewOnly
+            ? AppModel(billing: OurosBilling(useKeychain: false))
+            : AppModel()
         // Only aggregate system telemetry stays live. Process and network
         // identity collectors are disabled in this explicit fixture mode.
         DaemonClient.shared.stop()
@@ -167,8 +189,26 @@ enum SurfaceRenderer {
         // to the running app, not to the public fixture sheet.
         VLANRegistry.shared.adopt(Fixtures.segments)
 
-        for appearance in Appearance.allCases {
+        for appearance in (overviewOnly ? [Appearance.dark] : Appearance.allCases) {
             NSApp.appearance = NSAppearance(named: appearance.name)
+            if overviewOnly {
+                // These are the shipping view implementations with synthetic data.
+                // Do not traverse tool panels: terminal/files can create processes.
+                model.requestedSection = .quickView
+                renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {}, registration: registration)),
+                                     named: "popover-quick-view", model: model, fixture: fixture,
+                                     appearance: appearance, into: out)
+                let controller = ConsoleWindowController(model: model)
+                controller.console.atHome = false
+                controller.console.module = .overview
+                controller.show(activate: false)
+                guard let window = controller.window else { fatalError("No fixture overview window") }
+                window.appearance = NSAppearance(named: appearance.name)
+                hold(model, fixture)
+                capture(window, to: out.appendingPathComponent("console-overview-\(appearance.rawValue).png"))
+                window.orderOut(nil)
+                continue
+            }
             renderMenuBar(model: model, appearance: appearance, into: out)
             renderPopover(model: model, fixture: fixture, registration: registration, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
