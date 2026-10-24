@@ -66,6 +66,11 @@ final class ConsoleModel {
 
     /// The active module for the selected device.
     var module: ConsoleModule = .overview
+    /// The process module's presentation belongs to window navigation state so
+    /// its selector can live in the native toolbar instead of spending a second
+    /// horizontal band inside the module. Keeping it here also preserves the
+    /// choice while someone checks another module and returns.
+    var processView: ProcessView = .relationships
     var operationsSection = "Services"
     private var effectiveModule: ConsoleModule {
         guard module == .services else { return module }
@@ -146,6 +151,15 @@ final class ConsoleModel {
         /// heatmap is drawn from the filtered rows. `all` — the unfiltered
         /// view — is free; everything that narrows it is not.
         var isPremium: Bool { self != .all }
+    }
+
+    enum ProcessView: String, CaseIterable, Identifiable {
+        case relationships = "Relationships"
+        case table = "Table"
+        case heatmap = "Heatmap"
+        case scatter = "Scatter"
+
+        var id: String { rawValue }
     }
 
     var isLocalDeviceSelected: Bool { selectedDeviceID == "self" }

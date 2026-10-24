@@ -118,6 +118,10 @@ enum ConsoleMetrics {
     static var modulePickerWidth: CGFloat {
         modulePickerSegment * CGFloat(ConsoleModule.allCases.count)
     }
+    /// The process presentation picker occupies the toolbar's centred slot.
+    /// One ladder rung keeps all four full labels legible without claiming the
+    /// remaining width that belongs to Tools, refresh and search.
+    static let processViewPickerWidth: CGFloat = 377
 
     // MARK: The two side columns
     //
