@@ -31,7 +31,6 @@ struct OperationsWorkspace: View {
 struct ProcessWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
-    @State private var visualization = "Relationships"
     @State private var scatterMemory: Double?
     private var matchingRows: [ProcessRow] {
         let query = console.search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -39,18 +38,15 @@ struct ProcessWorkspace: View {
             || String($0.pid).contains(query) || $0.commandLine.localizedCaseInsensitiveContains(query) }
     }
     var body: some View {
-        VStack(spacing: 8) {
-            Picker("Process view", selection: $visualization) {
-                ForEach(["Relationships", "Table", "Heatmap", "Scatter"], id: \.self) { Text($0).tag($0) }
-            }.pickerStyle(.segmented).padding(.horizontal, ConsoleMetrics.gutter)
-            switch visualization {
-            case "Table": ProcessModule(model: model, console: console)
-            case "Heatmap":
+        Group {
+            switch console.processView {
+            case .table: ProcessModule(model: model, console: console)
+            case .heatmap:
                 HeatmapView(items: ProcessHeatmap.items(from: matchingRows),
                             summary: "Area: resident memory · color: CPU · groups select their heaviest process", animatesLayout: false, investigationModel: model)
                     .padding(ConsoleMetrics.gutter)
-            case "Scatter": scatter
-            default: ProcessRelationsView(model: model, console: console)
+            case .scatter: scatter
+            case .relationships: ProcessRelationsView(model: model, console: console)
             }
         }
         .actionErrorAlert(model: model)
