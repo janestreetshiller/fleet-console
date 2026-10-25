@@ -69,6 +69,59 @@ struct TerminalAgentSessionTests {
         #expect(agent.policy.contains("external agent"))
     }
 
+    @MainActor @Test("A process exit is recorded even while a descendant keeps the PTY open")
+    func exitBeforePTYEOF() async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = try script("#!/bin/sh\ntrap '' HUP\nsleep 2 &\nprintf 'EXIT-BEFORE-EOF\\n'\nexit 7\n", directory: directory)
+        let panel = TerminalPanel()
+        #expect(panel.startAgent(request(executable: executable)))
+        panel.resize(to: TerminalGrid(columns: 60, rows: 18))
+        let agent = try #require(panel.selectedAgent)
+        defer { panel.windowClosed() }
+        try await waitUntil { if case .exited = agent.pty.phase { return true }; return false }
+        #expect(agent.status == "Exited 7 · review output")
+        #expect(panel.closeSelectedAgent(), "A reaped child cannot permanently consume a session slot")
+    }
+
+    @MainActor @Test("Stop completes when SwiftTerm has already stopped tracking a live child")
+    func stopAfterPTYEOF() async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = try script("""
+        #!/bin/sh
+        trap '' TERM HUP
+        printf 'ready' > "$1"
+        exec </dev/null >/dev/null 2>&1
+        while :; do sleep 1; done
+        """, directory: directory)
+        let ready = directory.appendingPathComponent("ready")
+        let panel = TerminalPanel()
+        #expect(panel.startAgent(request(executable: executable, prompt: ready.path)))
+        panel.resize(to: TerminalGrid(columns: 60, rows: 18))
+        let agent = try #require(panel.selectedAgent)
+        let pid = agent.pty.host.terminal.process.shellPid
+        defer {
+            // Bound a failing regression too; never signal an unrelated/recycled PID.
+            var child = siginfo_t()
+            if waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0, getpgid(pid) == pid {
+                kill(-pid, SIGKILL)
+            }
+            panel.windowClosed()
+        }
+        try await waitUntil { FileManager.default.fileExists(atPath: ready.path) }
+        // SwiftTerm can clear `running` independently of the child lifetime.
+        // Exercise that state deterministically with its public teardown API;
+        // the fixture ignores TERM and keeps running without any PTY handles.
+        agent.pty.host.terminal.process.terminate()
+        #expect(!agent.pty.host.terminal.process.running)
+        #expect(kill(pid, 0) == 0, "A closed PTY is not proof of process exit")
+        panel.stopSelectedAgent()
+        try await waitUntil { agent.pty.phase == .exited(nil) }
+        #expect(kill(pid, 0) != 0)
+        #expect(panel.closeSelectedAgent())
+    }
+
     @MainActor @Test("Real PTYs isolate agent argv, working directory, shell and simultaneous sessions")
     func realSessionIsolation() async throws {
         let app = NSApplication.shared
@@ -189,6 +242,66 @@ struct TerminalAgentSessionTests {
         tools.invalidateGeometry()
         tools.flushGeometry()
         #expect(agent.pty.launch != nil)
+    }
+
+    @MainActor @Test("Application-exit cleanup joins new and already pending process-group stops", arguments: [false, true])
+    func quitWaitsForCleanup(alreadyStopping: Bool) async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = try script("""
+        #!/bin/sh
+        trap '' TERM HUP
+        /bin/sh -c 'trap "" TERM HUP; while :; do sleep 1; done' &
+        printf 'QUIT-CHILD:%s\\n' "$!"
+        wait
+        """, directory: directory)
+        let session = PTYSession(refusesBelowMinimum: false)
+        session.settle(TerminalGrid(columns: 60, rows: 18))
+        session.ensureRunning(PTYSession.Launch(executable: executable,
+            workingDirectory: directory, environment: ToolBinary.environment(withSearchPath: true)))
+        defer { session.terminate() }
+        try await waitUntil { text(session.host).contains("QUIT-CHILD:") }
+        let digits = try #require(text(session.host).components(separatedBy: "QUIT-CHILD:").last?.prefix(while: { $0.isNumber }))
+        let descendant = try #require(Int32(digits))
+        let pid = session.host.terminal.process.shellPid
+        if alreadyStopping { session.terminate() }
+        let start = ContinuousClock.now
+        if ProcessInfo.processInfo.environment["FLEET_TEST_TERMINATION_NOTIFICATION"] == "1" {
+            // The acceptance harness selects only this case in its own process:
+            // posting a process-wide quit notification during other PTY tests
+            // would correctly stop their children too.
+            try #require(ProcessInfo.processInfo.arguments.contains("TerminalAgentSessionTests/quitWaitsForCleanup"))
+            NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: NSApp)
+            #expect(kill(pid, 0) != 0, "The actual quit observer must join escalation before returning")
+        }
+        session.terminate(waitForExit: true)
+        #expect(ContinuousClock.now - start < .seconds(6))
+        #expect(kill(pid, 0) != 0, "Quit cannot return while its direct child is unreaped")
+        try await waitUntil { kill(descendant, 0) != 0 }
+        try await waitUntil { session.phase == .exited(nil) }
+    }
+
+    @MainActor @Test("Restart waits for cleanup before reusing SwiftTerm's process and input path")
+    func restartWaitsForCleanup() async throws {
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let executable = try script("#!/bin/sh\ntrap '' TERM HUP\nprintf 'RESTART-READY\\n'\nwhile :; do sleep 1; done\n", directory: directory)
+        let session = PTYSession(refusesBelowMinimum: false)
+        session.settle(TerminalGrid(columns: 60, rows: 18))
+        session.ensureRunning(PTYSession.Launch(executable: executable,
+            workingDirectory: directory, environment: ToolBinary.environment(withSearchPath: true)))
+        defer { session.terminate() }
+        try await waitUntil { text(session.host).contains("RESTART-READY") }
+        let oldPID = session.host.terminal.process.shellPid
+        session.restart(PTYSession.Launch(executable: URL(fileURLWithPath: "/bin/cat"),
+            workingDirectory: directory, environment: []))
+        #expect(session.phase == .stopping)
+        #expect(session.host.terminal.process.shellPid == oldPID)
+        session.send("REPLACEMENT-INPUT\\n")
+        try await waitUntil { session.phase == .running }
+        #expect(session.host.terminal.process.shellPid != oldPID)
+        #expect(kill(oldPID, 0) != 0)
+        try await waitUntil { text(session.host).contains("REPLACEMENT-INPUT") }
     }
 
     @MainActor @Test("Stopping reaps stubborn children in the app-owned group before allowing Close")
