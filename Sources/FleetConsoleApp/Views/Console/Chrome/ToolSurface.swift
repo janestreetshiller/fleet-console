@@ -253,6 +253,14 @@ final class ToolSurfaceRegistry {
     func deactivateAll() {
         for surface in surfaces.values { surface.deactivate() }
     }
+
+    func closeTerminalSessions() {
+        (surfaces[.terminal] as? TerminalPanel)?.windowClosed()
+    }
+
+    func resumeTerminal() {
+        (surfaces[.terminal] as? TerminalPanel)?.windowReopened()
+    }
 }
 
 /// Shared "this panel cannot draw itself yet" state. Used by a surface whose

@@ -32,6 +32,12 @@ protocol PTYBackedSurface: ToolSurface {
     /// columns against what is actually left, or it hands back a grid that does
     /// not fit the panel it measured.
     var reservedWidth: CGFloat { get }
+    /// Actual height spent on controls above the emulator, not terminal rows.
+    var chromeHeight: CGFloat { get }
+}
+
+extension PTYBackedSurface {
+    var chromeHeight: CGFloat { 0 }
 }
 
 // MARK: - Font and cell
@@ -191,11 +197,28 @@ private final class ProcessReaper: @unchecked Sendable {
         reapNow()
     }
 
-    func reapNow() {
+    func reapNow(completion: (@MainActor @Sendable () -> Void)? = nil) {
         guard let process, process.running else { return }
         let pid = process.shellPid
-        process.terminate()
-        ProcessReaper.wait(for: pid)
+        // forkpty makes the child a new session/group leader. Never signal our
+        // own group, a recycled pid, or a group we did not create.
+        let group: pid_t? = pid > 0 && getpgid(pid) == pid && pid != getpgrp() ? pid : nil
+        if let group { kill(-group, SIGTERM) }
+        process.terminate() // Cancels SwiftTerm's monitor and closes the owned PTY.
+        Task.detached(priority: .utility) {
+            // Keep the direct child unreaped until escalation, reserving its pid
+            // and group identity even if it exits before a stubborn descendant.
+            try? await Task.sleep(for: .seconds(2))
+            var child = siginfo_t()
+            let stillOwned = pid > 0 && waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0
+            if stillOwned {
+                if let group, getpgid(pid) == group { kill(-group, SIGKILL) }
+                else if group == nil { kill(pid, SIGKILL) }
+            }
+            var status: Int32 = 0
+            if pid > 0 { _ = waitpid(pid, &status, 0) }
+            await completion?()
+        }
     }
 
     /// `SIGTERM` is asynchronous, so the wait cannot happen inline. Escalates
@@ -383,6 +406,7 @@ final class PTYSession {
     enum Phase: Equatable {
         case idle
         case running
+        case stopping
         /// Raw `wait` status, as SwiftTerm hands it over.
         case exited(Int32?)
     }
@@ -410,6 +434,7 @@ final class PTYSession {
     @ObservationIgnored private let reaper = ProcessReaper()
     /// A launch that is waiting for its first settled grid.
     @ObservationIgnored private var deferredLaunch: Launch?
+    @ObservationIgnored private var generation = UUID()
     /// Keystrokes sent before the child exists. The PTY would buffer them for
     /// a running shell anyway; this only covers the gap before `forkpty`.
     @ObservationIgnored private var pendingInput: [String] = []
@@ -443,6 +468,7 @@ final class PTYSession {
     /// the whole point of keeping it warm.
     func ensureRunning(_ launch: Launch) {
         guard phase != .running else { return }
+        if phase == .stopping { deferredLaunch = launch; return }
         spawn(launch)
     }
 
@@ -467,7 +493,7 @@ final class PTYSession {
             forwarded = grid
             host.apply(grid)
         }
-        if let deferred = deferredLaunch {
+        if phase != .stopping, let deferred = deferredLaunch {
             deferredLaunch = nil
             spawn(deferred)
         }
@@ -483,9 +509,22 @@ final class PTYSession {
     }
 
     func terminate() {
-        guard phase == .running else { return }
-        reaper.reapNow()
-        phase = .exited(nil)
+        deferredLaunch = nil
+        pendingInput.removeAll()
+        guard phase == .running else {
+            if phase == .idle { phase = .exited(nil) }
+            return
+        }
+        phase = .stopping
+        let outgoing = generation
+        reaper.reapNow { [weak self] in
+            guard let self, self.generation == outgoing, self.phase == .stopping else { return }
+            self.phase = .exited(nil)
+            if let deferred = self.deferredLaunch {
+                self.deferredLaunch = nil
+                self.spawn(deferred)
+            }
+        }
     }
 
     private func spawn(_ launch: Launch) {
@@ -496,6 +535,7 @@ final class PTYSession {
             deferredLaunch = launch
             return
         }
+        generation = UUID()
         host.apply(grid)
         self.launch = launch
         host.terminal.startProcess(executable: launch.executable.path,
@@ -525,7 +565,7 @@ final class PTYSession {
     fileprivate func childExited(status: Int32?) {
         // An exit we did not ask for. Ignore the late report of a child we
         // replaced ourselves — that one is already accounted for.
-        guard host.terminal.process?.running != true else { return }
+        guard phase != .stopping, host.terminal.process?.running != true else { return }
         phase = .exited(status)
         // The scrollback is the evidence for *why* it exited, so the view keeps
         // showing it and the chrome's running indicator carries the fact. The
