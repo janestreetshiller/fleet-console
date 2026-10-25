@@ -141,7 +141,10 @@ struct TerminalOutputTests {
         panel.run("stty -echo; if [ -n \"$ZSH_VERSION\" ]; then unsetopt zle; fi; PS1=''; PS2=''; RPROMPT=''; printf '\\033[2J\\033[HAGENT-READY\\n'")
         try await waitFor(terminal, containing: "AGENT-READY")
         let questionArgument = styled ? "--prompt-file " + shellQuote(promptFile.path) : shellQuote(prompt)
-        let command = "printf '\\033[2J\\033[H'; FLEET_AGENT_LLM_URL=" + shellQuote(endpoint)
+        // Keep the actual CLI's inference lock and controller discovery out of
+        // the operator's home. Only the owned loopback response is exercised.
+        let command = "printf '\\033[2J\\033[H'; HOME=" + shellQuote(directory.path)
+            + " FLEET_AGENT_LLM_URL=" + shellQuote(endpoint)
             + " FLEET_AGENT_LEDGER=" + shellQuote(directory.appendingPathComponent("meter.txt").path)
             + " " + shellQuote(binary) + " propose " + questionArgument
             + "; fleet_output_status=$?; printf '\\nPROPOSAL-EXIT:%s\\n' \"$fleet_output_status\""

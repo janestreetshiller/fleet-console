@@ -54,7 +54,16 @@ swift test --disable-index-store
 cargo check --manifest-path rust/Cargo.toml --workspace --all-targets --locked
 ```
 
-The [CI workflow](../.github/workflows/ci.yml) runs these checks on macOS. Require a successful run before publication; it does not package, sign, notarize, install, publish, or start a daemon. Run live Rust conformance only against a controller you are authorized to observe.
+Run these checks locally on the trusted workstation fleet and record their actual
+results before publication. The [workflow file](../.github/workflows/ci.yml) is a
+check reference, not a requirement to enable GitHub Actions or provision a runner.
+These checks do not package, sign, notarize, install, publish, or start a daemon.
+For terminal/session releases, also run `python3 Scripts/test-terminal-integration.py`
+to exercise the production formatter, actual-agent loopback transport and
+observational shipping Overview without skipped prerequisites. It preserves
+memory-pressure admission and makes no paid provider requests. Keep its native
+captures private until reviewed. Run live Rust conformance only against a
+controller you are authorized to observe.
 
 The script regressions use labelled test data and mock build/signing tools in `TMPDIR`; they do not produce a native app or valid signatures. They exercise the production staging and benchmark gates, including Applications aliases, existing/running targets, signing failures, and invalid receipts/budgets with Python optimization enabled. Set `TMPDIR` to an existing scratch directory before running them.
 

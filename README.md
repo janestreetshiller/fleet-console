@@ -140,9 +140,13 @@ claimed and unmanaged processes do not gain controller signalling authority.
 
 **Stop…** confirms termination of that app-owned agent process group (SIGTERM,
 then SIGKILL after two seconds while the child identity is still verified). The
-session remains **Stopping** until cleanup finishes. Detached work that escapes
-the group requires its own supervision; use `fleetctl` leases for background
-services. Stop does not undo
+session remains **Stopping** until cleanup finishes. Closing the PTY is not
+proof that its child exited: cleanup verifies waitable-child ownership before
+signalling. App quit signals all remaining owned groups, then waits for the same
+two-second escalation window, including stops already in progress. Detached work,
+or descendants that outlive an already-reaped group leader, require separate
+supervision: this path does not signal a group whose leader identity it can no
+longer reserve. Use `fleetctl` leases for background services. Stop does not undo
 edits, stop controller-managed services or guarantee cancellation of provider
 billing. **Stop waiting** cancels an account investigation without clearing an
 unconfirmed paid-operation identity or automatically retrying it; window close
@@ -194,6 +198,23 @@ verification. Ouros Agent displays the charge returned by the gateway for each r
 [threat model](docs/THREAT-MODEL.md).
 
 ## Verification and contribution
+
+Run the native terminal acceptance harness to supply the prerequisites for the
+formatter, actual-agent HTTP and observational shipping-Overview tests:
+
+```sh
+python3 Scripts/test-terminal-integration.py
+```
+
+It builds the production Rust formatter fixtures and Fleet Agent, then exercises
+real PTYs, session cleanup, rendered lifecycle labels and both Overview appearances.
+Each native suite runs in a separate process because AppKit state is process-wide.
+The model response is a labelled loopback fixture: no model is started, no paid
+provider is called, and production memory-pressure admission remains enforced.
+The actual agent uses a temporary home; the Overview uses observational controller
+RPCs. Evidence is written to a fresh private system-temp directory, and the harness
+fails on skipped cases. Captures can include real local process/telemetry data;
+review them before sharing.
 
 `Scripts/benchmark.sh 60` runs the optimized app with real probes in offscreen
 native windows, exercises navigation, and captures light/dark layouts at three

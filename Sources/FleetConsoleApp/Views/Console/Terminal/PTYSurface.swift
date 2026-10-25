@@ -182,29 +182,56 @@ enum ToolBinary {
 /// notification closure.
 private final class ProcessReaper: @unchecked Sendable {
     var process: LocalProcess?
-    private var observer: NSObjectProtocol?
+    private final class WeakReaper {
+        weak var value: ProcessReaper?
+        init(_ value: ProcessReaper) { self.value = value }
+    }
+    // Main-queue-only registry; the group also retains cleanup jobs after a
+    // closed session's reaper has deallocated.
+    nonisolated(unsafe) private static var reapers: [WeakReaper] = []
+    private static let cleanup = DispatchGroup()
+    nonisolated(unsafe) private static let terminationObserver = NotificationCenter.default.addObserver(
+        forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+    ) { _ in
+        // Signal every owned group first, then share one escalation window.
+        // Detached tasks cannot survive app exit; they release the group before
+        // requesting their main-actor UI completion, so this cannot deadlock it.
+        for reaper in reapers.compactMap(\.value) { reaper.reapNow() }
+        cleanup.wait()
+    }
 
     init() {
-        observer = NotificationCenter.default.addObserver(
-            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.reapNow()
+        _ = Self.terminationObserver
+        Self.reapers.removeAll { $0.value == nil }
+        Self.reapers.append(WeakReaper(self))
+    }
+
+    deinit { reapNow() }
+
+    func reapNow(waitForExit: Bool = false, completion: (@MainActor @Sendable () -> Void)? = nil) {
+        guard let process else {
+            if waitForExit { Self.cleanup.wait() }
+            if let completion { Task { @MainActor in completion() } }
+            return
         }
-    }
-
-    deinit {
-        if let observer { NotificationCenter.default.removeObserver(observer) }
-        reapNow()
-    }
-
-    func reapNow(completion: (@MainActor @Sendable () -> Void)? = nil) {
-        guard let process, process.running else { return }
+        self.process = nil // Transfer ownership once; deinit must not repeat it.
         let pid = process.shellPid
+        var child = siginfo_t()
+        // `running` describes SwiftTerm's I/O, not child ownership. It can be
+        // false at PTY EOF, or true inside an exit callback after waitpid.
+        // WNOWAIT both proves this is still our child and reserves its PID.
+        guard pid > 0, waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0 else {
+            if waitForExit { Self.cleanup.wait() }
+            if let completion { Task { @MainActor in completion() } }
+            return
+        }
         // forkpty makes the child a new session/group leader. Never signal our
         // own group, a recycled pid, or a group we did not create.
-        let group: pid_t? = pid > 0 && getpgid(pid) == pid && pid != getpgrp() ? pid : nil
+        let group: pid_t? = getpgid(pid) == pid && pid != getpgrp() ? pid : nil
         if let group { kill(-group, SIGTERM) }
         process.terminate() // Cancels SwiftTerm's monitor and closes the owned PTY.
+        let work = Self.cleanup
+        work.enter()
         Task.detached(priority: .utility) {
             // Keep the direct child unreaped until escalation, reserving its pid
             // and group identity even if it exits before a stubborn descendant.
@@ -213,28 +240,21 @@ private final class ProcessReaper: @unchecked Sendable {
             let stillOwned = pid > 0 && waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0
             if stillOwned {
                 if let group, getpgid(pid) == group { kill(-group, SIGKILL) }
-                else if group == nil { kill(pid, SIGKILL) }
+                else { kill(pid, SIGKILL) }
             }
             var status: Int32 = 0
             if pid > 0 { _ = waitpid(pid, &status, 0) }
+            // Release a synchronous quit before hopping back to the main actor.
+            work.leave()
             await completion?()
         }
+        if waitForExit { work.wait() }
     }
 
-    /// `SIGTERM` is asynchronous, so the wait cannot happen inline. Escalates
-    /// rather than parking a thread forever on a child that ignores it.
-    static func wait(for pid: pid_t) {
-        guard pid != 0 else { return }
-        Task.detached(priority: .utility) {
-            var status: Int32 = 0
-            for _ in 0..<20 {
-                if waitpid(pid, &status, WNOHANG) != 0 { return }
-                try? await Task.sleep(for: .milliseconds(100))
-            }
-            kill(pid, SIGKILL)
-            _ = waitpid(pid, &status, 0)
-        }
-    }
+    /// SwiftTerm normally reaps before its delegate callback. If its nonblocking
+    /// wait has not collected the child yet, finish through the same verified
+    /// cleanup rather than dropping ownership of a future zombie.
+    func childExited() { reapNow() }
 }
 
 // MARK: - The AppKit host
@@ -472,12 +492,12 @@ final class PTYSession {
         spawn(launch)
     }
 
-    /// Replace a live child with one launched somewhere else. Safe to do
-    /// synchronously: `terminate()` cancels SwiftTerm's exit dispatch source, so
-    /// the outgoing child cannot report back over the top of the new one.
+    /// Replace a live child only after its monitor, I/O and owned group have
+    /// finished cleanup. Reusing LocalProcess immediately can let an old EOF
+    /// clear the replacement's I/O state before its first input arrives.
     func restart(_ launch: Launch) {
         terminate()
-        spawn(launch)
+        ensureRunning(launch)
     }
 
     /// A settled, cell-aligned grid from the host. Forwarded as-is; the host has
@@ -508,16 +528,19 @@ final class PTYSession {
         host.terminal.send(txt: text)
     }
 
-    func terminate() {
+    /// Ordinary stops are asynchronous; application termination must join the
+    /// same bounded cleanup before the process (and its tasks) can disappear.
+    func terminate(waitForExit: Bool = false) {
         deferredLaunch = nil
         pendingInput.removeAll()
         guard phase == .running else {
             if phase == .idle { phase = .exited(nil) }
+            if waitForExit { reaper.reapNow(waitForExit: true) }
             return
         }
         phase = .stopping
         let outgoing = generation
-        reaper.reapNow { [weak self] in
+        reaper.reapNow(waitForExit: waitForExit) { [weak self] in
             guard let self, self.generation == outgoing, self.phase == .stopping else { return }
             self.phase = .exited(nil)
             if let deferred = self.deferredLaunch {
@@ -563,15 +586,15 @@ final class PTYSession {
     }
 
     fileprivate func childExited(status: Int32?) {
-        // An exit we did not ask for. Ignore the late report of a child we
-        // replaced ourselves — that one is already accounted for.
-        guard phase != .stopping, host.terminal.process?.running != true else { return }
+        // SwiftTerm calls this after attempting waitpid, before clearing `running`.
+        // Stops cancel that monitor, so they finish through our reaper instead.
+        guard phase == .running else { return }
+        reaper.childExited()
         phase = .exited(status)
         // The scrollback is the evidence for *why* it exited, so the view keeps
         // showing it and the chrome's running indicator carries the fact. The
         // notice goes into that scrollback rather than over it.
         host.terminal.feed(text: "\r\n" + PTYSession.notice(for: status) + "\r\n")
-        if let pid = host.terminal.process?.shellPid { ProcessReaper.wait(for: pid) }
     }
 
     /// SwiftTerm passes the raw `wait` status through as an "exit code", so it is
