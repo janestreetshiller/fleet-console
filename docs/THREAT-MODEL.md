@@ -230,6 +230,28 @@ the agent share a uid, and this was always an accountability boundary.
   service except by invoking `fleetctl` — which goes through the same socket, the same
   `LOCAL_PEERCRED` check and the same bounded-launch validation as any other client, and
   is logged immutably like any other client.
+- **Explicit agent sessions, not inferred authority.** Fixer handoffs launch the
+  resolved executable with fixed argument arrays in distinct PTYs, never by
+  typing a command into a running shell or another agent. The four-session cap
+  refuses new work rather than evicting a live child. Generic commands are
+  accepted only in Shell. Stop is confirmed for the selected app-owned process
+  group. A waitable-child and group-identity check gates escalation after two
+  seconds; the session remains stopping during cleanup. Escaped/daemonized jobs
+  are not supervised by this path. It is not controller signalling and does not roll back edits or guarantee
+  provider cancellation. External agents retain their own permissions; the
+  bundled Fleet Agent remains read-only. No account token is added to argv/env.
+- **Suggestions do not execute.** Up to eight options use bounded, recent local
+  event counts, not global statistical claims. Saved requests and session details
+  share those options; unknown evidence grants no signalling authority. Findings
+  and event text remain untrusted data, not instructions. Request files are
+  created exclusively with mode `0600`, and a write failure prevents dispatch.
+  Claimed records are labelled observation-only and never choose a project cwd
+  for a handoff. Embedded newlines/control characters are escaped in report
+  values. Unattributable unmanaged events are never merged across processes.
+- **Paid cancellation is not a refund.** Stop waiting/window close cancels the
+  investigation task. A cancellation check before paid dispatch prevents a
+  stopped catalog lookup from becoming an analysis request. Once dispatched,
+  its saved unconfirmed identity remains available for receipt review; no blind retry.
 - **The interpreter's prompt is inspectable** before and alongside the answer. A local
   model's output is only usable as evidence if you can see what it was told.
 

@@ -272,6 +272,7 @@ final class OurosBilling {
         guard validateObservation() else {
             throw InvestigationGatewayError.refused("The selected observation became stale or its process changed while verifying access. Select it again.")
         }
+        try Task.checkCancellation() // Closing/stopping during catalog lookup must not dispatch paid work.
         let payload = try InvestigationGatewayPayload.make(model: model.id, starter: starter)
         let operationID = UUID().uuidString
         // Persist before dispatch. Never retry an ambiguous paid operation, even after relaunch.

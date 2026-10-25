@@ -46,6 +46,7 @@ enum ConsoleCommand {
     static let runInTerminal = Notification.Name("com.fleetconsole.console.runInTerminal")
     static let userInfoModule = "module"
     static let userInfoTool = "tool"
+    static let userInfoAgentRequest = "agentRequest"
     static let userInfoCommand = "command"
     static let userInfoDirectory = "directory"
     static let userInfoSubject = "subject"
