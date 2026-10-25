@@ -168,6 +168,26 @@ struct TerminalAgentSessionTests {
         #expect(!agent.pty.host.terminal.process.running)
     }
 
+    @MainActor @Test("A fresh session receives a grid even when the destination matches the last settled layout")
+    func sameGridCanBeReissuedForFreshSession() throws {
+        let tools = ChromeTools()
+        tools.toggle(.terminal, context: ToolContext())
+        defer { tools.registry.closeTerminalSessions() }
+        let size = CGSize(width: 500, height: 400)
+        tools.propose(size: size)
+        tools.flushGeometry()
+        #expect(tools.startAgent(request()))
+        let panel = try #require(tools.registry.surface(for: .terminal) as? TerminalPanel)
+        let agent = try #require(panel.selectedAgent)
+        tools.propose(size: size)
+        tools.flushGeometry()
+        #expect(agent.pty.launch == nil)
+        // Production invokes this on the newly measured header's layoutRevision.
+        tools.invalidateGeometry()
+        tools.flushGeometry()
+        #expect(agent.pty.launch != nil)
+    }
+
     @MainActor @Test("Stopping reaps stubborn children in the app-owned group before allowing Close")
     func processGroupCleanup() async throws {
         let directory = try fixtureDirectory()
@@ -339,7 +359,9 @@ struct TerminalAgentSessionTests {
     }
 
     @MainActor private func waitUntil(_ predicate: () -> Bool) async throws {
-        let deadline = Date().addingTimeInterval(5)
+        // Other native suites share AppKit's main actor and can hold it for
+        // several seconds while capturing/OCRing views during a full test run.
+        let deadline = Date().addingTimeInterval(20)
         while !predicate() {
             guard Date() < deadline else { throw NSError(domain: "TerminalAgentSessionTests.timeout", code: 1) }
             try await Task.sleep(for: .milliseconds(20))

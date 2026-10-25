@@ -23,6 +23,7 @@ final class TerminalPanel: PTYBackedSurface {
         didSet { confirmingStop = false; showingDetails = false }
     }
     private(set) var chromeHeight: CGFloat = 0
+    private(set) var layoutRevision = 0
     private var session: PTYSession {
         if selection == .investigation, let investigationSession { return investigationSession }
         return selectedAgent?.pty ?? shellSession
@@ -195,11 +196,10 @@ final class TerminalPanel: PTYBackedSurface {
     }
 
     private func measuredChrome(_ height: CGFloat) {
-        let unchanged = chromeHeight == height
         chromeHeight = height
-        // Equal chrome needs no new coalescer emission, but a fresh PTY still
-        // needs its first settled grid. Changed chrome waits for host regrid.
-        if unchanged, let lastGrid { session.settle(lastGrid) }
+        // A new PTY needs an emission even when its grid equals the previously
+        // settled one (including a rapid switch that cancels an intervening resize).
+        layoutRevision += 1
     }
 
     private var controls: some View {

@@ -195,6 +195,12 @@ final class ChromeTools {
         coalescer(for: tool).propose(grid)
     }
 
+    func invalidateGeometry() {
+        guard let tool = revealed else { return }
+        coalescers[tool]?.reset()
+        regrid()
+    }
+
     /// The end of a drag, or a panel that has just been revealed and should not
     /// wait out the quiet period before its first paint.
     func flushGeometry() {
@@ -399,6 +405,10 @@ private struct ChromeToolPanel: View {
         (tools.registry.surface(for: tool) as? any PTYBackedSurface)?.cellMetrics
     }
 
+    private var terminalLayoutRevision: Int {
+        (tools.registry.surface(for: tool) as? TerminalPanel)?.layoutRevision ?? 0
+    }
+
     private var chromeHeight: CGFloat {
         (tools.registry.surface(for: tool) as? any PTYBackedSurface)?.chromeHeight ?? 0
     }
@@ -482,6 +492,7 @@ private struct ChromeToolPanel: View {
         // of columns.
         .onChange(of: cellMetrics) { _, _ in tools.regrid() }
         .onChange(of: chromeHeight) { _, _ in tools.regrid() }
+        .onChange(of: terminalLayoutRevision) { _, _ in tools.invalidateGeometry() }
     }
 
     // MARK: Drag edge
