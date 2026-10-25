@@ -65,7 +65,7 @@ final class TerminalPanel: PTYBackedSurface {
         }
         selection = value
         if value == .shell { activate(context: currentContext) }
-        if let lastGrid { session.settle(lastGrid) }
+        if session.phase != .idle, let lastGrid { session.settle(lastGrid) }
         session.focusTerminal()
     }
 
