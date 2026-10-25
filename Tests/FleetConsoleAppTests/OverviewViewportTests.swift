@@ -145,7 +145,7 @@ struct OverviewViewportTests {
     // The shipping root requests refresh on appearance. Only its explicitly
     // observational harness may run this test: registry-changing RPCs are denied
     // before the actual native window is created.
-    @MainActor @Test("Shipping Overview fits compact and standard windows in both appearances",
+    @MainActor @Test("Shipping Overview keeps its instruments visible above scrollable evidence in both appearances",
         .enabled(if: RPCRequestPolicy.forArguments(ProcessInfo.processInfo.arguments) == .observational))
     func shippingWindowViewport() async throws {
         initializeApplication()
@@ -171,7 +171,17 @@ struct OverviewViewportTests {
                 let activeScrolls = scrollViews(in: root).filter {
                     !$0.isHiddenOrHasHiddenAncestor && !$0.visibleRect.isEmpty
                 }
-                #expect(activeScrolls.isEmpty)
+                // The shipping workspace intentionally scrolls its process map
+                // and interval evidence below the fixed-height instruments.
+                // A sidebar List also scrolls; neither is an OverviewModule
+                // overflow (covered separately by compactOverviewDoesNotScroll).
+                let cpu = try #require(element("overview.cpu", in: root))
+                let cpuRect = root.convert(window.convertFromScreen(try frame(cpu)), from: nil)
+                let workspaceScrolls = activeScrolls.filter { root.convert($0.bounds, from: $0).contains(cpuRect) }
+                #expect(workspaceScrolls.count == 1)
+                let workspace = try #require(workspaceScrolls.first)
+                #expect((workspace.documentView?.bounds.height ?? 0) > workspace.contentView.bounds.height)
+                #expect(element("overview.process-map", in: root) != nil)
                 for id in ["overview.cpu", "overview.memory", "overview.glance", "overview.processes"] {
                     let object = try #require(element(id, in: root))
                     let rect = root.convert(window.convertFromScreen(try frame(object)), from: nil)
@@ -184,11 +194,12 @@ struct OverviewViewportTests {
                         #expect(rect.minY >= 0)
                     }
                 }
-                // The cap is stated by the rows themselves now, not by a caption.
+                // The workspace reserves a compact, fixed-height instrument
+                // area at both window sizes; width does not add process rows.
                 let processRows = Set(nodes(in: root)
                     .compactMap { value("accessibilityIdentifier", from: $0) as? String }
                     .filter { $0.hasPrefix("overview.process.") })
-                #expect(processRows.count == (name == "compact" ? 3 : 5))
+                #expect(processRows.count == 3)
                 try capture(window, name: "overview-\(name)-\(dark ? "dark" : "light")")
             }
         }

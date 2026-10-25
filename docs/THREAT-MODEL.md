@@ -235,9 +235,15 @@ the agent share a uid, and this was always an accountability boundary.
   typing a command into a running shell or another agent. The four-session cap
   refuses new work rather than evicting a live child. Generic commands are
   accepted only in Shell. Stop is confirmed for the selected app-owned process
-  group. A waitable-child and group-identity check gates escalation after two
-  seconds; the session remains stopping during cleanup. Escaped/daemonized jobs
-  are not supervised by this path. It is not controller signalling and does not roll back edits or guarantee
+  group. A waitable-child check gates the initial signal even when SwiftTerm's
+  I/O flag says stopped; child and group identity are checked again before
+  escalation after two seconds. Natural exit callbacks release ownership even
+  when SwiftTerm has not yet cleared its I/O flag. The session remains stopping
+  during cleanup. App termination signals all groups first, then joins pending
+  cleanup (including jobs whose session has closed) before exiting; UI completions
+  do not block that join. Escaped/daemonized jobs, and descendants outliving an
+  already-reaped group leader, are not supervised by this path; losing a reservable
+  leader identity does not authorize signalling a potentially reused group. It is not controller signalling and does not roll back edits or guarantee
   provider cancellation. External agents retain their own permissions; the
   bundled Fleet Agent remains read-only. No account token is added to argv/env.
 - **Suggestions do not execute.** Up to eight options use bounded, recent local
