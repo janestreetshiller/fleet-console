@@ -115,6 +115,47 @@ The dashboard's **View** menu opens Terminal and Files. Terminal is
 your shell; commands entered there become supervised only when launched through
 `fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi).
 
+### Agent-aware terminal sessions
+
+Choose an installed fixer in the Fixer menu, then hand it a Needs Attention
+finding. Claude Code, Codex and Fleet Agent now open in separate terminal
+sessions rather than typing into your shell. The **Session** picker switches
+between the warm shell, up to four agent sessions and the latest account-backed
+read-only investigation. Starting another agent never replaces a running one.
+Close an ended session to make room; requests are never evicted automatically.
+These are explicit FleetConsole handoffs, not detection of arbitrary commands
+or an automatic Agent-RX integration.
+
+**Details** shows the request, working directory, permission/billing policy and
+troubleshooting options. The same options are included in the saved request the
+agent receives. Health-check failures, repeated recorded crashes, lease expiry,
+missing declared listeners, port violations and unmanaged work have distinct
+checks and remedies. Up to eight suggestions are ranked by matching events in
+the latest 200 supplied events within six hours. Counts are local observations,
+not global prevalence, probabilities or proof of a root cause. Zero means no
+matching attributable event was supplied. Legacy unmanaged events without a
+process identity are not guessed or merged into a fabricated count. Stale or
+unavailable evidence remains labelled;
+claimed and unmanaged processes do not gain controller signalling authority.
+
+**Stop…** confirms termination of that app-owned agent process group (SIGTERM,
+then SIGKILL after two seconds while the child identity is still verified). The
+session remains **Stopping** until cleanup finishes. Detached work that escapes
+the group requires its own supervision; use `fleetctl` leases for background
+services. Stop does not undo
+edits, stop controller-managed services or guarantee cancellation of provider
+billing. **Stop waiting** cancels an account investigation without clearing an
+unconfirmed paid-operation identity or automatically retrying it; window close
+also cancels waiting. Exit status is not proof that a problem was fixed. External agents keep
+their own permissions and provider billing. Fleet Agent remains proposal-only,
+and account-backed investigations remain output-only. Generic commands are
+accepted only in **Shell**, never injected into an agent or investigation.
+Returning to an ended shell restarts it in the same directory. Panel toggles
+keep processes warm; window close ends agent children, including hidden or deferred sessions. Session
+metadata and scrollback are not restored after quitting. Saved request files
+remain local and owner-only under `Library/Application Support/FleetConsole/fix-reports`;
+review their contents before sharing them.
+
 | Action | Shortcut |
 |---|---|
 | Open Dashboard | ⌘0 |

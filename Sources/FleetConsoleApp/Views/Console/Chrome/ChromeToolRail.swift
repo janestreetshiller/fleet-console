@@ -120,6 +120,15 @@ final class ChromeTools {
         return (registry.surface(for: .terminal) as? TerminalPanel)?.run(commandLine) ?? false
     }
 
+    @discardableResult
+    func startAgent(_ request: TerminalAgentRequest) -> Bool {
+        guard let terminal = registry.surface(for: .terminal) as? TerminalPanel,
+              terminal.startAgent(request) else { return false }
+        let context = ToolContext(workingDirectory: request.workingDirectory, subject: request.subject)
+        if revealed == .terminal { update(context: context) } else { toggle(.terminal, context: context) }
+        return true
+    }
+
     func investigate(_ starter: String, billing: OurosBilling, subject: String, validation: @escaping @MainActor () -> Bool) -> Bool {
         guard let terminal = registry.surface(for: .terminal) as? TerminalPanel,
               terminal.investigate(starter, billing: billing, validation: validation) else { return false }
@@ -178,8 +187,12 @@ final class ChromeTools {
         let surface = registry.surface(for: tool) as? any PTYBackedSurface
         let cell = surface?.cellMetrics ?? .placeholder
         let reserved = surface?.reservedWidth ?? 0
-        coalescer(for: tool).propose(
-            TerminalGrid.fitting(lastProposedSize, cell: cell, reservedWidth: reserved))
+        let terminalHeight = lastProposedSize.height - (surface?.chromeHeight ?? 0)
+        let grid = terminalHeight > 0
+            ? TerminalGrid.fitting(CGSize(width: lastProposedSize.width, height: terminalHeight),
+                                   cell: cell, reservedWidth: reserved)
+            : TerminalGrid(columns: 1, rows: 1)
+        coalescer(for: tool).propose(grid)
     }
 
     /// The end of a drag, or a panel that has just been revealed and should not
@@ -386,6 +399,10 @@ private struct ChromeToolPanel: View {
         (tools.registry.surface(for: tool) as? any PTYBackedSurface)?.cellMetrics
     }
 
+    private var chromeHeight: CGFloat {
+        (tools.registry.surface(for: tool) as? any PTYBackedSurface)?.chromeHeight ?? 0
+    }
+
     // MARK: Header
 
     private var header: some View {
@@ -423,7 +440,7 @@ private struct ChromeToolPanel: View {
     @ViewBuilder
     private var content: some View {
         Group {
-            if tools.isTooNarrow {
+            if tools.isTooNarrow && tool == .files {
                 EmptyPanelView(
                     symbol: tool.symbol,
                     title: "Panel too narrow",
@@ -464,6 +481,7 @@ private struct ChromeToolPanel: View {
         // cell it is drawing has, so the same pixels now mean a different number
         // of columns.
         .onChange(of: cellMetrics) { _, _ in tools.regrid() }
+        .onChange(of: chromeHeight) { _, _ in tools.regrid() }
     }
 
     // MARK: Drag edge

@@ -26,7 +26,7 @@ private final class InvestigationTransportProbe: URLProtocol, @unchecked Sendabl
     }
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
-    override func stopLoading() {}
+    override func stopLoading() { Self.lock.withLock { Self.held = nil } }
 
     override func startLoading() {
         var snapshot = request
@@ -154,6 +154,51 @@ struct InvestigationTransportTests {
         let billing = fixture(defaults: defaults, authenticated: false)
         await expectRefusal { try await billing.investigate(starter: Self.starter, validateObservation: { true }) }
         #expect(InvestigationTransportProbe.requests.isEmpty)
+    }
+
+    @MainActor @Test func cancellationBeforeDispatchNeverCreatesAPaidOperation() async throws {
+        InvestigationTransportProbe.reset()
+        let suite = "FleetInvestigationTransport.cancelBefore." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let billing = fixture(defaults: defaults)
+        let operation = Task { @MainActor in
+            try await billing.investigate(starter: Self.starter, validateObservation: {
+                withUnsafeCurrentTask { $0?.cancel() }
+                return true
+            })
+        }
+        do { _ = try await operation.value; Issue.record("Cancelled investigation unexpectedly completed") }
+        catch { #expect(error is CancellationError) }
+        #expect(InvestigationTransportProbe.requests.map { $0.url!.path } == ["/ouros/v1/models"])
+        #expect(billing.unconfirmedInvestigationID == nil)
+    }
+
+    @MainActor @Test func closingTerminalCancelsWaitingButRetainsThePaidOperationIdentity() async throws {
+        InvestigationTransportProbe.reset(.heldCompletion)
+        let suite = "FleetInvestigationTransport.cancelPanel." + UUID().uuidString
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let billing = fixture(defaults: defaults)
+        let panel = TerminalPanel()
+        let accepted = panel.investigate(Self.starter, billing: billing, validation: { true })
+        #expect(accepted)
+        for _ in 0..<1000 {
+            if InvestigationTransportProbe.hasHeldCompletion { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        let operationID = try #require(billing.unconfirmedInvestigationID)
+        #expect(InvestigationTransportProbe.hasHeldCompletion)
+        panel.windowClosed()
+        for _ in 0..<1000 {
+            if !panel.investigationBusy { break }
+            try await Task.sleep(for: .milliseconds(1))
+        }
+        #expect(!panel.investigationBusy)
+        #expect(!billing.busy)
+        #expect(billing.unconfirmedInvestigationID == operationID)
+        #expect(defaults.string(forKey: Self.pendingKey) == operationID)
+        #expect(InvestigationTransportProbe.requests.count == 2)
     }
 
     /// Explicit synthetic credentials avoid device login, polling and Keychain.

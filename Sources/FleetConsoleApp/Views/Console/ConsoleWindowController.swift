@@ -106,18 +106,35 @@ final class ConsoleWindowController {
                 [console] _ in
                 MainActor.assumeIsolated { console.goHome() }
             })
+        navigationObservers.append(
+            centre.addObserver(forName: NSWindow.willCloseNotification, object: nil, queue: .main) {
+                [weak self] note in
+                let closing = (note.object as? NSWindow).map(ObjectIdentifier.init)
+                MainActor.assumeIsolated {
+                    guard let self, let closing,
+                          self.window.map(ObjectIdentifier.init) == closing else { return }
+                    self.tools.registry.closeTerminalSessions()
+                }
+            })
         // A hand-off to the designated agent arrives from the popover with no
         // window up, so it is observed here for the same reason as the two above.
         navigationObservers.append(
             centre.addObserver(forName: ConsoleCommand.runInTerminal, object: nil, queue: .main) {
                 [weak self] note in
-                guard let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String else { return }
+                let agentRequest = note.userInfo?[ConsoleCommand.userInfoAgentRequest] as? TerminalAgentRequest
+                let command = note.userInfo?[ConsoleCommand.userInfoCommand] as? String
+                guard agentRequest != nil || command != nil else { return }
                 let directory = (note.userInfo?[ConsoleCommand.userInfoDirectory] as? String) ?? NSHomeDirectory()
                 let subject = (note.userInfo?[ConsoleCommand.userInfoSubject] as? String) ?? "Terminal"
                 MainActor.assumeIsolated {
                     guard let self else { return }
-                    if !self.tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory), subject: subject)) {
-                        self.model.actionError = "Return to the shell after the investigation before starting another terminal command."
+                    if let agentRequest {
+                        if !self.tools.startAgent(agentRequest) {
+                            self.model.actionError = "Could not start the agent. Close an ended session (limit: four) and check the agent executable. The saved request was not executed: \(agentRequest.reportURL.path)"
+                        }
+                    } else if let command,
+                              !self.tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory), subject: subject)) {
+                        self.model.actionError = "Select Shell before starting a terminal command. Agent and read-only investigation sessions do not accept command injection."
                     }
                 }
             })
@@ -125,6 +142,7 @@ final class ConsoleWindowController {
 
     func show(activate: Bool = true) {
         if let window {
+            if tools.revealed == .terminal { tools.registry.resumeTerminal() }
             if activate {
                 NSApp.activate(ignoringOtherApps: true)
                 window.makeKeyAndOrderFront(nil)
