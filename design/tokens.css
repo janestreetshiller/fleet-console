@@ -1,0 +1,17 @@
+/* Fleet Console design tokens: phosphor-terminal palette, pixel grid, state colors. */
+:root {
+  --fc-bg: #000;
+  --fc-panel: #050b05;
+  --fc-line: #0b4d0b;
+  --fc-dim: #1f7a1f;
+  --fc-dark: #00aa00;     /* secondary tone, logo C */
+  --fc-bright: #55ff55;   /* primary tone, logo F */
+  --fc-text: #b8ffb8;
+  --fc-warn: #ffd23f;
+  --fc-crit: #ff5555;
+  --fc-info: #55ffff;
+  --fc-font: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fc-cell: 10px;        /* base grid unit; gauges and logo snap to it */
+  --fc-gap: 2px;
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
