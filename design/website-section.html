@@ -4,50 +4,126 @@
 <link rel="stylesheet" href="tokens.css">
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:var(--fc-bg);color:var(--fc-text);font:15px/1.55 var(--fc-font)}
-section{max-width:1080px;margin:0 auto;padding:64px 20px}
-.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:40px;align-items:center}
-@media(max-width:800px){.hero{grid-template-columns:1fr}}
-h1{font-size:clamp(32px,5vw,52px);line-height:1.05;margin:0 0 16px;color:var(--fc-bright);font-weight:700}
-h1 span{color:var(--fc-dark)}
-h2{font-size:clamp(24px,3.4vw,34px);margin:0 0 10px;color:var(--fc-bright)}
-p{margin:0 0 14px;color:var(--fc-text)}.dim{color:var(--fc-dim)}
-.logo{width:100%;max-width:340px;justify-self:center}
-.cta{display:flex;gap:12px;flex-wrap:wrap;margin-top:20px}
-.cta a{padding:10px 18px;text-decoration:none;border:1px solid var(--fc-bright);color:var(--fc-bright)}
-.cta a.p{background:var(--fc-bright);color:#000}
-.cta a:focus-visible,.cta a:hover{outline:2px solid var(--fc-warn);outline-offset:2px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:28px}
-.card{border:1px solid var(--fc-line);background:var(--fc-panel);padding:16px}
-.card h3{margin:0 0 6px;font-size:15px;color:var(--fc-bright)}.card p{margin:0;color:var(--fc-text);font-size:14px}
-.demo{margin-top:28px;border:1px solid var(--fc-line);background:var(--fc-panel);padding:16px}
-.demo iframe{width:100%;height:520px;border:0;background:#000}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:28px}
-.stats div{border-left:2px solid var(--fc-dark);padding-left:12px}.stats b{display:block;font-size:26px;color:var(--fc-bright)}
+html{scroll-behavior:smooth}
+body{margin:0;background:#000;color:#fff;font:16px/1.55 "Geist","Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.mono{font-family:var(--fc-font)}
+a{color:inherit}
+/* nav */
+nav{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;max-width:1240px;margin:0 auto;padding:30px 28px}
+.brand{display:flex;align-items:center;gap:12px;font-size:22px;text-decoration:none;letter-spacing:-.01em}
+.brand img{height:30px}
+.links{display:flex;gap:40px;color:#d8d8d8}
+.links a{text-decoration:none;font-size:16px}.links a:hover{color:var(--fc-bright)}
+.right{display:flex;align-items:center;gap:22px}
+.pill{display:inline-block;background:#fff;color:#000;border-radius:999px;padding:12px 28px;text-decoration:none;font-size:16px}
+.pill:hover,.pill:focus-visible{background:var(--fc-bright);outline:none}
+.ghost{color:#d8d8d8;text-decoration:none}
+@media(max-width:860px){.links{display:none}}
+/* hero */
+.hero{position:relative;min-height:min(100vh,860px);overflow:hidden;display:flex;flex-direction:column;justify-content:center}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.veil{position:absolute;inset:0;background:linear-gradient(90deg,#000 0%,rgba(0,0,0,.85) 34%,rgba(0,0,0,0) 62%),linear-gradient(0deg,#000 0%,rgba(0,0,0,0) 30%);pointer-events:none}
+.copy{position:relative;z-index:2;max-width:1240px;width:100%;margin:0 auto;padding:150px 28px 40px}
+.eyebrow{font:14px var(--fc-font);color:#bdbdbd;margin:0 0 30px}
+h1{font-weight:400;font-size:clamp(44px,7.2vw,96px);line-height:1;letter-spacing:-.035em;margin:0;max-width:11em}
+h1 em{font-style:normal;color:var(--fc-bright)}
+.lede{max-width:34em;color:#b9c4b9;font-size:18px;margin:28px 0 34px}
+.stats{position:relative;z-index:2;max-width:1240px;width:100%;margin:0 auto;padding:40px 28px 56px;display:flex;gap:clamp(28px,6vw,90px);flex-wrap:wrap}
+.stats b{display:block;font-weight:400;font-size:clamp(34px,4.4vw,52px);letter-spacing:-.03em;line-height:1.1}
+.stats span{color:#8f9f8f;font-size:15px}
+/* sections */
+.sec{max-width:1240px;margin:0 auto;padding:110px 28px 20px}
+.sec h2{font-weight:400;font-size:clamp(34px,5vw,64px);line-height:1.04;letter-spacing:-.03em;margin:0 0 18px;max-width:14em}
+.sec h2 em{font-style:normal;color:var(--fc-bright)}
+.sec>p{color:#aab6aa;max-width:36em;font-size:18px;margin:0 0 36px}
+.frame{border:1px solid #123a12;background:#030803;border-radius:14px;overflow:hidden;box-shadow:0 0 90px rgba(85,255,85,.07)}
+.frame iframe{display:block;width:100%;height:560px;border:0;background:#000}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1px;background:#123a12;border:1px solid #123a12;border-radius:14px;overflow:hidden;margin-top:36px}
+.cards article{background:#000;padding:26px}
+.cards h3{font-weight:400;font-size:20px;margin:0 0 8px;letter-spacing:-.01em}
+.cards p{margin:0;color:#9aa89a;font-size:15px}
+footer{max-width:1240px;margin:0 auto;padding:90px 28px 70px;display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+footer h2{font-weight:400;font-size:clamp(30px,4vw,48px);letter-spacing:-.03em;margin:0;line-height:1.05}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style></head><body>
-<section class="hero" aria-labelledby="t">
- <div>
-  <h1 id="t">Every node.<br><span>One field of view.</span></h1>
-  <p>Fleet Console shows how things connect: which service spawned which process, which agent is working on what, and where memory and disk went. Use the menu bar for a glance, or the terminal for everything else.</p>
-  <div class="cta"><a class="p" href="https://github.com/janestreetshiller/fleet-console/releases/latest/download/FleetConsole.dmg">Download Fleet Console</a><a href="#cluster">See the cluster view</a></div>
+<header class="hero" id="top">
+ <nav aria-label="Primary">
+  <a class="brand" href="#top"><img src="assets/fleet-console-logo-terminal.svg" alt="">Fleet Console</a>
+  <div class="links"><a href="#cluster">Cluster</a><a href="#terminal">Terminal</a><a href="#features">Capabilities</a><a href="https://github.com/janestreetshiller/fleet-console">GitHub</a></div>
+  <div class="right"><a class="ghost" href="#terminal">Docs</a><a class="pill" href="https://github.com/janestreetshiller/fleet-console/releases/latest/download/FleetConsole.dmg">Download</a></div>
+ </nav>
+ <canvas id="scene" aria-hidden="true"></canvas><div class="veil"></div>
+ <div class="copy">
+  <p class="eyebrow">Menu bar and terminal observability for your fleet</p>
+  <h1>Every node,<br>one <em>field of view.</em></h1>
+  <p class="lede">See how things connect: which service spawned which process, which agent is working on what, and where memory and disk went.</p>
+  <a class="pill" href="#cluster">See the cluster</a>
  </div>
- <img class="logo" src="assets/fleet-console-logo-terminal.svg" alt="Fleet Console logo: an F and a C sharing one grid">
+ <div class="stats"><div><b>5</b><span>nodes in one view</span></div><div><b>3s</b><span>telemetry refresh</span></div><div><b>1 key</b><span>to hand a fix to an agent</span></div></div>
+</header>
+
+<section class="sec" id="cluster" aria-labelledby="c">
+ <h2 id="c">The whole cluster, <em>at a glance.</em></h2>
+ <p>A gauge tile for every node: CPU, memory, GPU, network and disk, with history and agent activity beside it.</p>
+ <div class="frame"><iframe src="gauges.html" title="Cluster gauges preview" loading="lazy"></iframe></div>
 </section>
-<section id="cluster" aria-labelledby="c">
- <h2 id="c">The whole cluster, at a glance.</h2>
- <p class="dim">A gauge tile for every node. CPU, memory, GPU, network and disk, with history and agent activity beside it.</p>
- <div class="stats"><div><b>5</b>nodes in view</div><div><b>3s</b>refresh interval</div><div><b>1 key</b>to hand a fix to an agent</div></div>
- <div class="demo"><iframe src="gauges.html" title="Cluster gauges preview" loading="lazy"></iframe></div>
+
+<section class="sec" id="terminal" aria-labelledby="t">
+ <h2 id="t">A terminal that <em>earns its keystrokes.</em></h2>
+ <p>Six views, one keymap, the same data as the menu bar. Press 1 to 6 in the preview.</p>
+ <div class="frame"><iframe src="tui.html" title="Fleet Console terminal preview" loading="lazy"></iframe></div>
 </section>
-<section aria-labelledby="f">
- <h2 id="f">A terminal that earns its keystrokes.</h2>
- <p class="dim">Six views, one keymap, same data as the menu bar.</p>
+
+<section class="sec" id="features" aria-labelledby="f">
+ <h2 id="f">Built for the <em>operator.</em></h2>
  <div class="cards">
-  <article class="card"><h3>Relational process tree</h3><p>Every process traced to the service, launch agent, or app that owns it.</p></article>
-  <article class="card"><h3>Managed services</h3><p>Show, tail, restart, stop and renew from one list. Agents act through fleetctl only.</p></article>
-  <article class="card"><h3>Agent approvals</h3><p>Watch an agent work, then approve or deny its next step without leaving the view.</p></article>
-  <article class="card"><h3>Needs attention</h3><p>Failing services, unmanaged processes and full volumes become fix reports an agent can resolve.</p></article>
+  <article><h3>Relational process tree</h3><p>Every process traced to the service, launch agent or app that owns it.</p></article>
+  <article><h3>Managed services</h3><p>Show, tail, restart, stop and renew from one list. Agents act through fleetctl only.</p></article>
+  <article><h3>Agent approvals</h3><p>Watch an agent work, then approve or deny its next step in place.</p></article>
+  <article><h3>Needs attention</h3><p>Failing services, unmanaged processes and full volumes become fix reports an agent can resolve.</p></article>
  </div>
- <div class="demo"><iframe src="tui.html" title="Fleet Console terminal preview" loading="lazy"></iframe></div>
 </section>
+
+<footer><h2>Always one step<br>ahead of the pack.</h2><a class="pill" href="https://github.com/janestreetshiller/fleet-console/releases/latest/download/FleetConsole.dmg">Download Fleet Console</a></footer>
+
+<script>
+(()=>{
+const cv=document.getElementById("scene"),cx=cv.getContext("2d"),still=matchMedia("(prefers-reduced-motion: reduce)").matches;
+const CELL=10,G=1;let W,H,cols,rows,t=0,motes=[];
+function size(){const r=cv.getBoundingClientRect(),d=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;cv.width=W*d;cv.height=H*d;cx.setTransform(d,0,0,d,0,0);cols=Math.ceil(W/CELL);rows=Math.ceil(H/CELL);
+ motes=Array.from({length:Math.round(cols/2.2)},()=>({x:Math.random()*cols,y:Math.random()*rows,v:.01+Math.random()*.03,p:Math.random()*6}))}
+const hash=(x,y)=>{let h=x*374761393+y*668265263;h=(h^(h>>13))*1274126177;return((h^(h>>16))>>>0)/4294967295};
+function ground(c){const x=c/cols;return rows*(.74-.16*Math.exp(-Math.pow((x-.74)/.2,2))-.05*Math.sin(x*9)-.03*Math.sin(x*23))}
+const mix=(a,b,k)=>a.map((v,i)=>Math.round(v+(b[i]-v)*k));
+function draw(){
+ cx.clearRect(0,0,W,H);
+ const cxm=cols*.74;
+ for(let c=0;c<cols;c++){
+  const g=ground(c),sway=still?0:Math.sin(t*.6+c*.4)*.6;
+  // terrain columns, gauge-like: bright cap, dithered body fading down
+  for(let r=Math.floor(g+sway);r<rows;r++){
+   const d=r-g,k=Math.max(0,1-d/(rows*.2));if(k<=0)continue;
+   const dither=hash(c,r)<k*.9?1:0;if(!dither)continue;
+   const a=(.15+.7*k)*(d<2?1:.55);
+   const col=d<1.5?[85,255,85]:mix([0,110,0],[0,170,0],hash(c,r+9));
+   cx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${a})`;cx.fillRect(c*CELL+G,r*CELL+G,CELL-G*2,CELL-G*2)}
+ }
+ // the F/C mark rising out of the field: cells light up in sequence
+ const F=[[0,0],[1,0],[2,0],[3,0],[4,0],[0,1],[0,2],[0,3],[2,1],[2,2]],C=[[0,2],[1,2],[2,2],[3,2],[4,2],[0,3],[0,4],[0,5],[4,3],[4,4],[4,5],[1,5],[3,5]];
+ const S=Math.max(CELL*2.4,Math.min(34,W/38)),ox=W*.62,oy=H*.18;
+ const lit=still?99:(t*3)%34;
+ function cell(r,c,col,i){const on=lit>i;const p=on?1:.12;cx.fillStyle=col.replace("A",p);cx.fillRect(ox+c*S+1,oy+r*S+1,S-2,S-2);if(on&&lit-i<2){cx.shadowColor="#55ff55";cx.shadowBlur=24;cx.fillRect(ox+c*S+1,oy+r*S+1,S-2,S-2);cx.shadowBlur=0}}
+ let i=0;const ov=new Set(F.map(([r,c])=>r+","+c).filter(k=>C.some(([r,c])=>r+","+c===k)));
+ F.forEach(([r,c])=>{cell(r,c,ov.has(r+","+c)?"rgba(220,255,220,A)":"rgba(85,255,85,A)",i++)});
+ C.forEach(([r,c])=>{if(!ov.has(r+","+c))cell(r,c,"rgba(0,170,0,A)",i++)});
+ // drifting motes, like pollen
+ cx.fillStyle="rgba(120,255,120,.7)";
+ motes.forEach(m=>{if(!still){m.y-=m.v;m.x+=Math.sin(t+m.p)*.01;if(m.y<0){m.y=rows*.9;m.x=Math.random()*cols}}
+  cx.globalAlpha=.25+.5*Math.abs(Math.sin(t*.8+m.p));cx.fillRect(m.x*CELL,m.y*CELL,3,3)});
+ cx.globalAlpha=1;
+ if(!still){t+=1/60;requestAnimationFrame(draw)}
+}
+size();draw();addEventListener("resize",()=>{size();if(still)draw()});
+})();
+</script>
 </body></html>
