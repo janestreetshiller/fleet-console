@@ -1,0 +1,3 @@
+# Machine-local agent adapters stay with the private development checkout.
+/AGENTS.md export-ignore
+/docs/AGENTS.md export-ignore

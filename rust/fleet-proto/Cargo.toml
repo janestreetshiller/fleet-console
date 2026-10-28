@@ -1,0 +1,10 @@
+[package]
+name = "fleet-proto"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Wire protocol for the FleetConsole controller socket."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true

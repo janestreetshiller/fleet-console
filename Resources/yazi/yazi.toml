@@ -1,0 +1,48 @@
+# FleetConsole's Yazi surface — layout only; colour lives in theme.toml.
+#
+# Not a copy of ~/.config/yazi. The panel is a fixed-purpose file view inside a
+# 40-column-minimum side field, so it makes different choices than a full-window
+# file manager would.
+
+[mgr]
+# No parent column. The default 1:4:3 assumes a full window; this panel's floor
+# is 40 columns, where a 1-part parent resolves to about six cells and shows a
+# stack of one-letter truncations — "f…", "i…", "n…" — which is noise, not
+# orientation. The header already prints the full path, so the column was paying
+# a seventh of a narrow panel to say something less clearly than the line above
+# it. Current gets the weight; preview keeps enough to identify a file by.
+ratio = [0, 4, 2]
+
+sort_by = "alphabetical"
+sort_dir_first = true
+sort_sensitive = false
+show_hidden = false
+
+# The panel opens on a service's recorded cwd and is read for orientation, so
+# symlink targets matter more here than in a general browser.
+show_symlink = true
+
+# Off: the panel is not where files get counted, and the size probe walks the
+# tree on every hover, which is real work for a number the inspector already has.
+scrolloff = 2
+
+[preview]
+# A file view inside a 40-column panel is for identifying files, not reading
+# them. Keeping the budget small keeps a hover on a large file from stalling the
+# pane.
+max_width = 300
+max_height = 200
+wrap = "no"
+
+[opener]
+# Reveal rather than edit. The panel deliberately does not become a launcher:
+# opening an editor from here would put a second, unmanaged interactive process
+# behind a surface whose whole point is that it only shows things.
+reveal = [
+	{ run = 'open -R "$1"', desc = "Reveal in Finder", orphan = true, for = "macos" },
+]
+
+[open]
+# `url`, not `name` — an [open] rule matches on url or mime and rejects anything
+# else at parse time.
+rules = [{ url = "*", use = "reveal" }]

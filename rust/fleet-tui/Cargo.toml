@@ -1,0 +1,25 @@
+[package]
+name = "fleet-tui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Terminal client for the FleetConsole controller on macOS and Linux."
+
+[features]
+default = []
+# Synthetic data for captures and tests. Never enabled for release builds.
+fixtures = ["fleet-ui-core/fixtures"]
+
+[dependencies]
+fleet-ui-core = { path = "../fleet-ui-core" }
+# Terminal rendering and input. ratatui re-exports the crossterm backend it is
+# built against, so the client uses `ratatui::crossterm` instead of a second,
+# independently versioned crossterm dependency.
+ratatui = { version = "0.30", default-features = false, features = ["crossterm"] }
+
+[dev-dependencies]
+fleet-ui-core = { path = "../fleet-ui-core", features = ["fixtures"] }
+
+[[bin]]
+name = "fleet-tui"
+path = "src/main.rs"

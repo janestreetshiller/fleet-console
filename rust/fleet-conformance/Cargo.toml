@@ -1,0 +1,10 @@
+[package]
+name = "fleet-conformance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Checks the Rust protocol types against the live Swift controller."
+
+[dependencies]
+fleet-proto = { path = "../fleet-proto" }
+serde_json.workspace = true

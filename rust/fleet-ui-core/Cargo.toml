@@ -1,0 +1,22 @@
+[package]
+name = "fleet-ui-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Controller client, honest-state model, platform telemetry and view models shared by the FleetConsole terminal and GPUI clients."
+
+[features]
+default = []
+# Synthetic snapshots for tests, documentation captures and screenshots. Release
+# builds never enable it; `Scripts/verify-rust-clients.sh` checks the shipped
+# binaries for the fixture marker.
+fixtures = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true
+fleet-proto = { path = "../fleet-proto" }
+
+[dev-dependencies]
+tempfile.workspace = true

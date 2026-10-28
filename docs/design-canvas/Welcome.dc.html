@@ -1,0 +1,123 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0; background: #070a0d; }
+    a { color: #5fe3d0; } a:hover { color: #8df0e2; }
+    .plate { position: relative; }
+    .plate::after {
+      content: "";
+      position: absolute;
+      left: 3px; top: 3px; right: -3px; bottom: -3px;
+      border-right: 1px solid rgba(232,237,242,0.07);
+      border-bottom: 1px solid rgba(232,237,242,0.07);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+    @keyframes sweep-ring { from { stroke-dashoffset: 660; } to { stroke-dashoffset: 145; } }
+    @keyframes lobe { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(50px,-40px) scale(1.15); } }
+    .ring { animation: sweep-ring 3.2s cubic-bezier(.4,0,.2,1) infinite alternate; }
+    .lobe { animation: lobe 38s ease-in-out infinite; }
+    @media (prefers-reduced-motion: reduce) { .ring, .lobe { animation: none; } }
+  </style>
+</helmet>
+
+<div style="width: 700px; height: 560px; position: relative; overflow: hidden; background: #070a0d; font-family: -apple-system, 'SF Pro Text', 'Helvetica Neue', sans-serif; color: #e8edf2; -webkit-font-smoothing: antialiased; display: flex; align-items: center; justify-content: center;">
+
+  <div style="position: absolute; inset: 0; pointer-events: none;">
+    <div class="lobe" style="position: absolute; left: -60px; top: -120px; width: 520px; height: 460px; border-radius: 50%; background: radial-gradient(closest-side, #1c6f77, transparent 72%); filter: blur(80px); opacity: 0.55;"></div>
+    <div style="position: absolute; right: -140px; bottom: -160px; width: 520px; height: 480px; border-radius: 50%; background: radial-gradient(closest-side, #5a2f7a, transparent 70%); filter: blur(90px); opacity: 0.5;"></div>
+  </div>
+  <div style="position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(232,237,242,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(232,237,242,0.03) 1px, transparent 1px); background-size: 13px 13px;"></div>
+
+  <!-- the panel: 560 × 420, the size the app already opens at -->
+  <div class="plate" style="position: relative; width: 560px; height: 420px; border: 1px solid rgba(232,237,242,0.14); border-radius: 10px; background: rgba(12,16,21,0.86); backdrop-filter: blur(28px); display: flex; flex-direction: column; overflow: hidden;">
+
+    <!-- header -->
+    <div style="display: flex; align-items: center; gap: 10px; padding: 8px 21px; border-bottom: 1px solid rgba(232,237,242,0.08);">
+      <svg width="18" height="18" viewBox="0 0 26 26" aria-hidden="true">
+        <circle cx="13" cy="13" r="11" fill="none" stroke="rgba(232,237,242,0.16)" stroke-width="1"></circle>
+        <path d="M8.5 19.5 L8.5 7 L18 7 M8.5 12.6 L15.2 12.6" fill="none" stroke="#5fe3d0" stroke-width="1.6" stroke-linecap="round"></path>
+        <circle cx="8.5" cy="19.5" r="1.5" fill="#5fe3d0"></circle>
+      </svg>
+      <span style="font-size: 13px; font-weight: 600;">Welcome to FleetConsole</span>
+      <div style="flex-grow: 1;"></div>
+      <span style="padding: 2px 7px; border: 1px solid rgba(242,184,92,0.45); border-radius: 3px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.10em; color: #f2b85c;">TRIAL · 14 DAYS</span>
+    </div>
+
+    <!-- stage -->
+    <div style="flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 13px; padding: 0 21px;">
+      <span style="font-size: 25px; font-weight: 600; letter-spacing: -0.014em; text-align: center;">Your whole fleet, in the menu bar.</span>
+      <span style="max-width: 420px; text-align: center; font-size: 13px; line-height: 1.5; color: rgba(232,237,242,0.56); text-wrap: pretty;">FleetConsole watches the daemons, leases and processes you already run — and puts the evidence one click from the clock.</span>
+
+      <!-- the sweep: the instrument itself, drawn on its construction circles -->
+      <div style="position: relative; width: 216px; height: 216px; display: flex; align-items: center; justify-content: center; margin-top: 4px;">
+        <svg width="216" height="216" viewBox="0 0 216 216" style="position: absolute; inset: 0;" aria-hidden="true">
+          <circle cx="108" cy="108" r="105" fill="none" stroke="rgba(232,237,242,0.06)" stroke-width="1"></circle>
+          <circle class="ring" cx="108" cy="108" r="105" fill="none" stroke="#f2b85c" stroke-width="2" stroke-linecap="round" stroke-dasharray="660" transform="rotate(-90 108 108)" opacity="0.6"></circle>
+        </svg>
+        <svg width="184" height="184" viewBox="0 0 184 184" aria-hidden="true">
+          <circle cx="92" cy="92" r="84" fill="none" stroke="rgba(232,237,242,0.07)" stroke-width="1"></circle>
+          <circle cx="92" cy="92" r="68" fill="none" stroke="rgba(232,237,242,0.10)" stroke-width="1" stroke-dasharray="2 5"></circle>
+          <sc-for list="{{ticks}}" as="t" hint-placeholder-count="9">
+            <line x1="{{t.x1}}" y1="{{t.y1}}" x2="{{t.x2}}" y2="{{t.y2}}" stroke="{{t.stroke}}" stroke-width="{{t.w}}" stroke-linecap="round"></line>
+          </sc-for>
+          <path d="{{arc}}" fill="none" stroke="#f2b85c" stroke-width="3.5" stroke-linecap="round"></path>
+          <line x1="92" y1="92" x2="{{needle.x}}" y2="{{needle.y}}" stroke="#e8edf2" stroke-width="1.8" stroke-linecap="round"></line>
+          <circle cx="92" cy="92" r="4" fill="#0c1015" stroke="#e8edf2" stroke-width="1.4"></circle>
+          <text x="92" y="132" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="19" fill="#e8edf2">78%</text>
+          <text x="92" y="147" text-anchor="middle" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-size="9" letter-spacing="2" fill="rgba(232,237,242,0.42)">CPU</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- footer -->
+    <div style="display: flex; align-items: center; gap: 9px; padding: 8px 21px; border-top: 1px solid rgba(232,237,242,0.08); background: rgba(232,237,242,0.02);">
+      <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 9px; letter-spacing: 0.14em; color: rgba(232,237,242,0.30);">PLATE 05 · WELCOME</span>
+      <div style="flex-grow: 1;"></div>
+      <div style="display: flex; align-items: center; justify-content: center; height: 26px; padding: 0 13px; border: 1px solid rgba(232,237,242,0.18); border-radius: 4px;">
+        <span style="font-size: 12px; color: rgba(232,237,242,0.72);">Skip</span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: center; height: 26px; padding: 0 15px; border: 1px solid rgba(95,227,208,0.55); border-radius: 4px; background: rgba(95,227,208,0.14);">
+        <span style="font-size: 12px; color: #5fe3d0;">Open the console</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":700,"height":560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const cx = 92, cy = 92, r = 68, start = 150, sweep = 240;
+    const rad = (d) => (d * Math.PI) / 180;
+    const ticks = [];
+    for (let i = 0; i <= 8; i++) {
+      const a = rad(start + (sweep * i) / 8);
+      const major = i % 2 === 0;
+      const r1 = major ? r - 12 : r - 6;
+      ticks.push({
+        x1: (cx + Math.cos(a) * r1).toFixed(1), y1: (cy + Math.sin(a) * r1).toFixed(1),
+        x2: (cx + Math.cos(a) * r).toFixed(1), y2: (cy + Math.sin(a) * r).toFixed(1),
+        stroke: major ? 'rgba(232,237,242,0.42)' : 'rgba(232,237,242,0.20)',
+        w: major ? 1.6 : 1
+      });
+    }
+    const frac = 0.78;
+    const a0 = rad(start), a1 = rad(start + sweep * frac);
+    const arc = 'M' + (cx + Math.cos(a0) * r).toFixed(1) + ' ' + (cy + Math.sin(a0) * r).toFixed(1) +
+      ' A' + r + ' ' + r + ' 0 ' + (sweep * frac > 180 ? 1 : 0) + ' 1 ' +
+      (cx + Math.cos(a1) * r).toFixed(1) + ' ' + (cy + Math.sin(a1) * r).toFixed(1);
+    const needle = { x: (cx + Math.cos(a1) * (r - 16)).toFixed(1), y: (cy + Math.sin(a1) * (r - 16)).toFixed(1) };
+    return { ticks, arc, needle };
+  }
+}
+</script>
+</body>
+</html>

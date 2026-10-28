@@ -1,0 +1,12 @@
+[package]
+name = "fleet-spatial"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Relational spatial mapping, force-directed graph engine, and topology layout for FleetConsole"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+fleet-telemetry = { path = "../fleet-telemetry" }
+ouros-adapter = { path = "../ouros-adapter" }

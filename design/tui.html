@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet Console TUI</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#020402;color:var(--fc-text);font:13px/1.35 var(--fc-font);padding:16px;display:flex;justify-content:center}
+.term{width:min(1000px,100%);border:1px solid var(--fc-line);background:var(--fc-bg);display:flex;flex-direction:column;min-height:620px}
+.top{display:flex;align-items:center;gap:14px;padding:8px 12px;border-bottom:1px solid var(--fc-line)}
+.top img{height:22px}.brand{color:var(--fc-bright);font-weight:700}
+.top .r{margin-left:auto;color:var(--fc-dim)}
+.tabs{display:flex;border-bottom:1px solid var(--fc-line);overflow-x:auto}
+.tabs button{all:unset;cursor:pointer;padding:6px 14px;color:var(--fc-dim);white-space:nowrap}
+.tabs button b{color:var(--fc-dark);margin-right:6px;font-weight:400}
+.tabs button.on{background:var(--fc-bright);color:#000}.tabs button.on b{color:#000}
+.tabs button:focus-visible{outline:1px solid var(--fc-bright);outline-offset:-2px}
+main{flex:1;padding:12px;display:grid;gap:12px;align-content:start}
+.pane{border:1px solid var(--fc-line);padding:0 10px 8px}
+.pane>h2{font-size:12px;font-weight:400;color:var(--fc-bright);margin:-9px 0 6px;background:var(--fc-bg);display:inline-block;padding:0 6px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:720px){.two{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--fc-dim);font-weight:400;padding:2px 8px 2px 0}
+td{padding:1px 8px 1px 0;white-space:nowrap}
+tr.sel td{background:var(--fc-dark);color:#000}
+.ok{color:var(--fc-bright)}.warn{color:var(--fc-warn)}.crit{color:var(--fc-crit)}.dim{color:var(--fc-dim)}
+.g{display:inline-block;letter-spacing:0}
+.tree{margin:0;white-space:pre;color:var(--fc-text)}
+.foot{border-top:1px solid var(--fc-line);padding:6px 12px;color:var(--fc-dim);display:flex;gap:16px;flex-wrap:wrap}
+.foot b{color:var(--fc-bright);font-weight:400}
+.cur{display:inline-block;width:8px;height:14px;background:var(--fc-bright);vertical-align:-2px;animation:b 1s steps(1) infinite}
+@keyframes b{50%{opacity:0}}
+</style></head><body>
+<div class="term" role="application" aria-label="Fleet Console terminal interface">
+ <div class="top"><img src="assets/fleet-console-logo-terminal.svg" alt=""><span class="brand">Fleet Console</span><span class="dim">fleetctl 2.0</span><span class="r" id="clock"></span></div>
+ <nav class="tabs" id="tabs"></nav>
+ <main id="view"></main>
+ <div class="foot"><span><b>1-6</b> view</span><span><b>j/k</b> move</span><span><b>enter</b> inspect</span><span><b>/</b> filter</span><span><b>r</b> restart</span><span><b>a</b> ask agent</span><span><b>?</b> help</span><span><b>q</b> quit</span></div>
+</div>
+<script>
+const bar=(p,w=20)=>{const n=Math.round(p/100*w);const c=p>90?"crit":p>70?"warn":"ok";return `<span class="g ${c}">${"█".repeat(n)}</span><span class="g dim">${"░".repeat(w-n)}</span>`};
+const views=[
+{k:"Overview",h:()=>`
+<div class="two"><section class="pane"><h2>Cluster</h2><table>
+<tr><th>node</th><th>cpu</th><th>mem</th><th></th></tr>
+<tr><td>node-a</td><td>34%</td><td>61%</td><td>${bar(34,14)}</td></tr>
+<tr><td>node-b</td><td>58%</td><td>44%</td><td>${bar(58,14)}</td></tr>
+<tr><td>node-c</td><td class="warn">82%</td><td class="warn">77%</td><td>${bar(82,14)}</td></tr>
+<tr><td>node-d</td><td class="crit">97%</td><td class="crit">94%</td><td>${bar(97,14)}</td></tr></table></section>
+<section class="pane"><h2>Needs attention</h2><table>
+<tr><td class="crit">crit</td><td>node-d volume / at 92%</td></tr>
+<tr><td class="warn">warn</td><td>node-c gpu 93% sustained 8m</td></tr>
+<tr><td class="warn">warn</td><td>svc api-gateway restarting</td></tr>
+<tr><td class="ok">info</td><td>new unmanaged process: node 41822</td></tr></table></section></div>
+<section class="pane"><h2>Agents</h2><table>
+<tr><th>agent</th><th>target</th><th>state</th><th>runtime</th></tr>
+<tr><td>codex-3</td><td>svc api-gateway</td><td class="ok">working</td><td>14m</td></tr>
+<tr><td>codex-1</td><td>vol node-d:/</td><td class="warn">waiting approval</td><td>2m</td></tr></table></section>`},
+{k:"Processes",h:()=>`<section class="pane"><h2>Process tree</h2><pre class="tree">launchd (1)
+├─ api-gateway.service            cpu 12%  mem 1.2G   <span class="warn">restarting</span>
+│  ├─ node worker-a (4120)          cpu  8%  mem 640M
+│  └─ node worker-b (4121)          cpu  3%  mem 590M
+├─ <span class="ok">fleetd (902)</span>                      cpu  1%  mem  88M
+│  └─ fleetctl agent bridge         cpu  0%  mem  24M
+└─ Terminal.app
+   └─ zsh
+      └─ codex-3                    cpu  6%  mem 410M   <span class="ok">agent</span>
+</pre></section>`},
+{k:"Services",h:()=>`<section class="pane"><h2>Managed services</h2><table>
+<tr><th>service</th><th>state</th><th>pid</th><th>uptime</th><th>restarts</th></tr>
+<tr class="sel"><td>api-gateway</td><td>restarting</td><td>4119</td><td>0m</td><td>3</td></tr>
+<tr><td>render-studio</td><td class="ok">running</td><td>3302</td><td>3d 4h</td><td>0</td></tr>
+<tr><td>llama-serve :8080</td><td class="ok">running</td><td>2210</td><td>6d 1h</td><td>0</td></tr>
+<tr><td>n8n</td><td class="ok">running</td><td>2218</td><td>6d 1h</td><td>1</td></tr>
+<tr><td>drive-sync</td><td class="crit">failed</td><td>--</td><td>--</td><td>5</td></tr></table>
+<p class="dim">r restart · s stop · t tail logs · n renew lease. Agents act through fleetctl only.</p></section>`},
+{k:"Agents",h:()=>`<section class="pane"><h2>codex-3 · api-gateway</h2><pre class="tree"><span class="dim">14:02</span> read   gateway/routes.ts
+<span class="dim">14:03</span> run    fleetctl logs api-gateway --tail 200
+<span class="dim">14:05</span> found  port 8443 already bound by pid 3990
+<span class="dim">14:06</span> <span class="warn">ask</span>    stop pid 3990 and restart api-gateway?  <span class="ok">[y]</span> approve  <span class="crit">[n]</span> deny
+<span class="cur"></span></pre></section>`},
+{k:"Storage",h:()=>`<section class="pane"><h2>Volume map · area is allocated bytes</h2><pre class="tree"><span class="ok">████████████████</span><span class="warn">██████████</span><span class="crit">████</span><span class="dim">░░░░░░░░░░</span>
+ <span class="ok">■</span> caches 38G   <span class="warn">■</span> build 24G   <span class="crit">■</span> logs 9G   <span class="dim">■</span> free 31G
+
+ 38G  ~/Library/Caches/Xcode      <span class="warn">stale 41d</span>
+ 24G  ~/project/.build/cache
+  9G  /var/log/fleet             <span class="crit">growing 1.2G/d</span></pre></section>`},
+{k:"Attention",h:()=>`<section class="pane"><h2>Fix reports</h2><table>
+<tr><td class="crit">crit</td><td>volume / at 92%</td><td class="dim">agent can clear caches (38G)</td></tr>
+<tr><td class="warn">warn</td><td>drive-sync failed 5x</td><td class="dim">agent can read logs, propose fix</td></tr>
+<tr><td class="ok">info</td><td>unmanaged process node 41822</td><td class="dim">adopt as service or ignore</td></tr></table>
+<p class="dim">enter opens the report. a hands it to an agent with the exact target attached.</p></section>`}
+];
+let cur=0;const tabs=document.getElementById("tabs"),view=document.getElementById("view");
+function draw(){tabs.innerHTML=views.map((v,i)=>`<button class="${i===cur?"on":""}" data-i="${i}"><b>${i+1}</b>${v.k}</button>`).join("");view.innerHTML=views[cur].h()}
+tabs.onclick=e=>{const b=e.target.closest("button");if(b){cur=+b.dataset.i;draw()}};
+addEventListener("keydown",e=>{const n=+e.key;if(n>=1&&n<=views.length){cur=n-1;draw()}});
+const clock=()=>document.getElementById("clock").textContent=new Date().toTimeString().slice(0,8);clock();setInterval(clock,1000);draw();
+</script></body></html>

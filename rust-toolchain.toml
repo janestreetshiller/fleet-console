@@ -1,0 +1,8 @@
+# The Rust toolchain for rust/, pinned so a fresh checkout on macOS and Linux
+# builds with the compiler these crates were verified with. The workspace's
+# rust-version (1.89) is the floor declared by its locked dependencies; this
+# file is the version actually exercised. See docs/CROSS-PLATFORM.md.
+[toolchain]
+channel = "1.98.0"
+profile = "minimal"
+components = ["rustfmt", "clippy"]

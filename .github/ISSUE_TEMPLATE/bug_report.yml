@@ -1,0 +1,42 @@
+name: Bug report
+description: Report a reproducible FleetConsole defect using sanitized details.
+title: "bug: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include credentials, real process arguments, home paths, hostnames,
+        tailnet addresses or unreviewed screenshots. Report security vulnerabilities
+        privately using SECURITY.md, not this form.
+  - type: input
+    id: revision
+    attributes:
+      label: Version or source commit
+      placeholder: Bundle version or git commit
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: macOS version and architecture
+      placeholder: macOS version, Apple Silicon or Intel
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Use synthetic service names and paths.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized diagnostics
+      description: Include exact errors or measured performance, with private data removed.
