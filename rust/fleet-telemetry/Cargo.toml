@@ -1,0 +1,11 @@
+[package]
+name = "fleet-telemetry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "OS-agnostic telemetry provider and hardware capability abstraction for FleetConsole"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sysinfo.workspace = true

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-4 -4 68 58" width="272" height="232" shape-rendering="crispEdges">
+<defs>
+<pattern id="dith" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="#55ff55"/><rect x="1" y="1" width="1" height="1" fill="#55ff55"/><rect x="1" width="1" height="1" fill="#00aa00"/><rect y="1" width="1" height="1" fill="#00aa00"/></pattern>
+</defs>
+<rect x="-4" y="-4" width="68" height="58" fill="#000"/>
+<rect x="0" y="0" width="10" height="10" fill="#55ff55"/><rect x="0" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="10" y="0" width="10" height="10" fill="#55ff55"/><rect x="10" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="20" y="0" width="10" height="10" fill="url(#dith)"/><rect x="20" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="30" y="0" width="10" height="10" fill="url(#dith)"/><rect x="30" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="40" y="0" width="10" height="10" fill="#00aa00"/><rect x="40" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="50" y="0" width="10" height="10" fill="#00aa00"/><rect x="50" y="4.6" width="10" height="0.8" fill="#000"/>
+<rect x="0" y="10" width="10" height="10" fill="#55ff55"/><rect x="0" y="14.6" width="10" height="0.8" fill="#000"/>
+<rect x="20" y="10" width="10" height="10" fill="#00aa00"/><rect x="20" y="14.6" width="10" height="0.8" fill="#000"/>
+<rect x="50" y="10" width="10" height="10" fill="#00aa00"/><rect x="50" y="14.6" width="10" height="0.8" fill="#000"/>
+<rect x="0" y="20" width="10" height="10" fill="#55ff55"/><rect x="0" y="24.6" width="10" height="0.8" fill="#000"/>
+<rect x="10" y="20" width="10" height="10" fill="#55ff55"/><rect x="10" y="24.6" width="10" height="0.8" fill="#000"/>
+<rect x="20" y="20" width="10" height="10" fill="url(#dith)"/><rect x="20" y="24.6" width="10" height="0.8" fill="#000"/>
+<rect x="0" y="30" width="10" height="10" fill="#55ff55"/><rect x="0" y="34.6" width="10" height="0.8" fill="#000"/>
+<rect x="20" y="30" width="10" height="10" fill="#00aa00"/><rect x="20" y="34.6" width="10" height="0.8" fill="#000"/>
+<rect x="50" y="30" width="10" height="10" fill="#00aa00"/><rect x="50" y="34.6" width="10" height="0.8" fill="#000"/>
+<rect x="0" y="40" width="10" height="10" fill="#55ff55"/><rect x="0" y="44.6" width="10" height="0.8" fill="#000"/>
+<rect x="20" y="40" width="10" height="10" fill="#00aa00"/><rect x="20" y="44.6" width="10" height="0.8" fill="#000"/>
+<rect x="30" y="40" width="10" height="10" fill="#00aa00"/><rect x="30" y="44.6" width="10" height="0.8" fill="#000"/>
+<rect x="40" y="40" width="10" height="10" fill="#00aa00"/><rect x="40" y="44.6" width="10" height="0.8" fill="#000"/>
+<rect x="50" y="40" width="10" height="10" fill="#00aa00"/><rect x="50" y="44.6" width="10" height="0.8" fill="#000"/>
+</svg>

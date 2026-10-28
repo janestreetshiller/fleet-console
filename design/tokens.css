@@ -1,0 +1,50 @@
+/* Fleet Console design tokens. Generated from tokens.json by fleet-ui-core; edit tokens.json, not this file. */
+:root {
+  --fc-bg: #000000;
+  --fc-panel: #050b05;
+  --fc-line: #0b4d0b;
+  --fc-dim: #1f7a1f;
+  --fc-dark: #00aa00;
+  --fc-bright: #55ff55;
+  --fc-text: #b8ffb8;
+  --fc-warn: #ffd23f;
+  --fc-crit: #ff5555;
+  --fc-info: #55ffff;
+  --fc-segment-off: #0a1f0a;
+  --fc-selected-text: #000000;
+  --fc-font: "Geist Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --fc-cell: 10px;
+  --fc-gap: 2px;
+}
+/* Glass appearance: a near-black substrate with a vibrant level ramp,
+used by the GPUI window in dark mode over the blurred material. */
+[data-fc-appearance="fog"] {
+  --fc-bg: #09090b;
+  --fc-panel: #101013;
+  --fc-line: #2a292e;
+  --fc-dim: #a3a19b;
+  --fc-dark: #55d58a;
+  --fc-bright: #ffd23f;
+  --fc-text: #f0eee8;
+  --fc-warn: #ff9e42;
+  --fc-crit: #f46b68;
+  --fc-info: #8caaff;
+  --fc-segment-off: #1b1b20;
+  --fc-selected-text: #0b0b0d;
+}
+/* Paper appearance, used by surfaces that offer a light mode. */
+[data-fc-appearance="paper"] {
+  --fc-bg: #fbfaf5;
+  --fc-panel: #f2f1ea;
+  --fc-line: #c9d8c9;
+  --fc-dim: #5f6f5f;
+  --fc-dark: #1e7b1e;
+  --fc-bright: #0f5f0f;
+  --fc-text: #1b2a1b;
+  --fc-warn: #8a5a00;
+  --fc-crit: #b3261e;
+  --fc-info: #006b7a;
+  --fc-segment-off: #e3e8e0;
+  --fc-selected-text: #ffffff;
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

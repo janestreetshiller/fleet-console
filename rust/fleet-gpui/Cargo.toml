@@ -1,0 +1,40 @@
+[package]
+name = "fleet-gpui"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "GPUI desktop client for the FleetConsole controller on macOS and Linux."
+
+[features]
+default = []
+# Synthetic data for captures and tests (`--fixture <scenario>`). Never enabled
+# for release builds; without it no fixture code or data is compiled in.
+fixtures = ["fleet-ui-core/fixtures"]
+
+[dependencies]
+gpui = "=0.2.2"
+serde_json.workspace = true
+fleet-ui-core = { path = "../fleet-ui-core" }
+# Unbounded channel and `select` used to wake the UI from fleet-ui-core's
+# controller and telemetry threads and from the macOS status item. Already in
+# Cargo.lock at 0.3.34 through gpui; no new package enters the lockfile.
+futures = "0.3"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# The menu bar status item (NSStatusItem) is created through the Objective-C
+# runtime on the main thread. Both crates are already in Cargo.lock through
+# gpui's macOS platform layer (objc 0.2.7, cocoa 0.26.0); no new package
+# enters the lockfile.
+objc = "0.2.7"
+cocoa = "0.26"
+
+[dev-dependencies]
+fleet-ui-core = { path = "../fleet-ui-core", features = ["fixtures"] }
+
+[[bin]]
+name = "fleet-gpui"
+path = "src/main.rs"
+
+[lib]
+name = "fleet_gpui"
+path = "src/lib.rs"

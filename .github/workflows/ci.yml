@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  macos:
+    name: macOS build and tests
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Record toolchain versions
+        run: |
+          swift --version
+          cargo --version
+      - name: Check shell syntax
+        run: |
+          for script in Scripts/*.sh; do bash -n "$script"; done
+      - name: Run non-destructive release-policy regressions
+        env:
+          TMPDIR: ${{ runner.temp }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          python3 Scripts/test-release-policy.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-release-policy.py
+          python3 Scripts/test-notary-staging.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-notary-staging.py
+          python3 Scripts/test-source-privacy.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-source-privacy.py
+          python3 Scripts/test-public-source.py
+          PYTHONOPTIMIZE=1 python3 Scripts/test-public-source.py
+      - name: Build release with the existing CMO workaround
+        run: swift build -c release --disable-index-store -Xswiftc -disable-cmo
+      - name: Run Swift tests
+        run: swift test --disable-index-store
+      - name: Check Rust protocol and conformance targets
+        run: >-
+          cargo check --manifest-path rust/Cargo.toml
+          --workspace --all-targets --locked
+      - name: Verify Rust clients
+        run: Scripts/verify-rust-clients.sh
+
+  linux:
+    name: Linux Rust clients
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Install GPUI system libraries
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y --no-install-recommends
+          pkg-config libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev
+          libx11-xcb-dev libxcb1-dev libfontconfig-dev libfreetype-dev libvulkan-dev
+      - name: Record toolchain versions
+        # rustup installs the version pinned in rust-toolchain.toml.
+        run: |
+          rustc --version
+          cargo --version
+      - name: Verify Rust clients
+        run: Scripts/verify-rust-clients.sh
