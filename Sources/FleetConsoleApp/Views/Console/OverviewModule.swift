@@ -27,6 +27,8 @@ struct OverviewModule: View {
             let layout = OverviewViewportGeometry(viewport: geometry.size, focused: focus != .both,
                                                   instrumentCount: system.power.hasBattery ? 5 : 4)
             VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
+                WorkspaceHeading(title: "Overview", detail: subtitle)
+                    .frame(height: OverviewViewportGeometry.headingHeight, alignment: .topLeading)
                 QuantizedCardGrid(
                     minimumCellWidth: (layout.contentWidth - CGFloat(layout.primaryColumns - 1) * OverviewViewportGeometry.gap) / CGFloat(layout.primaryColumns),
                     maximumColumns: layout.primaryColumns,
@@ -515,7 +517,8 @@ struct OverviewMetricGlance: View {
                 .accessibilityIdentifier("overview.metrics.details")
         }
         .frame(maxWidth: .infinity)
-        .elevatedCard(padding: 8)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 8)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("overview.glance")
     }

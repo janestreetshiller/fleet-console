@@ -16,18 +16,24 @@ struct FleetSidebarView: View {
     @State private var managingDevices = false
 
     var body: some View {
-        // Two unlabelled clusters and the devices. The first is this Mac: where
-        // the window opens and the instruments that describe the machine. The
-        // second is the background work on it. Their spacing is the boundary;
-        // a heading over each restated what the rows already say.
+        // Group observation and supervised work separately; destinations retain
+        // their existing selection bindings and keyboard routes.
         List(selection: navigationSelection) {
             Section {
                 Label("Needs Attention", systemImage: "exclamationmark.circle")
                     .tag("attention")
-                ForEach([ConsoleModule.overview, .processes, .services]) { module in
+                ForEach([ConsoleModule.overview, .processes]) { module in
                     Label(module.title, systemImage: module.symbol)
                         .tag("module:" + module.rawValue)
                 }
+            } header: {
+                Text("Monitor").accessibilityIdentifier("sidebar.monitor")
+            }
+            Section {
+                Label(ConsoleModule.services.title, systemImage: ConsoleModule.services.symbol)
+                    .tag("module:" + ConsoleModule.services.rawValue)
+            } header: {
+                Text("Background work").accessibilityIdentifier("sidebar.work")
             }
             Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
