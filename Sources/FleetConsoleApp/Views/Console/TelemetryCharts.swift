@@ -363,12 +363,15 @@ struct TelemetryCard<Content: View>: View {
                 Text(title)
                     .font(ConsoleFont.cardTitle)
                     .foregroundStyle(.primary)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("telemetry.\(title).title")
                 Spacer(minLength: 8)
                 Text(value)
                     .font(ConsoleFont.metricValue)
                     .monospacedDigit()
                     .foregroundStyle(.primary)
                     .accessibilityLabel("\(title): \(value)")
+                    .accessibilityIdentifier("telemetry.\(title).value")
             }
             if let subtitle {
                 Text(subtitle)

@@ -5,13 +5,13 @@ import CoreGraphics
 /// Reserve the readable chrome first; the charts spend what remains, and the
 /// process preview declares its cap rather than scrolling.
 ///
-/// There is no page heading, footer line or caption row to pay for. Each was a
-/// fixed cost charged to the plots, which is how a 1560-wide window ended up
-/// drawing its two primary traces 82pt tall.
+/// The page heading has an explicit budget. Supporting readings and the process
+/// preview yield space before the primary plots become unreadable.
 public struct OverviewViewportGeometry: Sendable {
     public static let horizontalPadding: CGFloat = 21
     public static let verticalPadding: CGFloat = 13
     public static let gap: CGFloat = 10
+    public static let headingHeight: CGFloat = 48
     public static let minimumPlotHeight: CGFloat = 89
     /// A trace taller than this stops adding legibility and starts adding air.
     public static let maximumPlotHeight: CGFloat = 377
@@ -25,8 +25,8 @@ public struct OverviewViewportGeometry: Sendable {
     public static let processRowHeight: CGFloat = 30
     /// A primary card around its plot: title, subtitle and the footer facts.
     /// Below `memoryFactsRowWidth` the memory facts take two rows of two.
-    public static let primaryChromeWide: CGFloat = 145
-    public static let primaryChromeNarrow: CGFloat = 173
+    public static let primaryChromeWide: CGFloat = 153
+    public static let primaryChromeNarrow: CGFloat = 181
     public static let memoryFactsRowWidth: CGFloat = 340
 
     public let contentWidth: CGFloat
@@ -49,9 +49,9 @@ public struct OverviewViewportGeometry: Sendable {
         let cellWidth = (contentWidth - CGFloat(primaryColumns - 1) * Self.gap) / CGFloat(primaryColumns)
         let primaryChrome = cellWidth >= Self.memoryFactsRowWidth
             ? Self.primaryChromeWide : Self.primaryChromeNarrow
-        // Three stacked parts: primary cards, glance, processes. Overview's
-        // controls live in the native toolbar, outside this viewport.
-        let fixedHeight = Self.verticalPadding * 2 + Self.gap * 2
+        // The heading, primary cards, glance and processes share one viewport.
+        // Controls remain in the native toolbar.
+        let fixedHeight = Self.verticalPadding * 2 + Self.headingHeight + Self.gap * 3
             + CGFloat(secondaryRows) * Self.glanceRowHeight + CGFloat(secondaryRows - 1) * Self.gap
             + CGFloat(primaryRows) * primaryChrome + CGFloat(primaryRows - 1) * Self.gap
             + Self.processChrome
