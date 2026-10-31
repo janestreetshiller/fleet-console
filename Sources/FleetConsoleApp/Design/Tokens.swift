@@ -25,7 +25,7 @@ enum ConsoleFont {
     /// Card numerals beside a gauge — the same emphasis as the dial's own
     /// readout plate, in text form.
     static let cardValue = Font.system(.title3, weight: .semibold)
-    static let metricValue = Font.system(.title, weight: .semibold)
+    static let metricValue = Font.system(.largeTitle, weight: .semibold)
     /// Body copy in a card or a welcome paragraph.
     static let body = Font.system(.body)
     /// Secondary row text, evidence, hints.
