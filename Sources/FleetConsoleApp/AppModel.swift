@@ -105,7 +105,10 @@ final class AppModel {
         }
         network.refresh()
         clockTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.clockTick &+= 1 }
+            Task { @MainActor in
+                self?.clockTick &+= 1
+                self?.expireTopologyEvidence()
+            }
         }
     }
 
@@ -120,6 +123,8 @@ final class AppModel {
     func apply(_ snapshot: Snapshot) {
         connected = true
         connectionError = nil
+        topologySource = snapshot
+        topology = FleetTopology(snapshot: snapshot)
         daemon = snapshot.daemon
         lastSnapshotAt = snapshot.generatedAt
         lastSnapshotReceivedUptime = ProcessInfo.processInfo.systemUptime
@@ -224,6 +229,14 @@ final class AppModel {
         var id: Date { time }
     }
     private(set) var jobObservations: [JobObservation] = []
+    @ObservationIgnored private var topologySource: Snapshot?
+    private(set) var topology: FleetTopology?
+
+    /// Reproject retained evidence only at its next expiry, using the existing clock.
+    private func expireTopologyEvidence() {
+        guard let deadline = topology?.validUntil, Date() > deadline, let source = topologySource else { return }
+        topology = FleetTopology(snapshot: source)
+    }
     private(set) var sessions: [AgentSession] = []
 
     var awaitingReplies: [AgentMessage] { recentMessages.filter(\.isAwaitingReply) }

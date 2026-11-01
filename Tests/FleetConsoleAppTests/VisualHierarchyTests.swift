@@ -37,21 +37,28 @@ struct VisualHierarchyTests {
         #expect(try frame(cpuValue).minY > frame(glance).maxY)
     }
 
-    @MainActor @Test("Sidebar provides one console destination and devices")
+    @MainActor @Test("Sidebar provides the agent-awareness return destination and devices")
     func sidebarGroups() throws {
+        // Cached offscreen bitmaps omit the native vibrant selected-row layer.
+        // Render the awareness return destination while a diagnostic tool is selected.
+        let console = ConsoleModel()
+        console.open(.storage)
         let window = host(NavigationSplitView {
-            FleetSidebarView(model: AppModel(), console: ConsoleModel())
+            FleetSidebarView(model: AppModel(), console: console)
                 .navigationSplitViewColumnWidth(240)
         } detail: { Text("Content") }, width: 980, dark: false)
         defer { window.orderOut(nil) }
         let root = try #require(window.contentView)
         let bitmap = try #require(root.bitmapImageRepForCachingDisplay(in: root.bounds))
         root.cacheDisplay(in: root.bounds, to: bitmap)
+        if let path = ProcessInfo.processInfo.environment["FLEET_SIDEBAR_CAPTURE"] {
+            try bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+        }
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         try VNImageRequestHandler(cgImage: #require(bitmap.cgImage)).perform([request])
         let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-        #expect(text.localizedCaseInsensitiveContains("Console"))
+        #expect(text.localizedCaseInsensitiveContains("Agent awareness"))
         #expect(!text.localizedCaseInsensitiveContains("Monitor"))
         #expect(!text.localizedCaseInsensitiveContains("Background work"))
     }
