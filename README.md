@@ -2,22 +2,22 @@
 
 <img width="552" height="318" alt="FleetConsole menu bar and dashboard" src="https://github.com/user-attachments/assets/2f653aa7-6c6a-4df6-8225-9c1a920917c7" />
 
-## System Abstract
+## Overview
 
 FleetConsole places CPU and memory dials one click from the Mac's menu bar, with a full dashboard for deeper review. Load can be reviewed in Quick View and traced through timed charts, processes, and service logs in the Dashboard. A local controller and the `fleetctl` CLI monitor the tasks coding agents initiate. macOS 14 or later is required. The complete source — core, controller, CLI, Rust protocol, and native application — is available under the MIT license; local monitoring and service control are free. Source and downloads: https://github.com/janestreetshiller/fleet-console. Optional multi-device access costs $10 USD/month through Ouros (operated by Ouros AI, LLC); SwiftTerm retains its own MIT notices.
 
-## Architecture and System Design
+## How it works
 
 - **Menu-bar cluster**: CPU, memory, and disk use, connection state, and an attention count. The dropdown Quick View shows CPU/memory dials, a thin disk-capacity track, and directional upload/download rates in one horizontal strip. Three action buttons open Agent, Diagnostics, and Preferences. Right-click offers Needs Attention, Agents, the dashboard, named destinations, configuration, logs, and Help; `fleetctl Setup…` explains the bundled CLI and can copy a controller-check command. Both views share the same resource probes and sampling cadence.
 - **Dashboard**: opens to Overview (CPU, GPU, memory, disk, network history, large process consumers; CPU or Memory focus with 15 s/30 s/1 min/2 min zoom; the horizontal axis shows actual observation times, including sampling gaps). A native sidebar leads to Processes, Storage, Needs Attention, Operations, Events, and Launch Services; Operations groups Services, Network, Agents, Storage, Events, Launch Services, and Account. Other computers appear separately with their reachability evidence. Search matches the current destination; changing destinations clears the filter, reopening keeps it. Unavailable readings are labelled unavailable; battery information appears only when a battery exists; temperature and fan readings depend on hardware support; a running process without a configured health check is **Running (unverified)**. Process existence, listening ports, host reachability, and health-check results remain separate facts.
 - **Controller and CLI**: launch through `fleetctl` to record an owner, purpose, lease, and logs. The application can pause, resume, renew, and stop controller-launched services. Services with unrenewed leases have their process groups cleaned up even after the launching agent disappears; paused services retain their groups and resources, with expiry cleanup resuming on unpause. The controller verifies process identity before signalling and records the action. Processes started elsewhere remain unmanaged; `fleetctl claim` records ownership and a lease for an existing process but grants no signalling authority — the controller will not stop, restart, pause, kill, or reap it. Optional user-initiated End Process is a separate owner-only SIGTERM control, disabled by default.
 - **Agent sessions**: choosing an installed fixer hands it a Needs Attention finding; Claude Code, Codex, and Fleet Agent open in separate terminal sessions rather than typing into the shell. The Session picker switches between the warm shell, up to four agent sessions, and the latest account-backed read-only investigation; starting another agent never replaces a running one, and requests are never evicted automatically. Details shows the request, working directory, permission/billing policy, and troubleshooting options. Suggestions are ranked by matching events in the latest 200 supplied events within six hours — counts are local observations, not global prevalence, probabilities, or proof of a root cause; zero means no matching attributable event was supplied; legacy unmanaged events are not guessed into fabricated counts. Stop… confirms termination of the application-owned agent process group (SIGTERM, then SIGKILL after two seconds while child identity is verified); closing the PTY is not proof of exit. Application quit signals all remaining owned groups and waits the same escalation window. Detached work or descendants outliving a reaped group leader require separate supervision. Stop does not undo edits, stop controller-managed services, or guarantee cancellation of provider billing; Stop waiting cancels an account investigation without clearing an unconfirmed paid-operation identity; exit status is not proof a problem was fixed. External agents keep their own permissions and provider billing. Fleet Agent remains proposal-only; account-backed investigations remain output-only; generic commands are accepted only in the Shell, never injected into an agent or investigation. Panel toggles keep processes warm; window close ends agent children. Session metadata and scrollback are not restored after quitting. Saved request files remain local and owner-only under `Library/Application Support/FleetConsole/fix-reports`.
 
-## Prerequisites and Toolchain
+## Requirements
 
 Swift 6 toolchain with the macOS SDK. The application uses SwiftTerm; the controller and CLI have no external package dependencies.
 
-## Build and Verification Protocol
+## Build and check
 
 ```sh
 swift test --disable-index-store -Xswiftc -disable-cmo
@@ -35,7 +35,7 @@ Acceptance harnesses:
 - `Scripts/benchmark.sh 60` — runs the optimized application with real probes in offscreen native windows, exercises navigation, and captures light/dark layouts at three sizes. The CPU result covers the application process only (excluding collector children and WindowServer) and is not an on-screen idle measurement.
 - `Scripts/product-detail-sheet.sh` — renders only the dark Quick View and Overview from synthetic fixtures, uses a disposable home, avoids keychain access and tool/account surfaces, and fails unless exactly the two expected PNGs are produced.
 
-## Interface and Specification
+## Usage
 
 | Action | Shortcut |
 |---|---|
