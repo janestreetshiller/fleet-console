@@ -3,11 +3,16 @@ import AppKit
 import FleetCore
 
 /// Agent-first spatial awareness. The projection is bounded and refreshed by
-/// existing observations; there is no physics loop, extra poller or paid request.
+/// existing observations; folder metadata has a bounded asynchronous cache,
+/// with no physics loop, extra process collector or paid request.
 struct AgentAwarenessWorkspace: View {
     let model: AppModel
     @Bindable var console: ConsoleModel
     @State private var graph: AwarenessGraph?
+    @State private var directories: DirectoryCrystalStore
+    @State private var directoryOrigin: CGSize?
+    @State private var directoryReference: String?
+    @State private var selectedDirectoryPath: String?
     @State private var selectedID: String?
     @State private var zoom: CGFloat = 1
     // Observation bounds can change without moving any existing world node.
@@ -20,6 +25,33 @@ struct AgentAwarenessWorkspace: View {
     @State private var didFit = false
     @State private var didFitActivity = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    @MainActor init(model: AppModel, console: ConsoleModel, directoryRoots: [String]? = nil) {
+        self.model = model
+        self.console = console
+        _directories = State(initialValue: DirectoryCrystalStore(roots: directoryRoots))
+    }
+
+    private var activityPaths: [String] {
+        model.sessions.compactMap(\.project) + model.serviceRows.map { $0.record.cwd }
+    }
+    private var selectedDirectory: DirectoryCrystal.Node? {
+        directories.snapshot?.nodes.first { $0.path == selectedDirectoryPath }
+    }
+    private var directoryAnchors: [String: CGPoint] {
+        guard let origin = directoryOrigin else { return [:] }
+        return Dictionary(uniqueKeysWithValues: (directories.snapshot?.nodes ?? []).map {
+            ($0.path, CGPoint(x: $0.position.x + origin.width, y: $0.position.y + origin.height))
+        })
+    }
+    private var worldBounds: CGRect {
+        let folderBounds = directories.snapshot?.bounds.offsetBy(dx: directoryOrigin?.width ?? 0, dy: directoryOrigin?.height ?? 0) ?? .null
+        return (graph?.bounds ?? .null).union(folderBounds)
+    }
+    private var directorySearchMatch: DirectoryCrystal.Node? {
+        guard !query.isEmpty else { return nil }
+        return directories.snapshot?.nodes.first { $0.path.localizedCaseInsensitiveContains(query) }
+    }
 
     private var selected: AwarenessGraph.Node? { graph?.nodes.first { $0.id == selectedID } }
     private var query: String { console.search.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -34,7 +66,7 @@ struct AgentAwarenessWorkspace: View {
                 AwarenessInk.ground.ignoresSafeArea()
                 canvas(nodes: nodes, edges: edges, related: related, size: geometry.size)
                     .accessibilityIdentifier("awareness.canvas")
-                if nodes.isEmpty {
+                if nodes.isEmpty && directorySearchMatch == nil {
                     ContentUnavailableView {
                         Label(query.isEmpty ? "Waiting for activity observations" : "No matching activity", systemImage: "point.3.connected.trianglepath.dotted")
                     } description: {
@@ -46,6 +78,8 @@ struct AgentAwarenessWorkspace: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     header
+                        .frame(maxWidth: min(selectedID != nil || selectedDirectoryPath != nil ? 340 : 420,
+                                             geometry.size.width * 0.65), alignment: .leading)
                     Spacer()
                     HStack(alignment: .bottom) {
                         minimap(size: geometry.size)
@@ -54,7 +88,12 @@ struct AgentAwarenessWorkspace: View {
                     }
                 }
                 .padding(ConsoleMetrics.gutter)
-                if let selected {
+                if let directory = selectedDirectory {
+                    directoryDetail(directory)
+                        .frame(width: min(320, max(240, geometry.size.width * 0.28)))
+                        .padding(ConsoleMetrics.gutter)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                } else if let selected {
                     detail(selected)
                         .frame(width: min(320, max(240, geometry.size.width * 0.28)))
                         .padding(ConsoleMetrics.gutter)
@@ -69,10 +108,17 @@ struct AgentAwarenessWorkspace: View {
             }
         }
         .onChange(of: model.lastSnapshotAt) { _, _ in refresh() }
-        .onChange(of: model.processes.capturedAt) { _, _ in refresh() }
+        .onChange(of: model.processes.capturedAt) { _, _ in directories.refreshIfNeeded(); refresh() }
+        .task(id: directories.request(required: activityPaths)) { await directories.load(required: activityPaths) }
+        .onChange(of: directories.snapshot) { _, _ in refresh() }
+        .onChange(of: directories.roots) { _, _ in directoryOrigin = nil; directoryReference = nil; selectedDirectoryPath = nil }
         .onChange(of: model.topology) { _, _ in refresh() }
-        .onChange(of: console.search) { _, _ in fit(size: viewport, nodes: visibleNodes) }
-        .onExitCommand { selectedID = nil }
+        .onChange(of: console.search) { _, _ in
+            if visibleNodes.isEmpty, let directory = directorySearchMatch {
+                selectDirectory(directory.path); focusDirectory(directory.path)
+            } else { fit(size: viewport, nodes: visibleNodes) }
+        }
+        .onExitCommand { selectedID = nil; selectedDirectoryPath = nil }
     }
 
     private var visibleNodes: [AwarenessGraph.Node] {
@@ -105,6 +151,7 @@ struct AgentAwarenessWorkspace: View {
             Text("\(nodes.filter { $0.kind == .session }.count) detected sessions · \(nodes.filter { $0.kind == .project }.count) projects · \(nodes.filter { $0.kind == .service }.count) managed services")
                 .font(ConsoleFont.caption).foregroundStyle(SurfaceInk.secondary)
             AwarenessObservationStatus(model: model)
+            directoryControls
             if !model.attention.isEmpty {
                 Button("Review findings (\(model.attention.count))") { console.goHome() }
                     .font(ConsoleFont.caption)
@@ -115,9 +162,118 @@ struct AgentAwarenessWorkspace: View {
         .accessibilityIdentifier("awareness.summary")
     }
 
+    private var directoryControls: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Menu {
+                ForEach(directories.roots, id: \.self) { path in
+                    Button((path as NSString).lastPathComponent) { selectDirectory(path); fitDirectoryRoots(path: path) }
+                        .help(path)
+                }
+                if !directories.roots.isEmpty { Divider() }
+                Button("Choose roots…") { directories.chooseRoots() }
+                Button("Refresh folder structure") { directories.refresh() }
+                Button("Focus activity") { selectedDirectoryPath = nil; initialFit(size: viewport) }
+            } label: { Label("Roots", systemImage: "point.3.filled.connected.trianglepath.dotted") }
+                .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityIdentifier("directory.roots")
+            Text(directories.snapshot.map { "\($0.nodes.count) folders" + ($0.truncated ? " · partial" : "") } ?? (directories.scanning ? "Reading folders…" : "Choose folders"))
+                .font(ConsoleFont.micro).foregroundStyle(SurfaceInk.secondary)
+                .help("Directory names only. Hidden/generated folders and symbolic links are excluded. Expand a branch for deeper coverage.\n" + (directories.snapshot?.issues.prefix(8).joined(separator: "\n") ?? ""))
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("directory.coverage")
+    }
+
+    private func selectDirectory(_ path: String) {
+        selectedID = nil
+        selectedDirectoryPath = path
+    }
+
+    private func directoryDetail(_ node: DirectoryCrystal.Node) -> some View {
+        let children = (directories.snapshot?.nodes ?? []).filter { $0.parentPath == node.path }.sorted { $0.name < $1.name }
+        return VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
+            HStack {
+                Label(node.name, systemImage: "folder").font(ConsoleFont.cardTitle).lineLimit(2)
+                Spacer(minLength: 8)
+                Button { selectedDirectoryPath = nil } label: { Image(systemName: "xmark") }
+                    .buttonStyle(.plain).help("Close directory detail")
+            }
+            Text(node.path).font(ConsoleFont.mono(.caption)).textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(node.childDirectoryCount.map { "\($0) immediate child folders · depth \(node.depth)" } ?? "Child count unavailable")
+                .font(ConsoleFont.caption).foregroundStyle(SurfaceInk.secondary)
+            if node.unreadable {
+                Label("Directory metadata unavailable", systemImage: "exclamationmark.folder")
+                    .font(ConsoleFont.caption)
+            } else if node.truncated {
+                Text("This branch has deeper or unscanned folders.").font(ConsoleFont.caption)
+            }
+            HStack {
+                Button("Focus") { focusDirectory(node.path) }
+                    .accessibilityIdentifier("directory.focus")
+                Button("Open folder") { model.revealInFinder(node.path) }
+                if node.childDirectoryCount != 0 && !node.unreadable {
+                    Button(directories.expanded.contains(node.path) ? "Collapse" : "Expand branch") { directories.toggleExpansion(node.path) }
+                        .accessibilityIdentifier("directory.expand")
+                }
+            }
+            if !children.isEmpty {
+                Text("Folder branches").font(ConsoleFont.cardTitle)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(children) { child in
+                            Button { selectDirectory(child.path); focusDirectory(child.path) } label: {
+                                HStack {
+                                    Image(systemName: "folder")
+                                    Text(child.name).lineLimit(1)
+                                    Spacer()
+                                    Text(child.childDirectoryCount.map(String.init) ?? "?").monospacedDigit()
+                                }
+                                .font(ConsoleFont.caption)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            }.buttonStyle(.plain).help(child.path)
+                        }
+                    }
+                }.frame(maxHeight: min(210, CGFloat(children.count) * 25))
+            }
+            Text("Straight branches are folder containment. Crystalline faces group siblings; they are not code dependencies. Hidden/generated folders and symbolic links are excluded.")
+                .font(ConsoleFont.micro).foregroundStyle(SurfaceInk.secondary)
+        }
+        .padding(ConsoleMetrics.cardPadding)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: ConsoleMetrics.cardCorner))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("directory.detail")
+    }
+
+    private func focusDirectory(_ path: String) {
+        guard let anchor = directoryAnchors[path] else { return }
+        worldCenter = anchor
+        zoom = 0.95
+        pan = CGSize(width: -min(140, viewport.width * 0.12), height: 0)
+        didFit = true
+    }
+
+    private func fitDirectoryRoots(path: String? = nil) {
+        guard let crystal = directories.snapshot, viewport.width >= 320, viewport.height >= 300 else { return }
+        let nodes = crystal.nodes.filter { path == nil || $0.rootPath == path }
+        let origin = directoryOrigin ?? .zero
+        let bounds = nodes.reduce(CGRect.null) { result, node in
+            result.union(CGRect(x: node.position.x + origin.width - 40, y: node.position.y + origin.height - 40, width: 80, height: 80))
+        }.insetBy(dx: -40, dy: -40)
+        guard !bounds.isNull else { return }
+        worldCenter = bounds.center
+        zoom = min(1.2, max(0.01, min((viewport.width - 100) / max(1, bounds.width), (viewport.height - 230) / max(1, bounds.height))))
+        pan = CGSize(width: 0, height: 45)
+        didFit = true
+    }
+
     private func canvas(nodes: [AwarenessGraph.Node], edges: [AwarenessGraph.Edge], related: Set<String>, size: CGSize) -> some View {
         let index = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         return ZStack {
+            DirectoryCrystalLayer(crystal: directories.snapshot, offset: directoryOrigin ?? .zero,
+                                  selectedPath: selectedDirectoryPath,
+                                  projectPositions: Dictionary(uniqueKeysWithValues: nodes.filter { $0.kind == .project }.compactMap { node in node.projectPath.map { ($0, node.position) } }),
+                                  zoom: zoom, point: { point($0, size: size) }, select: selectDirectory)
             Canvas { context, canvas in
                 // A spatial reference grid moves with the camera, not a data trace.
                 let step: CGFloat = max(18, 40 * zoom)
@@ -157,9 +313,21 @@ struct AgentAwarenessWorkspace: View {
                 if dragOrigin == nil { dragOrigin = pan }
                 pan = CGSize(width: origin.width + value.translation.width, height: origin.height + value.translation.height)
             }.onEnded { _ in dragOrigin = nil })
-            .onTapGesture { selectedID = nil }
+            .simultaneousGesture(SpatialTapGesture().onEnded { tap in
+                let anchors = directoryAnchors
+                let match = (directories.snapshot?.nodes ?? []).min {
+                    let a = point(anchors[$0.path] ?? $0.position, size: size)
+                    let b = point(anchors[$1.path] ?? $1.position, size: size)
+                    return hypot(a.x - tap.location.x, a.y - tap.location.y) < hypot(b.x - tap.location.x, b.y - tap.location.y)
+                }
+                if let match {
+                    let p = point(anchors[match.path] ?? match.position, size: size)
+                    if hypot(p.x - tap.location.x, p.y - tap.location.y) <= 14 { selectDirectory(match.path); return }
+                }
+                selectedID = nil; selectedDirectoryPath = nil
+            })
             ForEach(nodes) { node in
-                Button { selectedID = node.id } label: {
+                Button { selectedDirectoryPath = nil; selectedID = node.id } label: {
                     AwarenessNodeView(node: node, selected: node.id == selectedID,
                                       related: selectedID == nil || related.contains(node.id))
                         .equatable()
@@ -248,6 +416,7 @@ struct AgentAwarenessWorkspace: View {
                 .help("Zoom in").accessibilityIdentifier("awareness.zoom.in")
             Divider().frame(height: ConsoleMetrics.gutter)
             Button("Fit map") { fit(size: viewport) }.accessibilityIdentifier("awareness.fit")
+            Button("Fit roots") { fitDirectoryRoots() }.accessibilityIdentifier("directory.fit")
         }
         .buttonStyle(.borderless)
         .padding(ConsoleMetrics.cardPadding)
@@ -258,10 +427,17 @@ struct AgentAwarenessWorkspace: View {
         Button { fit(size: size) } label: {
             Canvas { context, canvas in
                 guard let graph, graph.bounds.width > 0, graph.bounds.height > 0 else { return }
-                let scale = min(canvas.width / graph.bounds.width, canvas.height / graph.bounds.height)
+                let bounds = worldBounds
+                let scale = min(canvas.width / bounds.width, canvas.height / bounds.height)
+                for folder in directories.snapshot?.nodes ?? [] {
+                    let origin = directoryOrigin ?? .zero
+                    let p = CGPoint(x: (folder.position.x + origin.width - bounds.minX) * scale,
+                                    y: (folder.position.y + origin.height - bounds.minY) * scale)
+                    context.fill(Path(ellipseIn: CGRect(x: p.x, y: p.y, width: 1.5, height: 1.5)), with: .color(AwarenessInk.crystalVertex))
+                }
                 for node in graph.nodes {
-                    let x = (node.position.x - graph.bounds.minX) * scale
-                    let y = (node.position.y - graph.bounds.minY) * scale
+                    let x = (node.position.x - bounds.minX) * scale
+                    let y = (node.position.y - bounds.minY) * scale
                     context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: node.kind == .session ? 5 : 3, height: node.kind == .session ? 5 : 3)),
                                  with: .color(node.id == selectedID ? .accentColor : AwarenessInk.connection))
                 }
@@ -319,8 +495,21 @@ struct AgentAwarenessWorkspace: View {
     private func changeZoom(_ factor: CGFloat) { zoom = min(2.5, max(0.2, zoom * factor)) }
 
     private func refresh() {
-        let value = AwarenessGraph.build(sessions: model.sessions, processes: model.processes.rows,
-                                         processCapturedAt: model.processes.capturedAt, topology: model.topology)
+        var value = AwarenessGraph.build(sessions: model.sessions, processes: model.processes.rows,
+                                         processCapturedAt: model.processes.capturedAt, topology: model.topology,
+                                         directoryAnchors: directoryAnchors)
+        if let crystal = directories.snapshot, !crystal.nodes.isEmpty {
+            if let project = value.nodes.first(where: { $0.kind == .project }), directoryReference == nil {
+                let anchor = crystal.nodes.first { $0.path == project.projectPath } ?? crystal.nodes.first { $0.parentPath == nil }!
+                let matches = anchor.path == project.projectPath
+                directoryOrigin = CGSize(width: project.position.x - anchor.position.x - (matches ? 0 : 300),
+                                         height: project.position.y - anchor.position.y - (matches ? 0 : 160))
+                directoryReference = project.id
+                value = AwarenessGraph.build(sessions: model.sessions, processes: model.processes.rows,
+                                              processCapturedAt: model.processes.capturedAt, topology: model.topology,
+                                              directoryAnchors: directoryAnchors)
+            } else if directoryOrigin == nil { directoryOrigin = CGSize(width: -240, height: -100) }
+        }
         graph = value
         if let selectedID, !value.nodes.contains(where: { $0.id == selectedID }) { self.selectedID = nil }
         if !didFit || (!didFitActivity && value.nodes.contains(where: { $0.kind == .session })) { initialFit(size: viewport) }

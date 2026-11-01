@@ -165,14 +165,14 @@ struct ProcessRelationsView: View {
     }
 }
 
-/// The local dashboard is one space-efficient working surface. Detailed maps,
-/// interval tools and historical instruments are not rendered behind the table.
+/// The main workspace is the agent-awareness map and directory substrate.
 struct OverviewWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
+    var directoryRoots: [String]? = nil
 
     var body: some View {
-        AgentAwarenessWorkspace(model: model, console: console)
+        AgentAwarenessWorkspace(model: model, console: console, directoryRoots: directoryRoots)
     }
 }
 

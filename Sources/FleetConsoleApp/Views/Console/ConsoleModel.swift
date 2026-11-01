@@ -194,7 +194,7 @@ final class ConsoleModel {
         guard isLocalDeviceSelected else { return "Local only" }
         guard !atHome else { return "Search findings" }
         switch effectiveModule {
-        case .overview: return "Search activity"
+        case .overview: return "Search activity or folders"
         case .processes: return "Search processes"
         case .storage: return "Search volumes"
         case .services: return "Search services"
