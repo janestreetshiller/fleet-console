@@ -27,7 +27,7 @@ enum ConsoleModule: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .overview: return "Console"
+        case .overview: return "Agent awareness"
         case .services: return "Operations"
         default: return rawValue
         }

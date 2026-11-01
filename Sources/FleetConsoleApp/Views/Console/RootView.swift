@@ -208,7 +208,7 @@ struct ConsoleRootView: View {
     private var contentColumn: some View {
         if console.isLocalDeviceSelected {
             if console.atHome {
-                OverviewWorkspace(model: model, console: console)
+                HomeModule(model: model, console: console)
             } else {
                 switch console.module {
                 case .overview: OverviewWorkspace(model: model, console: console)
@@ -285,7 +285,7 @@ struct ConsoleRootView: View {
 
         ToolbarItem(placement: .primaryAction) {
             Menu {
-                Button("Console") { console.open(.overview) }
+                Button("Agent awareness") { console.open(.overview) }
                 Section("Detailed views") {
                     ForEach(ConsoleModule.allCases.filter { $0 != .overview }) { module in
                         Button(module.title) { console.open(module) }

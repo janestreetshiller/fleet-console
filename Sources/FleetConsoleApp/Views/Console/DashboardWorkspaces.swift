@@ -172,7 +172,7 @@ struct OverviewWorkspace: View {
     let console: ConsoleModel
 
     var body: some View {
-        ConsolidatedConsole(model: model, console: console)
+        AgentAwarenessWorkspace(model: model, console: console)
     }
 }
 
