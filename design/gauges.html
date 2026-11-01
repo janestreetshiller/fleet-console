@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fleet Console Cluster Gauges</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--fc-bg);color:var(--fc-text);font:13px/1.4 var(--fc-font);padding:20px}
+h1{font-size:15px;font-weight:600;color:var(--fc-bright);margin:0 0 4px}
+.sub{color:var(--fc-dim);margin:0 0 16px}
+.bar{display:flex;gap:16px;flex-wrap:wrap;border:1px solid var(--fc-line);padding:10px 14px;margin-bottom:16px;background:var(--fc-panel)}
+.bar b{color:var(--fc-bright)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.node{border:1px solid var(--fc-line);background:var(--fc-panel);padding:12px 14px}
+.node.warn{border-color:var(--fc-warn)}.node.crit{border-color:var(--fc-crit)}.node.off{opacity:.5}
+.head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.name{color:var(--fc-bright);font-weight:600}
+.state{font-size:12px}
+.state.ok{color:var(--fc-bright)}.state.warn{color:var(--fc-warn)}.state.crit{color:var(--fc-crit)}.state.off{color:var(--fc-dim)}
+.row{display:grid;grid-template-columns:48px 1fr 46px;align-items:center;gap:8px;margin:5px 0}
+.lab{color:var(--fc-dim)}
+.val{text-align:right;font-variant-numeric:tabular-nums}
+.seg{display:flex;gap:var(--fc-gap)}
+.seg i{flex:1;height:12px;background:#0a1f0a;display:block}
+.seg i.on{background:var(--fc-dark)}.seg i.hi{background:var(--fc-bright)}
+.seg i.w{background:var(--fc-warn)}.seg i.c{background:var(--fc-crit)}
+.spark{display:flex;align-items:flex-end;gap:1px;height:26px;margin-top:10px;border-top:1px solid var(--fc-line);padding-top:8px}
+.spark i{flex:1;background:var(--fc-dark);min-height:1px}
+.foot{display:flex;justify-content:space-between;color:var(--fc-dim);margin-top:8px;font-size:12px}
+.legend{margin-top:18px;color:var(--fc-dim);display:flex;gap:18px;flex-wrap:wrap}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:-1px}
+.l1::before{background:var(--fc-dark)}.l2::before{background:var(--fc-bright)}.l3::before{background:var(--fc-warn)}.l4::before{background:var(--fc-crit)}
+</style></head><body>
+<h1>Cluster gauges</h1>
+<p class="sub">One tile per node. Segment bars snap to the 10px cell grid used by the logo; color shifts at 70% and 90%.</p>
+<div class="bar" id="summary"></div>
+<div class="grid" id="grid"></div>
+<div class="legend"><span class="l1">normal</span><span class="l2">above 50%</span><span class="l3">warn 70%+</span><span class="l4">critical 90%+</span></div>
+<script>
+const nodes=[
+ {n:"node-a",s:"ok",cpu:34,mem:61,gpu:12,net:8,dsk:47,svc:"14/14",ag:3,up:"6d 4h"},
+ {n:"node-b",s:"ok",cpu:58,mem:44,gpu:71,net:22,dsk:63,svc:"9/9",ag:2,up:"12d 1h"},
+ {n:"node-c",s:"warn",cpu:82,mem:77,gpu:93,net:41,dsk:71,svc:"21/22",ag:5,up:"3d 18h"},
+ {n:"node-d",s:"crit",cpu:97,mem:94,gpu:88,net:63,dsk:92,svc:"17/20",ag:4,up:"1d 2h"},
+ {n:"node-e",s:"off",cpu:0,mem:0,gpu:0,net:0,dsk:55,svc:"0/6",ag:0,up:"offline"},
+];
+const N=20;
+function seg(p,off){let on=Math.round(p/100*N),h="";for(let i=0;i<N;i++){const lit=i<on;let c="";if(lit&&!off){const f=(i+1)/N*100;c=f>90?"c":f>70?"w":f>50?"hi":"on"}h+=`<i class="${c}"></i>`.replace('class=""','')}return `<div class="seg">${h}</div>`}
+function spark(base){let h="";for(let i=0;i<40;i++){const v=Math.max(4,Math.min(100,base+Math.sin(i/3)*12+((i*37)%11)-5));h+=`<i style="height:${v}%"></i>`}return `<div class="spark" aria-label="cpu history">${h}</div>`}
+const label={ok:"healthy",warn:"pressure",crit:"critical",off:"offline"};
+document.getElementById("grid").innerHTML=nodes.map(x=>{const off=x.s==="off";
+ const rows=[["cpu",x.cpu],["mem",x.mem],["gpu",x.gpu],["net",x.net],["disk",x.dsk]].map(([l,v])=>`<div class="row"><span class="lab">${l}</span>${seg(v,off&&l!=="disk")}<span class="val">${off&&l!=="disk"?"--":v+"%"}</span></div>`).join("");
+ return `<article class="node ${x.s}"><div class="head"><span class="name">${x.n}</span><span class="state ${x.s}">${label[x.s]}</span></div>${rows}${spark(x.cpu||5)}<div class="foot"><span>services ${x.svc}</span><span>agents ${x.ag}</span><span>up ${x.up}</span></div></article>`}).join("");
+const on=nodes.filter(x=>x.s!=="off"),avg=k=>Math.round(on.reduce((a,x)=>a+x[k],0)/on.length);
+document.getElementById("summary").innerHTML=`<span>nodes <b>${on.length}/${nodes.length}</b></span><span>avg cpu <b>${avg("cpu")}%</b></span><span>avg mem <b>${avg("mem")}%</b></span><span>avg gpu <b>${avg("gpu")}%</b></span><span>agents <b>${nodes.reduce((a,x)=>a+x.ag,0)}</b></span><span>needs attention <b>${nodes.filter(x=>x.s==="warn"||x.s==="crit").length}</b></span>`;
+</script></body></html>
