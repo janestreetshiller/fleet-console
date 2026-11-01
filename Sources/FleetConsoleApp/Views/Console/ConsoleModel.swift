@@ -92,10 +92,9 @@ final class ConsoleModel {
     /// events each decide what fields it matches.
     var search = ""
 
-    /// Open by default: the sidebar is the window's navigation and carries the
-    /// app's identity card, so a window that opened without it opened without
-    /// both. ⌃⌘S and the toolbar toggle still tuck it away.
-    var sidebarRevealed = true
+    /// The local console uses the full viewport. Device navigation remains
+    /// available through the native sidebar toggle.
+    var sidebarRevealed = false
 
     func toggleSidebar() { sidebarRevealed.toggle() }
 
@@ -193,7 +192,7 @@ final class ConsoleModel {
     /// placeholder it reads as a hint that was itself truncated.
     var searchPrompt: String {
         guard isLocalDeviceSelected else { return "Local only" }
-        guard !atHome else { return "Search attention" }
+        guard !atHome else { return "Search processes" }
         switch effectiveModule {
         case .overview: return "Search processes"
         case .processes: return "Search processes"
@@ -213,10 +212,10 @@ final class ConsoleModel {
             return "Select a fleet node to inspect its link and addressing."
         }
         if atHome {
-            return "Select something that needs attention to inspect it here."
+            return "Select a process or managed service to inspect it here."
         }
         switch effectiveModule {
-        case .overview: return "Tap a map tile to inspect its process, or select an interval for retained observations."
+        case .overview: return "Select a process or managed service to inspect it without leaving the console."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."
@@ -280,7 +279,8 @@ final class ConsoleModel {
         guard isLocalDeviceSelected else { return .device(selectedDeviceID) }
         // Home borrows the inspector for whatever its selected priority row is
         // about, so reading an attention item does not cost a navigation.
-        if atHome {
+        if atHome || module == .overview {
+            if let pid = selectedPID { return .process(pid) }
             if let id = selectedServiceID { return .service(id) }
             if let id = selectedUnmanagedID { return .unmanaged(id) }
             return .none
@@ -299,6 +299,24 @@ final class ConsoleModel {
             if let id = selectedUnmanagedID { return .unmanaged(id) }
             return .none
         }
+    }
+
+    /// Compact work rows inspect in place rather than sending the user to
+    /// another module. Clear competing selection so the target is unambiguous.
+    func inspectConsoleProcess(_ pid: Int32) {
+        open(.overview)
+        selectedServiceID = nil
+        selectedUnmanagedID = nil
+        selectedPID = pid
+        inspectorRevealed = true
+    }
+
+    func inspectConsoleService(_ id: String) {
+        open(.overview)
+        selectedPID = nil
+        selectedUnmanagedID = nil
+        selectedServiceID = id
+        inspectorRevealed = true
     }
 
     // MARK: - Storage selection
@@ -357,7 +375,11 @@ final class ConsoleModel {
         // Home's rows navigate rather than select, so there is nothing of its
         // own to clear — clearing the module's selection here would silently
         // undo a choice you cannot see.
-        if atHome { return false }
+        if atHome || module == .overview {
+            guard selectedPID != nil || selectedServiceID != nil || selectedUnmanagedID != nil else { return false }
+            selectedPID = nil; selectedServiceID = nil; selectedUnmanagedID = nil
+            return true
+        }
         switch effectiveModule {
         case .processes where selectedPID != nil: selectedPID = nil; return true
         case .storage where selectedVolumeID != nil || selectedSegmentID != nil:

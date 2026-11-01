@@ -55,4 +55,19 @@ struct ConsoleNavigationTests {
         #expect(ConsoleModel.ProcessView.allCases.map(\.rawValue)
                 == ["Relationships", "Table", "Heatmap", "Scatter"])
     }
+    @MainActor @Test("Console inspection stays in place and switches targets unambiguously")
+    func consoleInspection() {
+        let console = ConsoleModel()
+        console.inspectConsoleService("fixture-service")
+        #expect(console.module == .overview)
+        #expect(console.inspectorTarget() == .service("fixture-service"))
+        console.inspectConsoleProcess(42)
+        #expect(console.module == .overview)
+        #expect(console.selectedServiceID == nil)
+        #expect(console.inspectorTarget() == .process(42))
+        #expect(console.inspectorRevealed)
+        #expect(console.handleEscape())
+        #expect(console.inspectorTarget() == .none)
+    }
+
 }
