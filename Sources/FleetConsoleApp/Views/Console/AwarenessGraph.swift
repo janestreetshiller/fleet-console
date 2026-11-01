@@ -40,7 +40,8 @@ struct AwarenessGraph {
     let observedAt: Date?
 
     static func build(sessions: [AgentSession], processes: [ProcessRow], processCapturedAt: Date?,
-                      topology: FleetTopology?, now: Date = Date(), limit: Int = 120) -> AwarenessGraph {
+                      topology: FleetTopology?, now: Date = Date(), limit: Int = 120,
+                      directoryAnchors: [String: CGPoint] = [:]) -> AwarenessGraph {
         var nodes: [Node] = []
         var edges: [Edge] = []
         var projects = Set<String>()
@@ -192,7 +193,7 @@ struct AwarenessGraph {
         let nodeIDs = Set(nodes.map(\.id))
         edges = edges.filter { nodeIDs.contains($0.source) && nodeIDs.contains($0.target) }
         let shown = Set(nodes.filter { !$0.id.hasPrefix("registry:") && $0.kind == .process }.compactMap(\.pid))
-        let spatial = layout(nodes: nodes, edges: edges)
+        let spatial = layout(nodes: nodes, edges: edges, directoryAnchors: directoryAnchors)
         return AwarenessGraph(nodes: spatial.nodes, edges: edges.sorted { $0.id < $1.id },
                               bounds: spatial.bounds, omittedProcesses: Set(processes.map(\.pid)).count - shown.count,
                               observedAt: processCapturedAt ?? topology?.generatedAt)
@@ -202,7 +203,7 @@ struct AwarenessGraph {
 
     /// A finite identity-seeded packing pass, never a force simulation. Only
     /// identities, card geometry and observed relationships affect placement.
-    private static func layout(nodes: [Node], edges: [Edge]) -> (nodes: [Node], bounds: CGRect) {
+    private static func layout(nodes: [Node], edges: [Edge], directoryAnchors: [String: CGPoint]) -> (nodes: [Node], bounds: CGRect) {
         guard !nodes.isEmpty else { return ([], .zero) }
         var index = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
         func precedes(_ a: String, _ b: String) -> Bool {
@@ -234,7 +235,9 @@ struct AwarenessGraph {
             let seed = stableHash(id)
             let angle = Double(seed % 65_536) * 2 * Double.pi / 65_536
             let preferred: CGPoint
-            if let parentID = parent[id], placed.contains(parentID), let anchor = index[parentID] {
+            if node.kind == .project, let path = node.projectPath, let anchor = directoryAnchors[path] {
+                preferred = anchor
+            } else if let parentID = parent[id], placed.contains(parentID), let anchor = index[parentID] {
                 let radius = max(anchor.size.width, node.size.width) * 0.9 + 80
                 preferred = CGPoint(x: anchor.position.x + cos(angle) * radius,
                                     y: anchor.position.y + sin(angle) * radius)

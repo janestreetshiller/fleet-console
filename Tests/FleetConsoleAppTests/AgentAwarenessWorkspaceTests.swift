@@ -10,7 +10,7 @@ struct AgentAwarenessWorkspaceTests {
     func viewport(dark: Bool) throws {
         for size in [NSSize(width: 640, height: 676), NSSize(width: 982, height: 720), NSSize(width: 1560, height: 900)] {
             let (model, console) = fixture()
-            let window = host(OverviewWorkspace(model: model, console: console), size: size, dark: dark)
+            let window = host(OverviewWorkspace(model: model, console: console, directoryRoots: []), size: size, dark: dark)
             defer { window.orderOut(nil) }
             let root = try #require(window.contentView)
             let canvas = try #require(element("awareness.canvas", in: root))
@@ -29,7 +29,7 @@ struct AgentAwarenessWorkspaceTests {
     @MainActor @Test("Selecting an agent exposes its actual activity and navigable relationships")
     func selectActivity() throws {
         let (model, console) = fixture()
-        let window = host(OverviewWorkspace(model: model, console: console), size: NSSize(width: 1560, height: 900), dark: true)
+        let window = host(OverviewWorkspace(model: model, console: console, directoryRoots: []), size: NSSize(width: 1560, height: 900), dark: true)
         defer { window.orderOut(nil) }
         let root = try #require(window.contentView)
         let node = try #require(nodes(root).first {
@@ -55,7 +55,7 @@ struct AgentAwarenessWorkspaceTests {
     @MainActor @Test("Registry membership updates preserve a focused agent's native frame")
     func focusedAgentStaysStillWhenGraphBoundsChange() throws {
         let (model, console) = fixture()
-        let window = host(OverviewWorkspace(model: model, console: console), size: NSSize(width: 1560, height: 900), dark: true)
+        let window = host(OverviewWorkspace(model: model, console: console, directoryRoots: []), size: NSSize(width: 1560, height: 900), dark: true)
         defer { window.orderOut(nil) }
         let root = try #require(window.contentView)
         let agentID = "session:fixture-session"
