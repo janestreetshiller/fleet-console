@@ -163,7 +163,7 @@ class PackagingTests(ScriptFixture):
         with (self.app / "Contents/Info.plist").open("rb") as stream:
             info = plistlib.load(stream)
         self.assertEqual(info["CFBundleShortVersionString"], "1.3.0")
-        self.assertEqual(info["CFBundleVersion"], "10")
+        self.assertEqual(info["CFBundleVersion"], "11")
         self.assertEqual(info["FleetSourceRevision"], "unrecorded")
         self.assertTrue(info["FleetSourceDirty"])
 
