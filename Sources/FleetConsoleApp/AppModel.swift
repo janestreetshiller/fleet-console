@@ -80,7 +80,7 @@ final class AppModel {
     @ObservationIgnored nonisolated(unsafe) private var clockTimer: Timer?
     private var didInitialLoad = false
 
-    init(billing: OurosBilling? = nil) {
+    init(billing: OurosBilling? = nil, connectToController: Bool = true) {
         ourosBilling = billing ?? OurosBilling()
         // Cadences come from config, clamped there. Read once at construction:
         // a live interval change would mean tearing down and rebuilding the two
@@ -90,15 +90,17 @@ final class AppModel {
         system = SystemMonitor { [license] feature in license.isUnlocked(feature) }
         processes = ProcessInventory(interval: intervals.clampedProcessSample)
 
-        DaemonClient.shared.startSubscription { [weak self] snapshot in
-            self?.apply(snapshot)
-        } onConnection: { [weak self] connected, error in
-            guard let self else { return }
-            self.connected = connected
-            self.connectionError = connected ? nil : error
-            self.lastSnapshotReceivedUptime = nil
-            if !connected {
-                self.agentRegistered = DaemonClient.shared.agentIsRegistered()
+        if connectToController {
+            DaemonClient.shared.startSubscription { [weak self] snapshot in
+                self?.apply(snapshot)
+            } onConnection: { [weak self] connected, error in
+                guard let self else { return }
+                self.connected = connected
+                self.connectionError = connected ? nil : error
+                self.lastSnapshotReceivedUptime = nil
+                if !connected {
+                    self.agentRegistered = DaemonClient.shared.agentIsRegistered()
+                }
             }
         }
         network.refresh()

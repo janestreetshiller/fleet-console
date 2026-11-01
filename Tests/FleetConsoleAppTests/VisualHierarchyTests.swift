@@ -37,7 +37,7 @@ struct VisualHierarchyTests {
         #expect(try frame(cpuValue).minY > frame(glance).maxY)
     }
 
-    @MainActor @Test("Sidebar separates monitoring from background work")
+    @MainActor @Test("Sidebar provides one console destination and devices")
     func sidebarGroups() throws {
         let window = host(NavigationSplitView {
             FleetSidebarView(model: AppModel(), console: ConsoleModel())
@@ -51,8 +51,9 @@ struct VisualHierarchyTests {
         request.recognitionLevel = .accurate
         try VNImageRequestHandler(cgImage: #require(bitmap.cgImage)).perform([request])
         let text = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
-        #expect(text.localizedCaseInsensitiveContains("Monitor"))
-        #expect(text.localizedCaseInsensitiveContains("Background work"))
+        #expect(text.localizedCaseInsensitiveContains("Console"))
+        #expect(!text.localizedCaseInsensitiveContains("Monitor"))
+        #expect(!text.localizedCaseInsensitiveContains("Background work"))
     }
 
     @MainActor private func host<Content: View>(_ content: Content, width: CGFloat, dark: Bool) -> NSWindow {

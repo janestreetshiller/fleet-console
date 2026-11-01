@@ -87,6 +87,8 @@ enum ConsoleMetrics {
     /// footer bars. Smaller than a card's interior, because a panel edge is
     /// already a boundary and needs less air than content inside it.
     static let panelInset: CGFloat = 8
+    /// One horizontal managed-work or detected-session line; never a flexible panel.
+    static let workRowHeight: CGFloat = 34
     /// Corner ramp, one rung per level of nesting: card, then a row inside it,
     /// then a control inside that, then a bar, then a heatmap tile. Adjacent
     /// rungs are a φ ratio apart, which is what makes a highlighted row inside a

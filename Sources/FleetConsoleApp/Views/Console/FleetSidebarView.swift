@@ -16,25 +16,11 @@ struct FleetSidebarView: View {
     @State private var managingDevices = false
 
     var body: some View {
-        // Group observation and supervised work separately; destinations retain
-        // their existing selection bindings and keyboard routes.
+        // The working console is one destination. Less frequent views live in
+        // Tools; the sidebar is for choosing a local or linked machine.
         List(selection: navigationSelection) {
-            Section {
-                Label("Needs Attention", systemImage: "exclamationmark.circle")
-                    .tag("attention")
-                ForEach([ConsoleModule.overview, .processes]) { module in
-                    Label(module.title, systemImage: module.symbol)
-                        .tag("module:" + module.rawValue)
-                }
-            } header: {
-                Text("Monitor").accessibilityIdentifier("sidebar.monitor")
-            }
-            Section {
-                Label(ConsoleModule.services.title, systemImage: ConsoleModule.services.symbol)
-                    .tag("module:" + ConsoleModule.services.rawValue)
-            } header: {
-                Text("Background work").accessibilityIdentifier("sidebar.work")
-            }
+            Label("Console", systemImage: "desktopcomputer")
+                .tag("module:" + ConsoleModule.overview.rawValue)
             Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
@@ -93,7 +79,7 @@ struct FleetSidebarView: View {
     private var navigationSelection: Binding<String> {
         Binding {
             if !console.isLocalDeviceSelected { return "device:" + console.selectedDeviceID }
-            return console.atHome ? "attention" : "module:" + ([ConsoleModule.storage, .events, .plists].contains(console.module) ? ConsoleModule.services.rawValue : console.module.rawValue)
+            return "module:" + (console.atHome ? ConsoleModule.overview.rawValue : console.module.rawValue)
         } set: { destination in
             if destination == "attention" {
                 console.goHome()

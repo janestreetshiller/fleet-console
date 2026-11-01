@@ -165,37 +165,14 @@ struct ProcessRelationsView: View {
     }
 }
 
-/// The original instrument page, with the later evidence surfaces added under it.
-///
-/// `OverviewModule` keeps the viewport it was measured against: a fixed height,
-/// no scroll of its own, and the capped process preview the viewport tests host
-/// directly. The process map and the interval chart sit on this page, so neither
-/// replaces the CPU and memory graphs.
+/// The local dashboard is one space-efficient working surface. Detailed maps,
+/// interval tools and historical instruments are not rendered behind the table.
 struct OverviewWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
-    /// Plots stay above the 89pt floor with the compact process cap, and the
-    /// default module column still shows the process map's title under them.
-    private static let instrumentHeight: CGFloat = 640
 
     var body: some View {
-        GeometryReader { geometry in
-            // Same cap and centering as the instrument cards. Without it the map
-            // and the interval chart run to the column edges on a wide window.
-            let contentWidth = DashboardContentGeometry.width(
-                available: geometry.size.width - OverviewViewportGeometry.horizontalPadding * 2)
-            ScrollView {
-                VStack(alignment: .center, spacing: OverviewViewportGeometry.gap) {
-                    OverviewModule(model: model, console: console)
-                        .frame(height: Self.instrumentHeight)
-                    ConsolidatedProcessMap(model: model, console: console)
-                        .frame(width: contentWidth)
-                    TrendsWorkspace(model: model, console: console, scrolls: false, showsInstruments: false)
-                        .frame(width: contentWidth)
-                }
-                .frame(maxWidth: .infinity)
-            }
-        }
+        ConsolidatedConsole(model: model, console: console)
     }
 }
 
