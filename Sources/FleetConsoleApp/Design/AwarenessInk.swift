@@ -16,5 +16,8 @@ enum AwarenessInk {
     static var halo: Color { Color.accentColor.opacity(0.055) }
     static var selectedHalo: Color { Color.accentColor.opacity(0.12) }
     static var shadow: Color { Color.black.opacity(0.10) }
+    static var crystalFacet: Color { Color.accentColor.opacity(0.065) }
+    static var crystalBranch: Color { Color(nsColor: .secondaryLabelColor).opacity(0.42) }
+    static var crystalVertex: Color { Color(nsColor: .secondaryLabelColor).opacity(0.70) }
     static let faded: Double = 0.25
 }
