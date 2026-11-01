@@ -19,6 +19,7 @@ import FleetCore
 struct ProcessModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
+    var embedded = false
 
     @State private var sortOrder: [KeyPathComparator<ProcessRow>] = [
         KeyPathComparator(\.cpuPercent, order: .reverse)
@@ -77,13 +78,15 @@ struct ProcessModule: View {
     }
 
     var body: some View {
+        let rows = filtered
+        let managed = managedByPID
         VStack(alignment: .leading, spacing: 0) {
-            header
+            header(rowCount: rows.count)
                 .padding(.horizontal, ConsoleMetrics.gutter)
-                .padding(.top, ConsoleMetrics.gutter)
+                .padding(.top, embedded ? ConsoleMetrics.panelInset : ConsoleMetrics.gutter)
                 .padding(.bottom, 10)
 
-            if filtered.isEmpty && !console.search.trimmingCharacters(in: .whitespaces).isEmpty {
+            if rows.isEmpty && !console.search.trimmingCharacters(in: .whitespaces).isEmpty {
                 ContentUnavailableView {
                     Label("No matching processes", systemImage: "magnifyingglass")
                 } description: {
@@ -95,7 +98,7 @@ struct ProcessModule: View {
             } else {
             Table(of: ProcessRow.self, selection: $console.selectedPID, sortOrder: $sortOrder) {
                 TableColumn("Process", value: \.name) { row in
-                    ProcessNameCell(row: row, managed: managedByPID[row.pid] != nil)
+                    ProcessNameCell(row: row, managed: managed[row.pid] != nil)
                 }
                 .width(min: 160, ideal: 220, max: 320)
 
@@ -154,11 +157,21 @@ struct ProcessModule: View {
                                             : "Ports \(ConsoleFmt.ports(row.ports))")
                 }
                 .width(min: 60, ideal: 90, max: 160)
+
+                TableColumn("Command") { row in
+                    Text(row.commandLine)
+                        .font(ConsoleFont.caption)
+                        .foregroundStyle(SurfaceInk.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .width(min: 160, ideal: 320, max: .infinity)
             } rows: {
-                ForEach(filtered) { row in
-                    let request = InvestigationRequest.process(row, model: model)
+                ForEach(rows) { row in
                     TableRow(row)
-                        .contextMenu { contextMenu(for: row, request: request) }
+                        .contextMenu {
+                            contextMenu(for: row, request: .process(row, model: model))
+                        }
                 }
             }
             .contextMenu(forSelectionType: Int32.self) { pids in
@@ -191,8 +204,12 @@ struct ProcessModule: View {
         }
     }
 
-    private var header: some View {
+    private func header(rowCount: Int) -> some View {
         ModuleControlBar {
+            if embedded {
+                Text("Processes").font(ConsoleFont.cardTitle).accessibilityAddTraits(.isHeader)
+                Text("\(rowCount)").font(ConsoleFont.caption).foregroundStyle(SurfaceInk.secondary)
+            }
             Picker("Scope", selection: $console.processScope) {
                 ForEach(ConsoleModel.ProcessScope.allCases) { scope in
                     // Premium scopes are labelled, not locked away: a paywalled

@@ -208,7 +208,7 @@ struct ConsoleRootView: View {
     private var contentColumn: some View {
         if console.isLocalDeviceSelected {
             if console.atHome {
-                HomeModule(model: model, console: console)
+                OverviewWorkspace(model: model, console: console)
             } else {
                 switch console.module {
                 case .overview: OverviewWorkspace(model: model, console: console)
@@ -268,11 +268,7 @@ struct ConsoleRootView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        if console.isLocalDeviceSelected && !console.atHome && console.module == .overview {
-            ToolbarItem(placement: .principal) {
-                OverviewToolbarControls(console: console)
-            }
-        } else if console.isLocalDeviceSelected && !console.atHome && console.module == .processes {
+        if console.isLocalDeviceSelected && !console.atHome && console.module == .processes {
             ToolbarItem(placement: .principal) {
                 Picker("Process view", selection: $console.processView) {
                     ForEach(ConsoleModel.ProcessView.allCases) { view in
@@ -289,6 +285,13 @@ struct ConsoleRootView: View {
 
         ToolbarItem(placement: .primaryAction) {
             Menu {
+                Button("Console") { console.open(.overview) }
+                Section("Detailed views") {
+                    ForEach(ConsoleModule.allCases.filter { $0 != .overview }) { module in
+                        Button(module.title) { console.open(module) }
+                    }
+                }
+                Section("Tools") {
                 ForEach(ConsoleTool.allCases) { tool in
                     Button {
                         tools.toggle(tool, context: toolContext)
@@ -296,11 +299,12 @@ struct ConsoleRootView: View {
                         Label(tool.title, systemImage: tool.symbol)
                     }
                 }
+                }
             } label: {
                 Label("Tools", systemImage: "wrench.and.screwdriver")
                     .labelStyle(.titleAndIcon)
             }
-            .help("Terminal, files and local interpretation")
+            .help("Detailed views, terminal and files")
             .accessibilityLabel("Tools")
         }
 
