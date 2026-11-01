@@ -25,7 +25,13 @@ enum ConsoleModule: String, CaseIterable, Identifiable {
     case plists = "Launch Services"
 
     var id: String { rawValue }
-    var title: String { self == .services ? "Operations" : rawValue }
+    var title: String {
+        switch self {
+        case .overview: return "Console"
+        case .services: return "Operations"
+        default: return rawValue
+        }
+    }
 
     var symbol: String {
         switch self {
