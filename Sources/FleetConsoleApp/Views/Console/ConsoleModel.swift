@@ -192,9 +192,9 @@ final class ConsoleModel {
     /// placeholder it reads as a hint that was itself truncated.
     var searchPrompt: String {
         guard isLocalDeviceSelected else { return "Local only" }
-        guard !atHome else { return "Search processes" }
+        guard !atHome else { return "Search findings" }
         switch effectiveModule {
-        case .overview: return "Search processes"
+        case .overview: return "Search activity"
         case .processes: return "Search processes"
         case .storage: return "Search volumes"
         case .services: return "Search services"
@@ -215,7 +215,7 @@ final class ConsoleModel {
             return "Select a process or managed service to inspect it here."
         }
         switch effectiveModule {
-        case .overview: return "Select a process or managed service to inspect it without leaving the console."
+        case .overview: return "Select an agent, project or process in the activity map."
         case .processes: return "Select a process to see its tree, threads, ports and owner."
         case .storage: return "Select a segment or volume for capacity and snapshot detail."
         case .services: return "Select a service for evidence, lease, placement and logs."

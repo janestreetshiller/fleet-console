@@ -144,7 +144,7 @@ struct OverviewViewportTests {
 
     // The shipping root requests refresh. Only the observational test harness
     // may exercise its live controller/probe integration.
-    @MainActor @Test("Shipping console uses the viewport for real process rows in both appearances",
+    @MainActor @Test("Shipping agent map occupies the viewport with real observed activity in both appearances",
         .enabled(if: RPCRequestPolicy.forArguments(ProcessInfo.processInfo.arguments) == .observational))
     func shippingWindowViewport() async throws {
         initializeApplication()
@@ -168,19 +168,30 @@ struct OverviewViewportTests {
                 try await Task.sleep(for: .milliseconds(100))
                 settle()
                 let root = try #require(window.contentView)
-                let resources = try #require(element("console.resources", in: root))
-                let processes = try #require(element("console.processes", in: root))
-                let resourceRect = try frame(resources)
-                let processRect = try frame(processes)
-                print("\(name) \(dark ? "dark" : "light") resources: \(resourceRect); processes: \(processRect)")
-                #expect(resourceRect.height <= 180)
-                #expect(processRect.height >= root.bounds.height * 0.50)
-                #expect(processRect.width >= root.bounds.width * 0.95)
+                let canvas = try #require(element("awareness.canvas", in: root))
+                let summary = try #require(element("awareness.summary", in: root))
+                let canvasRect = try frame(canvas)
+                print("\(name) \(dark ? "dark" : "light") activity canvas: \(canvasRect); sessions: \(model.sessions.count)")
+                #expect(try frame(summary).height <= 180)
+                #expect(canvasRect.height >= root.bounds.height * 0.85)
+                #expect(canvasRect.width >= root.bounds.width * 0.95)
+                #expect(element("console.processes", in: root) == nil)
+                #expect(element("awareness.fit", in: root) != nil)
+                if let session = model.sessions.first {
+                    let agent = try #require(element("awareness.node.session:" + session.id, in: root))
+                    #expect(try frame(agent).height >= 80, "Agent activity must be readable on first presentation")
+                }
                 #expect(element("overview.process-map", in: root) == nil)
                 #expect(element("overview.focus", in: root) == nil)
                 try capture(window, name: "overview-\(name)-\(dark ? "dark" : "light")")
             }
         }
+        controller.console.goHome()
+        settle()
+        #expect(element("home.priority", in: try #require(window.contentView)) != nil)
+        controller.console.open(.overview)
+        settle()
+        #expect(element("awareness.canvas", in: try #require(window.contentView)) != nil)
         let process = try #require(model.processes.rows.first)
         controller.console.inspectConsoleProcess(process.pid)
         settle()

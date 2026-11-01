@@ -593,40 +593,15 @@ and its key the same fact.
 
 ### Modules and inspectors
 
-The module list is `ConsoleModule`, in `Design/ConsoleModule.swift`. It is a
-design declaration before it is navigation state: `ConsoleMetrics.modulePickerWidth`
-is `modulePickerSegment × allCases.count`, so adding a module widens the toolbar
-picker rather than clipping the last segment. It used to sit at the top of
-`Views/Console/ConsoleModel.swift`, which pointed the dependency the wrong way —
-a token in `Design/` reaching up into the view layer — and put the enum out of
-reach of `Scripts/fleetkit-sheet.sh`, which symlinks only the design sources, so
-the contact sheet could not render the real picker width without either a stubbed
-module list or the whole console object graph. The enum touches neither
-`ConsoleModel` nor `AppModel`; the state that navigates *between* modules still
-lives in `ConsoleModel`.
+The module list is `ConsoleModule`, in `Design/ConsoleModule.swift`; navigation state lives in `ConsoleModel`. The default `overview` destination is **Agent awareness**, implemented by `AgentAwarenessWorkspace`. The primary window is a spatial map, not a module picker or process table. The sidebar starts hidden and selects the awareness map or a device. Diagnostic destinations remain under Tools and the View menu.
 
-`HomeModule` (`Console/Chrome/`) is the landing surface, not a module — it has no
-⌘-digit and no entry in `ConsoleModule`, because the digits are an index into that
-enum and a surface that is not in it must not consume one. ⇧⌘H reaches it.
+`AwarenessGraph` projects actual session, project, process and registry observations into a bounded world. Agent cards carry published activity when supplied; missing activity is labelled, never invented. Working-directory, verified-process, observed-child, recorded-owner, verified-leader and observed-listener connections carry distinct evidence. Shared names, PIDs or directories do not establish ownership or code dependencies. Registry evidence expiry uses the existing model clock; layout has no continuous physics loop or new polling pipeline.
 
-No surface carries a page header. The sidebar's selection already names the
-page, and a title row restating it — `ModuleHeader`, with a subtitle beside it —
-was a second toolbar charged to the content's height: on Overview it was most of
-why a 1560-wide window drew its traces 82pt tall. A module whose page has
-controls opens with a `ModuleControlBar` holding only those controls (Overview's
-chart focus and time range, Processes' scope, Launch Services' reload); a module
-without controls opens on its content. Storage's *Scan Now* sits on the
-breakdown card it re-measures, and a remote device is named by its reachability
-card. Its second card is labelled **Modules**, not
-"Go deeper": the rows under it are exactly `ConsoleModule.allCases`, the same six
-names the picker and the View menu use, and a section label names its contents
-rather than instructing the reader.
+The initial camera frames an agent cluster at a readable scale rather than shrinking it to fit every unrelated process. Drag pans, pinch and buttons zoom, and Fit map reveals the complete bounded projection. Selection shows related objects and provenance; process/service inspectors retain their existing policies. `AwarenessInk` holds semantic canvas materials and the existing `ConsoleFont` typography applies to cards and overlays. Page identity and source status remain visible when the sidebar is hidden.
 
-The six modules are `OverviewModule` (CPU wave + core grid, memory, process map,
-disk I/O, GPU, and the SMC **Sensors** card — fan RPM and CPU/GPU die
-temperature, a premium feature that renders its three states honestly: locked,
-no SMC (VMs, very old Macs), no keys (Apple silicon)), `ProcessModule` (below), `StorageModule` (`SegmentedStorageBar` +
-disk map + volumes + reclaim), `ServicesModule`, `EventsModule`, and
+`HomeModule` (`Console/Chrome/`) remains the explicit **Needs Attention** destination, reached by ⇧⌘H or Review findings. It is not the default workspace. It shows actionable findings and agent handoffs; returning to Agent awareness restores the spatial view.
+
+The diagnostic instrument components in `OverviewModule` retain CPU/memory, disk, GPU and sensor semantics. Unavailable sensors remain unavailable. Other destinations use `ProcessModule` (below), `StorageModule` (`SegmentedStorageBar` + disk map + volumes + reclaim), `ServicesModule`, `EventsModule`, and
 `PlistsModule` — **Launch Services**, the launchd jobs on this machine across
 three scopes (`~/Library/LaunchAgents`, `/Library/LaunchAgents`,
 `/Library/LaunchDaemons`). It shows label, `RunAtLoad`, program or program

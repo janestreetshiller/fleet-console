@@ -19,8 +19,9 @@ struct FleetSidebarView: View {
         // The working console is one destination. Less frequent views live in
         // Tools; the sidebar is for choosing a local or linked machine.
         List(selection: navigationSelection) {
-            Label("Console", systemImage: "desktopcomputer")
+            Label("Agent awareness", systemImage: "point.3.connected.trianglepath.dotted")
                 .tag("module:" + ConsoleModule.overview.rawValue)
+                .accessibilityIdentifier("sidebar.awareness")
             Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
