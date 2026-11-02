@@ -44,3 +44,5 @@ xcuserdata/
 # and canvas.json — re-seed it, do not track two megabytes of editor.
 docs/design-canvas/*.html
 !docs/design-canvas/*.dc.html
+
+/artifacts/design-core-delivery/
