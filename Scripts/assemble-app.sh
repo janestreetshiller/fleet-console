@@ -109,7 +109,7 @@ SOURCE_DIRTY=1
 if [ -n "$SOURCE_REVISION" ] && [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
     SOURCE_DIRTY=0
 fi
-python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" <<'SOURCE_PLIST'
+python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" "$ROOT/.design-core/receipt.json" <<'SOURCE_PLIST'
 import json
 import plistlib
 import re
