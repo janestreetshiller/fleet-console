@@ -11,7 +11,7 @@ enum SketchInk {
     static var ground: Color { Color(nsColor: .windowBackgroundColor) }
     static var plate: Color { Color(nsColor: .controlBackgroundColor) }
     static var plateLabel: Color { Color(nsColor: .secondaryLabelColor) }
-    static var accent: Color { .accentColor }
+    static var accent: Color { FleetCorePalette.signal }
     static var accentAlt: Color { Color(nsColor: .systemPurple) }
     static var accentWarm: Color { Color(nsColor: .systemOrange) }
 }

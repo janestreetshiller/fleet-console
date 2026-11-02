@@ -49,6 +49,28 @@ A running process without a configured health check is **Running (unverified)**.
 Process existence, listening ports, host reachability, and health-check results
 remain separate facts.
 
+## Agent monitoring and relationships
+
+Choose **Agents & Map** in the dashboard sidebar, or **Operations → Agents**.
+The fixed columns connect recorded owners to active services, identity-verified
+group leaders and observed listeners. Select a service to inspect its purpose,
+lease, health evidence and existing logs/actions. Search owners, service names,
+IDs or detected sessions; filter an exact recorded owner. The roster and inbox
+remain available in the same workspace.
+
+Detected agent sessions occupy a separate lane: a tool name or shared PID does
+not establish ownership. Declared ports remain declarations. Missing or stale
+samples are unavailable, and a disconnected controller retains clearly labelled
+observations. Service nodes show their recorded state separately from health
+check results. This map does not expose dependency-aware pruning or agent
+reasoning/context telemetry, which the controller does not provide.
+
+Ouros account/device management, usage credits and explicit problem review open
+from this workspace using the existing account and review contracts. Opening the
+map starts no paid request. Use `fleetctl topology [--owner <exact-id>] [--json]`
+for the same evidence, or `--snapshot <path>` to inspect saved `fleetctl list
+--json` output without a controller. See [CLI reference](docs/CLI.md).
+
 ## Keep background work accountable
 
 Launch through `fleetctl` to record an owner, a purpose, a lease, and logs:

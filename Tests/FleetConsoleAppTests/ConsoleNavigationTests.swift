@@ -55,4 +55,28 @@ struct ConsoleNavigationTests {
         #expect(ConsoleModel.ProcessView.allCases.map(\.rawValue)
                 == ["Relationships", "Table", "Heatmap", "Scatter"])
     }
+    @Test("Agent map search and service selection use the operations inspector")
+    @MainActor
+    func topologyInspector() {
+        let console = ConsoleModel()
+        console.open(.services)
+        console.operationsSection = "Agents"
+        #expect(console.searchPrompt == "Search owners, services, sessions")
+        console.selectedServiceID = "observed-service"
+        #expect(console.inspectorTarget() == .service("observed-service"))
+    }
+
+    @Test("Operations destination changes clear search while reopening preserves it")
+    @MainActor
+    func operationsSearch() {
+        let console = ConsoleModel()
+        console.openOperationsSection("Agents")
+        console.search = "ouros"
+        console.openOperationsSection("Agents")
+        #expect(console.search == "ouros")
+        console.openOperationsSection("Services")
+        #expect(console.search.isEmpty)
+        #expect(console.operationsSection == "Services")
+    }
+
 }

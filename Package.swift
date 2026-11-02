@@ -33,7 +33,8 @@ let package = Package(
             // The blackletter F: the mark in the window and popover, and the
             // source `Scripts/appicon/Icon.swift` draws the app icon from.
             resources: [.copy("Brand/fleet-letter.png")],
-            swiftSettings: [.swiftLanguageMode(.v6)]
+            swiftSettings: [.swiftLanguageMode(.v6)],
+            plugins: [.plugin(name: "VerifyDesignCore")]
         ),
         .testTarget(
             name: "FleetCoreTests",
@@ -43,5 +44,6 @@ let package = Package(
             name: "FleetConsoleAppTests",
             dependencies: ["FleetConsoleApp"]
         ),
+        .plugin(name: "VerifyDesignCore", capability: .buildTool()),
     ]
 )

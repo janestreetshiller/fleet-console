@@ -1,0 +1,1289 @@
+{
+  "format": "ouros-runtime-design-core-v1",
+  "version": "1.1.0",
+  "authority": {
+    "repository": "janestreetshiller/OurosProductionLive",
+    "path": "packages/design-core/source/core.json",
+    "canonicalHost": "omarchy",
+    "canonicalPath": "/home/algorithm/ouros-project/app/packages/design-core/source/core.json"
+  },
+  "brand": {
+    "signal": "#F17B33",
+    "artworkStar": "#FF6B00",
+    "actionBackground": "#B8460A",
+    "actionForeground": "#FFFFFF"
+  },
+  "philosophy": [
+    "Make the next action and its result clear. State is stronger than decoration.",
+    "Preserve the supplied artwork, composition, geometry and real interactions. Design continuity is part of function.",
+    "Give every role a named owner. Components consume semantic aliases; copied literals do not become competing truths.",
+    "Keep the family through artwork, quiet depth, considered type and restrained signal. Adapt each product to its work and platform.",
+    "Keep one continuous native shell. Material supports the task; content does not paint a second window.",
+    "Motion explains place or state and yields to reduced motion. Text and keyboard operation remain readable and usable.",
+    "Record every exception, new rule and retirement in the same core. Evidence is searchable without being mistaken for an active default."
+  ],
+  "policy": {
+    "normalTextContrast": 4.5,
+    "largeTextContrast": 3,
+    "orangeForeground": "#FFFFFF",
+    "controlDensity": "profile-owned",
+    "nativeMaterialAxes": [
+      "appearance",
+      "material",
+      "shape"
+    ],
+    "generation": "Edit the versioned core or profile source templates, generate exports, and check drift. Repositories carry pinned self-contained inputs; no sibling source paths are build dependencies."
+  },
+  "profiles": {
+    "website": {
+      "id": "website",
+      "use": "Public website and product marketing chrome",
+      "owner": "Omarchy /home/algorithm/ouros-project/app at main, apps/site",
+      "entry": "apps/site/docs/THEME.md",
+      "theme": "data-theme on html; system default; theme storage key",
+      "rule": "Use --site-* roles and cream key CTAs. Product artifacts retain native geometry and interaction.",
+      "sourceModules": []
+    },
+    "docs-reader": {
+      "id": "docs-reader",
+      "use": "Customer documentation reader",
+      "owner": "Same main repository, apps/docs",
+      "entry": "apps/docs/src/css/ouros-docs-layout.css",
+      "theme": "html[data-theme=light|dark]",
+      "rule": "Reader geometry and palette are independent of marketing chrome. Geist, Instrument Serif and Geist Mono.",
+      "sourceModules": []
+    },
+    "web-admin": {
+      "id": "web-admin",
+      "use": "Staff administration, including Ant Design portals",
+      "owner": "Same main repository, apps/web/components/admin/admin-palette.ts",
+      "entry": "apps/web/components/admin/admin-palette.ts",
+      "theme": "adminPalettes.light / dark and adminThemeTokens",
+      "rule": "Use AntD token and component adapters. Do not repair AntD density through generic shadcn input/table changes.",
+      "sourceModules": []
+    },
+    "web-app": {
+      "id": "web-app",
+      "use": "Customer dashboard, workspace, auth adapters",
+      "owner": "Same main repository, apps/web",
+      "entry": "apps/web/components/shell/brand-tokens.css",
+      "theme": "Scoped --site-*, --workspace-*, --omp-* and appearance providers",
+      "rule": "Resolve the actual route provider. Workspace, Obsidian Glass and embedded portal styles coexist; do not apply all globally.",
+      "sourceModules": []
+    },
+    "shared-web": {
+      "id": "shared-web",
+      "use": "Existing @ouros/ui Obsidian Glass consumers",
+      "owner": "Same main repository, packages/ui and packages/tailwind-config",
+      "entry": "packages/ui/src/tokens.ts",
+      "theme": "Obsidian Glass and Tailwind projection",
+      "rule": "The shared package is not the universal website palette; preserve amber/telemetry semantics in its own consumers.",
+      "sourceModules": []
+    },
+    "ouros-x": {
+      "id": "ouros-x",
+      "use": "Ouros X native macOS application",
+      "owner": "metal-mini /Users/main/Code/ouros/ouros-x",
+      "entry": "DESIGN.md; THEME.md; Sources/Shared/OurosDesignTokens.swift",
+      "theme": "Appearance, Glass/Matte material and rounded/squared shape are separate axes",
+      "rule": "Current native source wins over copied Studio assets and old token-engine defaults. Preserve native contour and app-owned control geometry.",
+      "sourceModules": []
+    },
+    "ouros-gpui": {
+      "id": "ouros-gpui",
+      "use": "GPUI/Linux native shell counterpart",
+      "owner": "metal-mini /Users/main/Code/ouros/ouros-gpui",
+      "entry": "Current theme/material source in native source manifest",
+      "theme": "Runtime native palette/material mapping",
+      "rule": "Shared principles adapt through platform-native rendering. Do not import the OS theme into app chrome.",
+      "sourceModules": [
+        "profiles/ouros-gpui/crates/ouros-domain/src/lib.rs",
+        "profiles/ouros-gpui/crates/ouros-ui/src/theme.rs",
+        "profiles/ouros-gpui/crates/ouros-platform/src/launcher_material.rs"
+      ]
+    },
+    "native-shell-registry": {
+      "id": "native-shell-registry",
+      "use": "Shared shell vocabulary and generated Studio/native exports",
+      "owner": "Omarchy /home/algorithm/ouros-project/studio/brand/ouros-brand-v1.json",
+      "entry": "brand/ouros-brand-v1.json",
+      "theme": "dark/light platform adaptation",
+      "rule": "Edit generation input rather than generated CSS/Rust/Swift. Registry is a source-backed contract, not proof every runtime matches it.",
+      "sourceModules": []
+    },
+    "termin8": {
+      "id": "termin8",
+      "use": "Termin8 native terminal and command palette",
+      "owner": "metal-mini /Users/main/Code/termin8",
+      "entry": "crates/termin8-app/src/ui_tokens.rs; docs/INTERFACE-STANDARD.md",
+      "theme": "Product theme and palette variants",
+      "rule": "Keep terminal content, command palette and outer chrome roles distinct. Marketing donut composition is a separate surface.",
+      "sourceModules": [],
+      "palettes": {
+        "loam": {
+          "bg": [
+            33,
+            28,
+            24
+          ],
+          "fg": [
+            231,
+            222,
+            208
+          ],
+          "cursor": [
+            205,
+            139,
+            81
+          ],
+          "selection_bg": [
+            62,
+            55,
+            47
+          ],
+          "accent": [
+            216,
+            160,
+            110
+          ],
+          "ansi": [
+            [
+              62,
+              57,
+              50
+            ],
+            [
+              185,
+              124,
+              106
+            ],
+            [
+              117,
+              150,
+              71
+            ],
+            [
+              164,
+              135,
+              77
+            ],
+            [
+              99,
+              143,
+              182
+            ],
+            [
+              190,
+              116,
+              153
+            ],
+            [
+              72,
+              152,
+              139
+            ],
+            [
+              194,
+              188,
+              180
+            ],
+            [
+              141,
+              132,
+              121
+            ],
+            [
+              209,
+              153,
+              136
+            ],
+            [
+              134,
+              180,
+              70
+            ],
+            [
+              194,
+              162,
+              97
+            ],
+            [
+              130,
+              171,
+              206
+            ],
+            [
+              213,
+              146,
+              179
+            ],
+            [
+              71,
+              184,
+              165
+            ],
+            [
+              231,
+              222,
+              208
+            ]
+          ]
+        },
+        "moss": {
+          "bg": [
+            23,
+            30,
+            25
+          ],
+          "fg": [
+            222,
+            226,
+            212
+          ],
+          "cursor": [
+            185,
+            148,
+            62
+          ],
+          "selection_bg": [
+            50,
+            61,
+            46
+          ],
+          "accent": [
+            184,
+            191,
+            130
+          ],
+          "ansi": [
+            [
+              54,
+              62,
+              50
+            ],
+            [
+              180,
+              126,
+              109
+            ],
+            [
+              119,
+              149,
+              77
+            ],
+            [
+              162,
+              136,
+              83
+            ],
+            [
+              104,
+              143,
+              177
+            ],
+            [
+              185,
+              119,
+              152
+            ],
+            [
+              78,
+              152,
+              140
+            ],
+            [
+              181,
+              191,
+              176
+            ],
+            [
+              122,
+              137,
+              116
+            ],
+            [
+              205,
+              154,
+              138
+            ],
+            [
+              136,
+              179,
+              77
+            ],
+            [
+              191,
+              162,
+              105
+            ],
+            [
+              132,
+              170,
+              202
+            ],
+            [
+              209,
+              148,
+              178
+            ],
+            [
+              84,
+              182,
+              165
+            ],
+            [
+              222,
+              226,
+              212
+            ]
+          ]
+        },
+        "slate": {
+          "bg": [
+            25,
+            30,
+            39
+          ],
+          "fg": [
+            229,
+            223,
+            215
+          ],
+          "cursor": [
+            198,
+            145,
+            84
+          ],
+          "selection_bg": [
+            50,
+            57,
+            67
+          ],
+          "accent": [
+            156,
+            184,
+            214
+          ],
+          "ansi": [
+            [
+              50,
+              55,
+              62
+            ],
+            [
+              179,
+              129,
+              113
+            ],
+            [
+              121,
+              150,
+              81
+            ],
+            [
+              163,
+              138,
+              88
+            ],
+            [
+              108,
+              145,
+              176
+            ],
+            [
+              184,
+              122,
+              153
+            ],
+            [
+              82,
+              153,
+              141
+            ],
+            [
+              185,
+              191,
+              198
+            ],
+            [
+              127,
+              135,
+              146
+            ],
+            [
+              205,
+              157,
+              143
+            ],
+            [
+              141,
+              180,
+              87
+            ],
+            [
+              191,
+              165,
+              112
+            ],
+            [
+              137,
+              172,
+              202
+            ],
+            [
+              209,
+              152,
+              180
+            ],
+            [
+              94,
+              183,
+              168
+            ],
+            [
+              229,
+              223,
+              215
+            ]
+          ]
+        },
+        "ember": {
+          "bg": [
+            16,
+            14,
+            17
+          ],
+          "fg": [
+            244,
+            236,
+            230
+          ],
+          "cursor": [
+            255,
+            77,
+            61
+          ],
+          "selection_bg": [
+            46,
+            26,
+            26
+          ],
+          "accent": [
+            255,
+            103,
+            89
+          ],
+          "ansi": [
+            [
+              42,
+              38,
+              42
+            ],
+            [
+              194,
+              102,
+              94
+            ],
+            [
+              111,
+              150,
+              86
+            ],
+            [
+              176,
+              146,
+              84
+            ],
+            [
+              109,
+              143,
+              181
+            ],
+            [
+              184,
+              118,
+              155
+            ],
+            [
+              79,
+              152,
+              141
+            ],
+            [
+              200,
+              192,
+              186
+            ],
+            [
+              132,
+              126,
+              128
+            ],
+            [
+              207,
+              131,
+              120
+            ],
+            [
+              138,
+              176,
+              92
+            ],
+            [
+              198,
+              167,
+              100
+            ],
+            [
+              137,
+              171,
+              203
+            ],
+            [
+              211,
+              150,
+              180
+            ],
+            [
+              95,
+              176,
+              164
+            ],
+            [
+              244,
+              236,
+              230
+            ]
+          ]
+        },
+        "beacon": {
+          "bg": [
+            14,
+            17,
+            23
+          ],
+          "fg": [
+            240,
+            244,
+            248
+          ],
+          "cursor": [
+            77,
+            158,
+            247
+          ],
+          "selection_bg": [
+            34,
+            48,
+            72
+          ],
+          "accent": [
+            101,
+            175,
+            255
+          ],
+          "ansi": [
+            [
+              42,
+              46,
+              56
+            ],
+            [
+              200,
+              104,
+              98
+            ],
+            [
+              140,
+              208,
+              139
+            ],
+            [
+              211,
+              190,
+              136
+            ],
+            [
+              114,
+              160,
+              203
+            ],
+            [
+              203,
+              122,
+              205
+            ],
+            [
+              130,
+              206,
+              197
+            ],
+            [
+              205,
+              208,
+              214
+            ],
+            [
+              138,
+              150,
+              168
+            ],
+            [
+              208,
+              133,
+              128
+            ],
+            [
+              163,
+              215,
+              162
+            ],
+            [
+              218,
+              202,
+              160
+            ],
+            [
+              145,
+              180,
+              212
+            ],
+            [
+              212,
+              154,
+              214
+            ],
+            [
+              154,
+              214,
+              206
+            ],
+            [
+              240,
+              244,
+              248
+            ]
+          ]
+        },
+        "parchment": {
+          "bg": [
+            250,
+            249,
+            246
+          ],
+          "fg": [
+            51,
+            43,
+            36
+          ],
+          "cursor": [
+            164,
+            90,
+            48
+          ],
+          "selection_bg": [
+            213,
+            209,
+            200
+          ],
+          "accent": [
+            132,
+            73,
+            39
+          ],
+          "ansi": [
+            [
+              51,
+              43,
+              36
+            ],
+            [
+              152,
+              83,
+              62
+            ],
+            [
+              84,
+              111,
+              45
+            ],
+            [
+              124,
+              99,
+              51
+            ],
+            [
+              60,
+              106,
+              147
+            ],
+            [
+              165,
+              68,
+              117
+            ],
+            [
+              46,
+              113,
+              102
+            ],
+            [
+              214,
+              208,
+              194
+            ],
+            [
+              113,
+              107,
+              93
+            ],
+            [
+              146,
+              75,
+              54
+            ],
+            [
+              76,
+              103,
+              38
+            ],
+            [
+              116,
+              91,
+              43
+            ],
+            [
+              51,
+              98,
+              139
+            ],
+            [
+              158,
+              58,
+              108
+            ],
+            [
+              39,
+              105,
+              94
+            ],
+            [
+              249,
+              248,
+              246
+            ]
+          ]
+        },
+        "sandstone": {
+          "bg": [
+            238,
+            228,
+            214
+          ],
+          "fg": [
+            47,
+            37,
+            30
+          ],
+          "cursor": [
+            149,
+            80,
+            50
+          ],
+          "selection_bg": [
+            198,
+            190,
+            179
+          ],
+          "accent": [
+            116,
+            63,
+            43
+          ],
+          "ansi": [
+            [
+              47,
+              37,
+              30
+            ],
+            [
+              135,
+              76,
+              58
+            ],
+            [
+              76,
+              99,
+              43
+            ],
+            [
+              109,
+              88,
+              47
+            ],
+            [
+              56,
+              95,
+              130
+            ],
+            [
+              146,
+              62,
+              104
+            ],
+            [
+              43,
+              101,
+              92
+            ],
+            [
+              214,
+              206,
+              194
+            ],
+            [
+              104,
+              96,
+              85
+            ],
+            [
+              130,
+              67,
+              48
+            ],
+            [
+              67,
+              91,
+              34
+            ],
+            [
+              103,
+              81,
+              38
+            ],
+            [
+              46,
+              87,
+              124
+            ],
+            [
+              141,
+              52,
+              97
+            ],
+            [
+              35,
+              93,
+              84
+            ],
+            [
+              249,
+              248,
+              246
+            ]
+          ]
+        },
+        "pink": {
+          "bg": [
+            251,
+            240,
+            244
+          ],
+          "fg": [
+            48,
+            32,
+            43
+          ],
+          "cursor": [
+            157,
+            40,
+            87
+          ],
+          "selection_bg": [
+            233,
+            181,
+            201
+          ],
+          "accent": [
+            144,
+            42,
+            83
+          ],
+          "ansi": [
+            [
+              48,
+              32,
+              43
+            ],
+            [
+              139,
+              75,
+              102
+            ],
+            [
+              76,
+              103,
+              80
+            ],
+            [
+              117,
+              96,
+              69
+            ],
+            [
+              81,
+              98,
+              137
+            ],
+            [
+              122,
+              84,
+              118
+            ],
+            [
+              65,
+              109,
+              108
+            ],
+            [
+              233,
+              181,
+              201
+            ],
+            [
+              119,
+              97,
+              108
+            ],
+            [
+              146,
+              81,
+              109
+            ],
+            [
+              81,
+              107,
+              85
+            ],
+            [
+              124,
+              101,
+              71
+            ],
+            [
+              87,
+              103,
+              141
+            ],
+            [
+              128,
+              89,
+              123
+            ],
+            [
+              72,
+              112,
+              111
+            ],
+            [
+              255,
+              248,
+              251
+            ]
+          ]
+        },
+        "maroon": {
+          "bg": [
+            38,
+            15,
+            28
+          ],
+          "fg": [
+            247,
+            232,
+            236
+          ],
+          "cursor": [
+            241,
+            166,
+            197
+          ],
+          "selection_bg": [
+            90,
+            43,
+            64
+          ],
+          "accent": [
+            232,
+            163,
+            192
+          ],
+          "ansi": [
+            [
+              74,
+              40,
+              55
+            ],
+            [
+              211,
+              130,
+              154
+            ],
+            [
+              162,
+              187,
+              144
+            ],
+            [
+              208,
+              176,
+              128
+            ],
+            [
+              155,
+              172,
+              208
+            ],
+            [
+              196,
+              154,
+              189
+            ],
+            [
+              138,
+              186,
+              184
+            ],
+            [
+              221,
+              208,
+              213
+            ],
+            [
+              178,
+              146,
+              160
+            ],
+            [
+              217,
+              157,
+              179
+            ],
+            [
+              180,
+              205,
+              162
+            ],
+            [
+              222,
+              199,
+              166
+            ],
+            [
+              177,
+              191,
+              226
+            ],
+            [
+              216,
+              172,
+              208
+            ],
+            [
+              164,
+              206,
+              202
+            ],
+            [
+              255,
+              246,
+              249
+            ]
+          ]
+        }
+      },
+      "paletteOrder": [
+        "loam",
+        "moss",
+        "slate",
+        "ember",
+        "beacon",
+        "parchment",
+        "sandstone",
+        "pink",
+        "maroon"
+      ],
+      "defaultPalette": "loam",
+      "fallback": {
+        "accent": [
+          205,
+          139,
+          81
+        ],
+        "background": [
+          33,
+          28,
+          24
+        ],
+        "foreground": [
+          231,
+          222,
+          208
+        ]
+      },
+      "chrome": {
+        "textContrast": 4.55,
+        "selectionTextContrast": 4.6,
+        "mutedTextContrast": 4.6,
+        "edgeContrast": 3.1,
+        "focusContrast": 3.0,
+        "normalTextContrast": 4.5,
+        "lightRaisedTint": 0.018,
+        "darkRaisedTint": 0.065,
+        "lightShellTint": 0.07,
+        "darkShellTint": 0.08,
+        "lightFooterTint": 0.035,
+        "darkFooterTint": 0.025,
+        "hoverTint": 0.035,
+        "selectionTint": 0.12,
+        "mutedTint": 0.48,
+        "lightLineTint": 0.14,
+        "darkLineTint": 0.16,
+        "strongLineTint": 0.29,
+        "lightShadowTint": 0.2,
+        "darkShadowTint": 0.65
+      },
+      "panelMetrics": {
+        "PANEL_RADIUS": 2.0,
+        "FIELD_RADIUS": 2.0,
+        "FOCUS_RADIUS": 2.0,
+        "ROW_RADIUS": 2.0,
+        "ROW_INSET": 4.0,
+        "CHIP_RADIUS": 3.0,
+        "PANEL_W": 640.0,
+        "PANEL_W_WIDE": {
+          "alias": "PANEL_W"
+        },
+        "PREVIEW_W": 296.0,
+        "HEADER_H": 30.0,
+        "PANEL_MAX_H": 404.0,
+        "PAD": 8.0,
+        "GAP": 6.0,
+        "INPUT_H": 48.0,
+        "ROW_H": 32.0,
+        "ICON": 18.0,
+        "FONT_TITLE": 15.0,
+        "FONT_SUB": 13.0,
+        "FONT_INPUT": 18.0,
+        "SHADOW_MARGIN": 140.0
+      },
+      "hostedPanel": {
+        "panelBorderOpacity": 0.0,
+        "rimOpacity": 0.0,
+        "shadowOpacity": 0.0,
+        "grain": 0.0,
+        "fallbackOpacity": 0.0,
+        "accentDimOpacity": 0.2
+      }
+    },
+    "fleet-console": {
+      "id": "fleet-console",
+      "use": "Fleet Console native console and popover",
+      "owner": "metal-mini /Users/main/Code/apps/fleet-console",
+      "entry": "Native theme/console and popover source in source manifest",
+      "theme": "Separate console and popover ramps",
+      "rule": "Preserve actual console columns, minimum sizes, popover measurements and native menu behavior.",
+      "sourceModules": [
+        "profiles/fleet-console/Sources/FleetConsoleApp/Design/Tokens.swift",
+        "profiles/fleet-console/Sources/FleetConsoleApp/Design/Theme.swift",
+        "profiles/fleet-console/Sources/FleetConsoleApp/Design/Sketchfield.swift",
+        "profiles/fleet-console/Sources/FleetConsoleApp/Design/StatusTone.swift",
+        "profiles/fleet-console/Sources/FleetConsoleApp/Design/CorePalette.swift",
+        "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift",
+        "profiles/fleet-console/design/tokens.json"
+      ]
+    },
+    "mandarin": {
+      "id": "mandarin",
+      "use": "Mandarin code editor and integrated Agent RX",
+      "owner": "metal-mini /Users/main/Code/mandarin",
+      "entry": "crates/mandarin-theme/src/lib.rs",
+      "theme": "Dark, light, rust camo and native material variants",
+      "rule": "Editor/syntax/status roles belong to Mandarin. Website body typography does not restyle the editor.",
+      "sourceModules": [
+        "profiles/mandarin/crates/mandarin-theme/src/lib.rs",
+        "profiles/mandarin/crates/mandarin-theme/src/contrast.rs",
+        "profiles/mandarin/crates/mandarin-theme/src/rust_camo.rs",
+        "profiles/mandarin/crates/mandarin-theme/src/glass.rs"
+      ]
+    },
+    "agent-rx": {
+      "id": "agent-rx",
+      "use": "Agent RX terminal/composer/editor integration",
+      "owner": "metal-mini /Users/main/Code/agents/agent-rx",
+      "entry": "runtime/rx/crates/rx-cli/src/palette.rs and theme sources in manifest",
+      "theme": "Terminal palette variants and semantic ANSI roles",
+      "rule": "Preserve exact terminal palette roles. Website character model is a separate authored artifact.",
+      "sourceModules": [
+        "profiles/agent-rx/runtime/rx/crates/rx-core/src/ascii_hd.rs",
+        "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme.rs",
+        "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme/palettes.rs"
+      ]
+    },
+    "loop-builder": {
+      "id": "loop-builder",
+      "use": "Loop Builder application and website embedding",
+      "owner": "Omarchy main apps/ouros-loop-builder-application; retained standalone /home/algorithm/projects/omarchy-imports/ouros-loop-builder",
+      "entry": "app/globals.scss; components/loop-builder/loop-builder.scss",
+      "theme": "Carbon .cds--white / .cds--g100 plus scoped zones; IBM Plex and Carbon Sass roles",
+      "rule": "Original app behavior and constellation artifact survive the shared marketing shell. Carbon Sass imports own theme, type and spacing; preserve those separately from website tokens.",
+      "sourceModules": []
+    },
+    "loop-carbon-preset": {
+      "id": "loop-carbon-preset",
+      "use": "Imported Carbon theme, type, layout and motion definitions",
+      "owner": "Installed @carbon/themes, @carbon/type, @carbon/layout and @carbon/motion dependencies on Omarchy",
+      "entry": "research/web/carbon-resolved.json",
+      "theme": "Imported package exports, including white/g10/g90/g100",
+      "rule": "Versioned dependency evidence. This is not proof of current main lockfile equivalence or approval of every upstream theme on every Ouros surface.",
+      "sourceModules": []
+    },
+    "zilch": {
+      "id": "zilch",
+      "use": "Zilch.sh website and CLI output",
+      "owner": "Website main apps/site; Zilch command package embedded in Agent RX",
+      "entry": "Current Zilch product source and RX package source",
+      "theme": "Surface-specific website roles; CLI rendering if present",
+      "rule": "No independently verified standalone global Zilch theme was found. Use website roles for its site; no invented native palette.",
+      "sourceModules": []
+    },
+    "os-theme": {
+      "id": "os-theme",
+      "use": "Omarchy desktop and terminal skin only",
+      "owner": "Omarchy /home/algorithm/Downloads/ouros-theme-kit/palette",
+      "entry": "ouros.json; ouros.css; kitty.conf; waybar-colors.css",
+      "theme": "Core intro colors; ANSI extension is a proposal",
+      "rule": "Keep red/black OS skin out of product/web defaults; retain asset-rights restrictions.",
+      "sourceModules": []
+    },
+    "historical": {
+      "id": "historical",
+      "use": "Prior registry, flyers, design studies and reference exports",
+      "owner": "Captured source files under research",
+      "entry": "research/studio/sources/design-studio/data/index.json",
+      "theme": "Historical snapshots dated 2026-10-21",
+      "rule": "Searchable evidence only. Retired paths, black-on-orange labels and obsolete navigation are not active defaults.",
+      "sourceModules": []
+    }
+  },
+  "navigation": {
+    "trayWidth": 700,
+    "headerHeight": 80,
+    "desktopHeight": 48,
+    "mobileSize": 52,
+    "breakpoint": 768,
+    "sourceRevision": "9b2f5265cd08f721894cb0722d2f4195d9f63157",
+    "composition": "retained floating tray with original mobile circles; replaces rejected full-width bar"
+  },
+  "profileModuleManifestSHA256": "8d377d97ca68208157cb8178ef388bb39c87e7a46c85621df7ab032fb63720ed"
+}

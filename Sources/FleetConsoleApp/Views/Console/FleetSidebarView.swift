@@ -29,6 +29,10 @@ struct FleetSidebarView: View {
                         .tag("module:" + module.rawValue)
                 }
             }
+            Section {
+                Label("Agents & Map", systemImage: "point.3.connected.trianglepath.dotted")
+                    .tag("agents")
+            }
             Section("Devices") {
                 ForEach(model.deviceRows.filter { !$0.record.evidence.isSelf }) { row in
                     DeviceNodeRow(record: row.record)
@@ -87,13 +91,17 @@ struct FleetSidebarView: View {
     private var navigationSelection: Binding<String> {
         Binding {
             if !console.isLocalDeviceSelected { return "device:" + console.selectedDeviceID }
+            if !console.atHome && console.module == .services && console.operationsSection == "Agents" { return "agents" }
             return console.atHome ? "attention" : "module:" + ([ConsoleModule.storage, .events, .plists].contains(console.module) ? ConsoleModule.services.rawValue : console.module.rawValue)
         } set: { destination in
-            if destination == "attention" {
+            if destination == "agents" {
+                console.openOperationsSection("Agents")
+            } else if destination == "attention" {
                 console.goHome()
             } else if destination.hasPrefix("module:"),
                       let module = ConsoleModule(rawValue: String(destination.dropFirst(7))) {
-                console.open(module)
+                if module == .services { console.openOperationsSection("Services") }
+                else { console.open(module) }
             } else if destination.hasPrefix("device:") {
                 console.selectedDeviceID = String(destination.dropFirst(7))
                 console.atHome = false

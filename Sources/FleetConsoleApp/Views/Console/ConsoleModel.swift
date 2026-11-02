@@ -198,7 +198,7 @@ final class ConsoleModel {
         case .overview: return "Search processes"
         case .processes: return "Search processes"
         case .storage: return "Search volumes"
-        case .services: return "Search services"
+        case .services: return operationsSection == "Agents" ? "Search owners, services, sessions" : "Search services"
         case .events: return "Search events"
         case .plists: return "Search jobs"
         }
@@ -242,6 +242,13 @@ final class ConsoleModel {
         if !isLocalDeviceSelected { selectedDeviceID = "self" }
         self.module = module
         atHome = false
+    }
+
+    func openOperationsSection(_ section: String) {
+        let changing = module != .services || operationsSection != section || atHome || !isLocalDeviceSelected
+        open(.services)
+        operationsSection = section
+        if changing { search = "" }
     }
 
     /// Drill down from a priority row to the surface that can act on it. The

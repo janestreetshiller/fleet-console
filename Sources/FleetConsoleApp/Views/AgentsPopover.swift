@@ -183,7 +183,7 @@ struct FixerRow: View {
                 Text(problemCount == 0 ? "Nothing to fix"
                      : "Send \(problemCount) problem\(problemCount == 1 ? "" : "s")")
             }
-            .buttonStyle(.borderedProminent)
+            .fleetPrimaryAction()
             .controlSize(.small)
             .disabled(problemCount == 0 || settings.designated == nil)
             .help(settings.designated == .fleetAgent

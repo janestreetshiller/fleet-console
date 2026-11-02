@@ -1,0 +1,60 @@
+{
+  "format": "ouros-pinned-design-core-v1",
+  "version": "1.1.0",
+  "sourceSHA256": "0038593c73bb371a74e53895baa1162f8cfaa0116b516bfebd56d7a5792e2ed6",
+  "authority": {
+    "repository": "janestreetshiller/OurosProductionLive",
+    "path": "packages/design-core/source/core.json",
+    "canonicalHost": "omarchy",
+    "canonicalPath": "/home/algorithm/ouros-project/app/packages/design-core/source/core.json"
+  },
+  "profile": "fleet-console",
+  "outputs": [
+    {
+      "kind": "swift",
+      "path": "Sources/FleetConsoleApp/Design/OurosCoreTokens.swift"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetConsoleApp/Design/CorePalette.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/CorePalette.swift",
+      "sha256": "6a3f4e3ce5b0ea412c6de6b4a626db0e688b3415f3f6c7a7eeee62411223f76e"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetConsoleApp/Design/Sketchfield.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Sketchfield.swift",
+      "sha256": "69d23b3433a6e5c2775f2d761064d16e3be8b4dd33a80773eed025970834886c"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetConsoleApp/Design/StatusTone.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/StatusTone.swift",
+      "sha256": "c43d2b25537a2e3006031a9bbdd1e80770d92e69ac774333fdafda84a8c386c8"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetConsoleApp/Design/Theme.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Theme.swift",
+      "sha256": "a3e3e93e31febcbb10f7a7ff09545dff215825620fabf79a29be178b0fe3cfcb"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetConsoleApp/Design/Tokens.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Tokens.swift",
+      "sha256": "0d68d015cb8041ae33946e4b34f5fafbb80d04d7606fe756f41edb0523482d42"
+    },
+    {
+      "kind": "template",
+      "path": "Sources/FleetCore/ConsoleLayout.swift",
+      "template": "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift",
+      "sha256": "2cefff7d0896bca3f0735022ae558646d065982317ce9b0ef8c283322f95e614"
+    },
+    {
+      "kind": "template",
+      "path": "design/tokens.json",
+      "template": "profiles/fleet-console/design/tokens.json",
+      "sha256": "4f959786c73ff5319379473b96bd3ad070b444be2265ee612e7d54d5f3e632f7"
+    }
+  ]
+}
