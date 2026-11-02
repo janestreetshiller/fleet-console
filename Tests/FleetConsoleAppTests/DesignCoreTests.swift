@@ -11,7 +11,7 @@ struct DesignCoreTests {
         #expect(abs(color.redComponent - 241.0 / 255.0) < 0.00001)
         #expect(abs(color.greenComponent - 123.0 / 255.0) < 0.00001)
         #expect(abs(color.blueComponent - 51.0 / 255.0) < 0.00001)
-        #expect(OurosCoreTokens.version == "1.1.0")
+        #expect(OurosCoreTokens.version == "1.1.2")
         #expect(OurosCoreTokens.sourceSHA256.count == 64)
     }
 

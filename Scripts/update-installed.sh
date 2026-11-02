@@ -96,6 +96,15 @@ if [ "$SOURCE_REVISION" != "$COMMIT" ] || [ "$SOURCE_DIRTY" != "false" ]; then
     exit 1
 fi
 
+verify_core_predecessor() {
+    if [ -n "${FLEETCONSOLE_PREDECESSOR_PROOF:-}" ]; then
+        : "${FLEETCONSOLE_EXPECTED_CORE_SHA256:?Supply the accepted core SHA256}"
+        python3 "$WORKTREE/Scripts/verify-core-update.py" "$INSTALLED" "$NEW" \
+            "$FLEETCONSOLE_PREDECESSOR_PROOF" "$FLEETCONSOLE_EXPECTED_CORE_SHA256" "$COMMIT"
+    fi
+}
+verify_core_predecessor
+
 echo "▸ quitting the running app…"
 osascript -e 'quit app id "com.fleetconsole.app"' >/dev/null 2>&1 || true
 for _ in $(seq 1 40); do
@@ -106,6 +115,8 @@ if pgrep -f "$INSTALLED/Contents/MacOS/FleetConsole" >/dev/null; then
     echo "✗ FleetConsole did not quit; nothing was changed." >&2
     exit 1
 fi
+
+verify_core_predecessor
 
 if [ -d "$INSTALLED" ]; then
     OLD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED/Contents/Info.plist" 2>/dev/null || echo unknown)"
