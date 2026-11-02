@@ -5,6 +5,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python3 "$ROOT/.design-core/generate.py" --check
 CONFIG="${1:-release}"
 OUTPUT_DIR="${FLEETCONSOLE_OUTPUT_DIR:-$ROOT/build}"
 

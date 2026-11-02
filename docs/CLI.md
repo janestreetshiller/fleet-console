@@ -189,3 +189,35 @@ See [FREEMIUM.md](FREEMIUM.md).
 ## Exit codes
 
 `0` success · `1` rejected or not found · `69` controller unavailable
+
+## Recorded relationships
+
+`fleetctl topology` reads the local controller snapshot and prints recorded
+owners → active services → identity-verified group leaders and observed group
+listeners. It also shows detected sessions in a separate, unlinked lane.
+
+```sh
+fleetctl topology
+fleetctl topology --owner ouros --json
+fleetctl list --json > /tmp/fleet-snapshot.json
+fleetctl topology --snapshot /tmp/fleet-snapshot.json --json
+```
+
+`--owner` matches an exact registry ownership ID; it does not guess a session
+identity from a tool name. Snapshot replay does not contact the controller and
+retains original timestamps. Snapshots contain local owner, process, purpose,
+and path data; review before sharing.
+
+The versioned JSON contains `generatedAt`, `isStale`, `validUntil`, typed `nodes`,
+`edges` with provenance and observation times, and `limitations`. CPU and memory
+are nullable; missing, invalid, and expired samples remain unavailable. Evidence
+expires after three configured controller ticks (15 seconds when invalid).
+Session metrics use the last completed reconciliation time, never snapshot publication
+time; missing or stale scan times make those metrics unavailable.
+Declared ports are labelled declarations and never produce listener edges.
+Recorded ownership survives missing telemetry. A claimed service stays
+visibility-only; topology performs no service mutation.
+
+Ouros account connection, linked devices, and explicit credit-funded reviews are
+available in FleetConsole → **Agents & Map**. The CLI does not mint Ouros
+credentials or start paid requests. Local controller monitoring remains free.

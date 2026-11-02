@@ -212,6 +212,20 @@ enum SurfaceRenderer {
             renderMenuBar(model: model, appearance: appearance, into: out)
             renderPopover(model: model, fixture: fixture, registration: registration, appearance: appearance, into: out)
             renderConsole(model: model, fixture: fixture, appearance: appearance, into: out)
+            let agentConsole = ConsoleModel()
+            agentConsole.openOperationsSection("Agents")
+            for width in [560.0, 900.0] {
+                hold(model, Fixtures.snapshot(), turns: 2)
+                renderStandalone(AnyView(AgentTopologyWorkspace(model: model, console: agentConsole)
+                    .frame(width: width, height: 820)), name: "agent-map-\(Int(width))",
+                    size: NSSize(width: width, height: 820), appearance: appearance, into: out)
+            }
+            model.connected = false
+            renderStandalone(AnyView(AgentTopologyWorkspace(model: model, console: agentConsole)
+                .frame(width: 900, height: 820)), name: "agent-map-offline",
+                size: NSSize(width: 900, height: 820), appearance: appearance, into: out)
+            hold(model, fixture)
+
             renderTaskComposer(registration: registration, appearance: appearance, into: out)
             renderStandalone(AnyView(DeviceManagementView(model: model)), name: "device-management",
                              size: NSSize(width: 600, height: 650), appearance: appearance, into: out)
@@ -453,6 +467,15 @@ enum SurfaceRenderer {
             capture(window, to: out.appendingPathComponent(
                 "console-\(module.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(appearance.rawValue).png"))
         }
+        // The relations workspace uses shipping view code and controller fixtures.
+        // Capture at both widths without activating or foregrounding a window.
+        mutate { controller.console.openOperationsSection("Agents") }
+        hold(model, fixture)
+        capture(window, to: out.appendingPathComponent("console-agent-topology-\(appearance.rawValue).png"))
+        window.setContentSize(NSSize(width: 982, height: 720))
+        hold(model, fixture)
+        capture(window, to: out.appendingPathComponent("compact-agent-topology-\(appearance.rawValue).png"))
+        mutate { controller.console.openOperationsSection("Services") }
         // The narrow layout is a separate acceptance surface for every module.
         window.setContentSize(NSSize(width: 982, height: 720))
         for module in ConsoleModule.allCases {

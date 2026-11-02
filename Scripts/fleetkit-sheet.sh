@@ -28,7 +28,9 @@ mkdir -p "$OUT" "$WORK/Sources/Sheet/real"
 # so its types cannot be imported from outside the package.
 ln -s "$ROOT/Sources/FleetCore" "$WORK/Sources/FleetCore"
 
-for f in Design/Theme.swift \
+for f in Design/OurosCoreTokens.swift \
+         Design/CorePalette.swift \
+         Design/Theme.swift \
          Design/Tokens.swift \
          Design/QuantizedCardGrid.swift \
          Design/Sketchfield.swift \

@@ -223,7 +223,7 @@ struct TaskComposerView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { dismiss() }
                 }
             }
-            .buttonStyle(.borderedProminent)
+            .fleetPrimaryAction()
             .controlSize(.regular)
             .disabled(model.isSubmitting || model.taskName.trimmingCharacters(in: .whitespaces).isEmpty)
         }

@@ -1,7 +1,34 @@
-# Relational Spatial Mapping Architecture (GPUI / OS-Agnostic)
+# Relational Spatial Mapping
+
+## Current native implementation
+
+FleetConsole remains a Swift macOS app with a separate Rust workspace and GPUI
+companion foundation. The native **Agents & Map** destination and `fleetctl
+topology` share `FleetCore/FleetTopology.swift`: fixed owner/service/evidence
+columns, recorded ownership, identity-verified group leaders, and timestamped
+observed group listeners. Detected sessions remain unlinked; listener edges do
+not establish dependencies, health, or which group member owns a socket.
+
+Search, exact-owner filtering, bounded progressive service rendering, keyboard
+service selection and the existing inspector provide the navigation path.
+Missing/stale resources are unavailable. The last graph is labelled when the
+controller disconnects; evidence expires using the existing app clock. The CLI
+can replay saved snapshots, retains timestamps, and emits versioned JSON with
+relation provenance. Local monitoring is free; existing Ouros subscription and
+AI-credit flows remain separate. No generic shell bridge or paid dispatch is
+introduced by mapping.
+
+The sections below preserve an earlier design proposal. They describe ambitions,
+not shipped capabilities: animated force layouts, runtime state/decision trees,
+SHM/socket dependencies, agent throttling, context compaction, pruning and
+automatic attachment are **not established by the controller contract**. The
+newer private companion foundation also uses stable columns and recorded
+evidence; public code does not depend on private source.
+
+## Historical GPUI proposal (not an implementation receipt)
 
 ## 1. Paradigm Shift Overview
-FleetConsole has transitioned from a macOS-exclusive, tabular-siloed utility into a cross-platform, high-performance spatial workspace built with GPUI in Rust.
+The earlier proposal envisioned extending the macOS utility into a cross-platform spatial workspace built with GPUI in Rust.
 
 Instead of fragmenting system state across isolated tables ("Processes", "Storage", "Services", "Needs Attention"), the console organizes operations into four unified relational planes centered on spatial mapping:
 
@@ -29,7 +56,7 @@ Instead of fragmenting system state across isolated tables ("Processes", "Storag
 ---
 
 ## 2. Sidebar: Descriptive Topology Map
-The static button list has been replaced by a live, zoomable structural tree:
+The proposal envisioned a live structural tree:
 ```text
 Cluster / Host (Metal-01)
   └─ Runtime Core

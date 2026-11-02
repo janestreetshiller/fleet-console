@@ -12,12 +12,12 @@ struct OperationsWorkspace: View {
     private let sections = ["Services", "Network", "Agents", "Storage", "Events", "Launch Services", "Account"]
     var body: some View {
         VStack(spacing: 8) {
-            Picker("Operations", selection: Binding(get: { console.operationsSection }, set: { console.operationsSection = $0 })) {
+            Picker("Operations", selection: Binding(get: { console.operationsSection }, set: { console.openOperationsSection($0) })) {
                 ForEach(sections, id: \.self) { Text($0).tag($0) }
             }.pickerStyle(.menu).padding(.horizontal, ConsoleMetrics.gutter)
             switch section {
             case "Network": ScrollView { NetworkGlance(model: model) }
-            case "Agents": ScrollView { AgentsContent(model: model, openDashboard: {}) }
+            case "Agents": AgentTopologyWorkspace(model: model, console: console)
             case "Storage": StorageModule(model: model, console: console)
             case "Events": EventsModule(model: model, console: console)
             case "Launch Services": PlistsModule(console: console)

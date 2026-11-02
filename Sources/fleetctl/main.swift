@@ -25,6 +25,8 @@ USAGE
   ── looking at what is running ────────────────────────────────────────────────
   fleetctl list    [--all] [--json]               managed + unmanaged + attention
   fleetctl show    <id|name> [--json]             one service in full
+  fleetctl topology [--owner <id>] [--snapshot <path>] [--json]
+                                                  recorded owners, services and observed listeners
   fleetctl agents  [--json]                       what each agent has left running
   fleetctl events  [<id|name>] [--limit 50] [--json] [--offline]
                                                   --offline reads the registry directly,
@@ -47,7 +49,7 @@ USAGE
   fleetctl prune   [--older-than 1h]              drop old stopped/crashed records
   fleetctl config  [--path | --reload]            show or reload config.json
 
-  JSON output: list, show, agents, events and inbox accept --json.
+  JSON output: list, show, agents, topology, events and inbox accept --json.
   Logs, ping and doctor print human-readable diagnostics.
 
 LAUNCH OPTIONS
@@ -445,25 +447,69 @@ case "reply":
     guard response.ok, let message = response.message else { fail(response.error ?? "reply failed") }
     print("answered message \(message.id) to \(message.agent).")
 
+case "topology":
+    let options: TopologyOptions
+    do { options = try TopologyOptions(arguments: Array(argv.dropFirst())) }
+    catch { fail(error.localizedDescription, code: 64) }
+    let snapshot: Snapshot
+    if let path = options.snapshotPath {
+        do { snapshot = try Codec.decode(Snapshot.self, from: Data(contentsOf: URL(fileURLWithPath: path))) }
+        catch { fail("cannot read snapshot: \(error.localizedDescription)", code: 65) }
+    } else {
+        let response = send(RPCRequest(op: .snapshot))
+        guard response.ok, let value = response.snapshot else { fail(response.error ?? "no snapshot") }
+        snapshot = value
+    }
+    let graph = FleetTopology(snapshot: snapshot, owner: options.owner)
+    if options.json { print(Codec.jsonString(graph, pretty: true)) }
+    else {
+        print("FleetConsole · Ouros / local operations")
+        print("\((options.snapshotPath != nil) ? "Snapshot replay" : "Controller snapshot") · \(snapshot.generatedAt.formatted(.iso8601)) · \(graph.isStale ? "STALE" : "recent")")
+        let servicesByOwner = Dictionary(grouping: graph.nodes.filter { $0.kind == .service }, by: { $0.owner ?? "" })
+        let evidenceByService = Dictionary(grouping: graph.nodes.filter { $0.kind == .process || $0.kind == .listener }, by: { $0.serviceID ?? "" })
+        for owner in graph.nodes where owner.kind == .owner {
+            print("\n\(owner.title) · \(owner.detail)")
+            for service in servicesByOwner[owner.title] ?? [] {
+                print("  → \(service.title) [\(service.serviceID ?? "")] · \(service.detail)")
+                print("    CPU \(service.cpuPct.map(Fmt.cpu) ?? "unavailable") · memory \(service.memMB.map(Fmt.mem) ?? "unavailable")")
+                for target in evidenceByService[service.serviceID ?? ""] ?? [] {
+                    print("    → \(target.title) · \(target.detail)")
+                }
+            }
+        }
+        let sessions = graph.nodes.filter { $0.kind == .session }
+        if !sessions.isEmpty { print("\nDetected sessions · ownership unlinked") }
+        for session in sessions { print("  \(session.title) · \(session.detail)") }
+        if graph.nodes.isEmpty { print("No matching active ownership or session observations.") }
+        for limitation in graph.limitations { print("\n\(limitation)") }
+        print("\nInspect: fleetctl show <service-id>; fleetctl logs <service-id>; fleetctl inbox --unanswered")
+        print("Ouros account, linked devices and credit-funded reviews: FleetConsole → Operations → Account / Agents.")
+    }
+
 case "agents":
     let response = send(RPCRequest(op: .snapshot))
-    guard let snapshot = response.snapshot else { fail(response.error ?? "no snapshot") }
+    guard response.ok, let snapshot = response.snapshot else { fail(response.error ?? "no snapshot") }
     let agents = snapshot.agentSummaries
+    let projection = FleetTopology(snapshot: snapshot)
+    let metricsByOwner = Dictionary(grouping: projection.nodes.filter { $0.kind == .service }, by: { $0.owner ?? "" })
     if args.has("json") {
         print(Codec.jsonString(agents, pretty: true))
     } else if agents.isEmpty {
-        print("No agent has anything running.")
+        print("No active ownership records or messages. Use `fleetctl topology` to inspect detected sessions.")
     } else {
         print(pad("AGENT", 14) + pad("RUNNING", 9) + pad("ATTN", 6) + pad("ASK", 5) + pad("PORTS", 16)
               + pad("CPU", 8) + pad("MEM", 10) + "NEXT LEASE")
         for agent in agents {
+            let samples = metricsByOwner[agent.id] ?? []
+            let cpu = !samples.isEmpty && samples.allSatisfy { $0.cpuPct != nil } ? Fmt.cpu(samples.compactMap(\.cpuPct).reduce(0, +)) : "—"
+            let memory = !samples.isEmpty && samples.allSatisfy { $0.memMB != nil } ? Fmt.mem(samples.compactMap(\.memMB).reduce(0, +)) : "—"
             print(pad(agent.id, 14)
                   + pad("\(agent.running)", 9)
                   + pad(agent.needingAttention > 0 ? "\(agent.needingAttention)" : "—", 6)
                   + pad(agent.awaitingReply > 0 ? "\(agent.awaitingReply)" : "—", 5)
                   + pad(Fmt.ports(agent.ports), 16)
-                  + pad(Fmt.cpu(agent.totalCPU), 8)
-                  + pad(Fmt.mem(agent.totalMemMB), 10)
+                  + pad(cpu, 8)
+                  + pad(memory, 10)
                   + (agent.nextLeaseExpiry.map { Fmt.relative($0) } ?? "—"))
         }
         for agent in agents where !agent.purposes.isEmpty {

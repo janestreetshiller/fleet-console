@@ -128,7 +128,7 @@ struct DeviceManagementView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 Button(primaryTitle) { primaryAction() }
-                    .buttonStyle(.borderedProminent)
+                    .fleetPrimaryAction()
                     .disabled(primaryDisabled)
                     .keyboardShortcut(.defaultAction)
             }
@@ -245,7 +245,7 @@ private struct OurosConnectionView: View {
                 Spacer()
                 Button("Continue in Ouros…") {
                     if let url = billing.verificationURL { NSWorkspace.shared.open(url) }
-                }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                }.fleetPrimaryAction().keyboardShortcut(.defaultAction)
             }
         }
         .padding(ConsoleMetrics.gutter)

@@ -4,6 +4,16 @@ Every surface in FleetConsole (menu-bar item, popover Overview, popover Details,
 console window, inspectors) is built from the components below. Nothing draws its
 own row chrome any more.
 
+The versioned Ouros design core owns the native brand roles and the dedicated
+Fleet token modules. The canonical source is `packages/design-core/source` in
+`janestreetshiller/OurosProductionLive`; this repository carries a self-contained
+pin in `.design-core`. `OurosCoreTokens.swift` supplies the signal and filled-action
+roles. SwiftPM and `Scripts/build-app.sh` check the generated files before build.
+Run `python3 .design-core/generate.py --check` to check the pin. Change the
+canonical profile source, export it again, then build; do not edit generated
+token owners directly. AppKit surface adaptation and semantic status colors
+remain Fleet-specific parts of that profile.
+
 The toolbox has two scales and one substrate. `Design/Theme.swift` is the
 **popover ramp** (menu density, 13pt rows). `Design/Tokens.swift` is the **window
 ramp** (`ConsoleFont` on dynamic text styles, `ConsoleMetrics`, `ConsoleColor`,
@@ -128,8 +138,9 @@ shrank 20pt when you moved away.
 ## Native surfaces — `Design/Sketchfield.swift`
 
 The native app follows Apple’s Human Interface Guidelines: system text styles,
-adaptive AppKit backgrounds, SF Symbols, native controls, and the user’s accent
-color. Supporting console text uses `callout`; small values and badges use
+adaptive AppKit backgrounds, SF Symbols and native controls. The Ouros identity
+signal uses the core brand role; branded primary actions use the core contrast-safe
+fill with explicit white text. Other native controls retain system accent behavior. Supporting console text uses `callout`; small values and badges use
 `footnote`. Popover numeric text defaults to 12 points. Field labels use sentence
 case and stay visible after entry.
 
