@@ -332,6 +332,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 // Top-level code is not main-actor isolated in Swift 5 mode, but it does run on
 // the main thread — which is exactly what assumeIsolated asserts.
 MainActor.assumeIsolated {
+    if CommandLine.arguments.contains("--design-core-identity") {
+        let identity = [
+            "version": OurosCoreTokens.version,
+            "sourceSHA256": OurosCoreTokens.sourceSHA256,
+            "brandSignal": String(format: "#%06X", OurosCoreTokens.brandSignalHex),
+            "actionBackground": String(format: "#%06X", OurosCoreTokens.actionBackgroundHex),
+            "actionForeground": String(format: "#%06X", OurosCoreTokens.actionForegroundHex)
+        ]
+        do {
+            let data = try JSONSerialization.data(withJSONObject: identity, options: [.sortedKeys])
+            print(String(decoding: data, as: UTF8.self))
+            exit(0)
+        } catch {
+            fputs("Cannot encode design core identity.\n", stderr)
+            exit(1)
+        }
+    }
     // Compiled in only by Scripts/surface-sheet.sh, which passes
     // -DFLEET_SURFACE_RENDERER. Runs the whole UI against fixtures, writes a PNG
     // per surface, and exits without ever putting an item in the menu bar.

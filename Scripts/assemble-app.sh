@@ -79,8 +79,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.fleetconsole.app</string>
     <key>CFBundleExecutable</key><string>FleetConsole</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.3.0</string>
-    <key>CFBundleVersion</key><string>11</string>
+    <key>CFBundleShortVersionString</key><string>1.3.1</string>
+    <key>CFBundleVersion</key><string>1.3.1</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
 
     <!-- LSUIElement keeps the icon out of the Dock, but not out of Finder, Get
@@ -110,14 +110,21 @@ if [ -n "$SOURCE_REVISION" ] && [ -z "$(git -C "$ROOT" status --porcelain --untr
     SOURCE_DIRTY=0
 fi
 python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" <<'SOURCE_PLIST'
+import json
 import plistlib
 import re
 import sys
-path, revision, dirty = sys.argv[1:]
+path, revision, dirty, receipt_path = sys.argv[1:]
 with open(path, "rb") as stream:
     info = plistlib.load(stream)
 info["FleetSourceRevision"] = revision if re.fullmatch(r"[0-9a-f]{40,64}", revision) else "unrecorded"
 info["FleetSourceDirty"] = dirty != "0"
+with open(receipt_path, encoding="utf-8") as stream:
+    core = json.load(stream)
+if not re.fullmatch(r"[0-9a-f]{64}", core["sourceSHA256"]):
+    raise SystemExit("Invalid design core identity")
+info["OurosDesignCoreVersion"] = core["version"]
+info["OurosDesignCoreSHA256"] = core["sourceSHA256"]
 with open(path, "wb") as stream:
     plistlib.dump(info, stream, sort_keys=False)
 SOURCE_PLIST

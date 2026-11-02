@@ -60,6 +60,10 @@ class ScriptFixture(unittest.TestCase):
             if (SCRIPTS / name).is_file():
                 # No rewritten guards: the fixture always runs current production bytes.
                 shutil.copyfile(SCRIPTS / name, scripts / name)
+        core = self.root / ".design-core"
+        shutil.copytree(SCRIPTS.parent / ".design-core", core)
+        subprocess.run([sys.executable, str(core / "generate.py")], check=True,
+                       capture_output=True, text=True)
         self.home = self.root / "home"
         self.home.mkdir()
         (self.root / "rust").mkdir()
@@ -136,6 +140,13 @@ class ScriptFixture(unittest.TestCase):
 
 
 class PackagingTests(ScriptFixture):
+    def test_design_core_drift_is_rejected_before_building(self):
+        token = self.root / "Sources/FleetConsoleApp/Design/CorePalette.swift"
+        token.write_text(token.read_text() + "\n")
+        result = self.run_script("build-app.sh", "release")
+        self.expect_failure(result, "Design core drift")
+        self.assertFalse(any(call["tool"] in ("swift", "cargo", "codesign") for call in self.calls()))
+
     def test_offline_build_uses_one_job_and_the_selected_dependency_license(self):
         scratch = self.root / "offline-scratch"
         license_dir = scratch / "checkouts" / "SwiftTerm"
@@ -162,10 +173,13 @@ class PackagingTests(ScriptFixture):
         import plistlib
         with (self.app / "Contents/Info.plist").open("rb") as stream:
             info = plistlib.load(stream)
-        self.assertEqual(info["CFBundleShortVersionString"], "1.3.0")
-        self.assertEqual(info["CFBundleVersion"], "11")
+        self.assertEqual(info["CFBundleShortVersionString"], "1.3.1")
+        self.assertEqual(info["CFBundleVersion"], "1.3.1")
         self.assertEqual(info["FleetSourceRevision"], "unrecorded")
         self.assertTrue(info["FleetSourceDirty"])
+        receipt = json.loads((self.root / ".design-core/receipt.json").read_text())
+        self.assertEqual(info["OurosDesignCoreVersion"], receipt["version"])
+        self.assertEqual(info["OurosDesignCoreSHA256"], receipt["sourceSHA256"])
 
     def test_relative_scratch_is_refused_before_building(self):
         result = self.run_script("build-app.sh", "release", FLEETCONSOLE_SCRATCH_PATH="relative")
