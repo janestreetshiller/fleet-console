@@ -32,17 +32,18 @@ def main():
             or not args.output.resolve().is_relative_to(root / 'artifacts')):
         raise ValueError('Fresh owning artifact output and explicit source/core/team are required')
     metadata = plistlib.loads((args.bundle / 'Contents/Info.plist').read_bytes())
-    identity = json.loads(run([args.bundle / 'Contents/MacOS/FleetConsole', '--design-core-identity']))
     if (metadata.get('CFBundleIdentifier') != 'com.fleetconsole.app'
             or metadata.get('FleetSourceRevision') != args.source_revision
             or metadata.get('FleetSourceDirty') is not False
-            or metadata.get('OurosDesignCoreSHA256') != args.core_sha256
-            or identity.get('sourceSHA256') != args.core_sha256):
+            or metadata.get('OurosDesignCoreSHA256') != args.core_sha256):
         raise ValueError('Actual signed Fleet source/core identity differs')
     requirement = f'identifier "com.fleetconsole.app" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = "{args.team}"'
     run(['codesign', '--verify', '--deep', '--strict', '-R=' + requirement, args.bundle])
     run(['xcrun', 'stapler', 'validate', args.bundle])
     run(['spctl', '--assess', '--type', 'execute', '--verbose=2', args.bundle])
+    identity = json.loads(run([args.bundle / 'Contents/MacOS/FleetConsole', '--design-core-identity']))
+    if identity.get('sourceSHA256') != args.core_sha256:
+        raise ValueError('Actual compiled Fleet core identity differs')
     args.output.mkdir(parents=True)
     scripts = args.output / 'Scripts'
     scripts.mkdir()
