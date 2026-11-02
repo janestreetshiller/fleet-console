@@ -13,6 +13,8 @@ def render_termin8(core):
     profile = core['profiles']['termin8']
     lines = ['use crate::theme::Theme;', '']
     names = profile['paletteOrder']
+    assert profile['defaultPalette'] in names
+    lines.append('pub const DEFAULT_PALETTE: &str = "' + profile['defaultPalette'] + '";')
     lines.append('pub const THEME_NAMES: [&str; ' + str(len(names)) + '] = [' + ', '.join('"' + name + '"' for name in names) + '];')
     for role, color in profile['fallback'].items():
         lines.append('pub const FALLBACK_' + rust_name(role) + ': [u8; 3] = ' + rust_rgb(color) + ';')
