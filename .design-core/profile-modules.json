@@ -303,6 +303,20 @@
       "sha256": "24cfb878922fdd1801a78651fba2a61977ca933ecfdce7b541a7966c17796f69"
     },
     {
+      "profile": "studio-portal",
+      "repository": "studio",
+      "target": "app/globals.css",
+      "template": "profiles/studio-portal/app/globals.css",
+      "sha256": "7cadc1206695cb3694fb8f7ce518778d9e1e3d7c7d4e8734012473fa55343484"
+    },
+    {
+      "profile": "studio-portal",
+      "repository": "studio",
+      "target": "app/tailwind.css",
+      "template": "profiles/studio-portal/app/tailwind.css",
+      "sha256": "6900a635d1447f902370d0c5f646cba479c13159d8cd9f0d55361d990f2828b5"
+    },
+    {
       "profile": "termin8",
       "repository": "termin8",
       "target": "crates/termin8-app/src/ui_tokens.rs",
@@ -350,6 +364,41 @@
       "target": "apps/web/components/shell/brand-tokens.css",
       "template": "profiles/web-app/apps/web/components/shell/brand-tokens.css",
       "sha256": "416ac895c3ff0490800aa51593558fa5c434489ecbe21218d948aa0caecc3c96"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/portal.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/portal.css",
+      "sha256": "f60dd14ab9aa0542f63ff6fa361ca1280d263f7203ff999c38b62bd2eb594c42"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+      "sha256": "ad1baa918524c24d54c2def1cabfc4a98e40f2da1d49ae6e311e66c23d6b2695"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/workspace-presentation.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css",
+      "sha256": "379abd21d975c137949ad8b20934f53358cf206443bb49a27c039c5b61a60769"
+    },
+    {
+      "profile": "web-auth",
+      "repository": "app",
+      "target": "apps/gateway/presentation/auth-ui/customer-auth.tailwind.css",
+      "template": "profiles/web-auth/apps/gateway/presentation/auth-ui/customer-auth.tailwind.css",
+      "sha256": "26783d47f2b6e3104a20a4f3d254710f6afc89cde3b3ffbc1a06ae7b4824becd"
+    },
+    {
+      "profile": "web-product-demos",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/product-demos.css",
+      "template": "profiles/web-product-demos/apps/web/portal-source/frontend/product-demos.css",
+      "sha256": "1be8fe9272badf6c9826b5259ce0631033963d7cc0b7440bf702678eaa1c5673"
     },
     {
       "profile": "website",

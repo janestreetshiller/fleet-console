@@ -1,6 +1,6 @@
 {
   "format": "ouros-runtime-design-core-v1",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "authority": {
     "repository": "janestreetshiller/OurosProductionLive",
     "path": "packages/design-core/source/core.json",
@@ -79,11 +79,14 @@
       "theme": "Scoped --site-*, --workspace-*, --omp-* and appearance providers",
       "rule": "Resolve the actual route provider. Workspace, Obsidian Glass and embedded portal styles coexist; do not apply all globally.",
       "sourceModules": [
+        "profiles/web-app/apps/web/app/omp-surfaces.css",
         "profiles/web-app/apps/web/components/shell/brand-tokens.css",
-        "profiles/web-app/apps/web/app/omp-surfaces.css"
+        "profiles/web-app/apps/web/portal-source/frontend/portal/portal.css",
+        "profiles/web-app/apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+        "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css"
       ],
       "consumerOwner": "Same main repository, apps/web",
-      "consumerEntry": "apps/web/components/shell/brand-tokens.css",
+      "consumerEntry": "apps/web/app/omp-surfaces.css; portal-source/frontend/portal/workspace-presentation.css and lower-level palette adapters",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "shared-web": {
@@ -1644,6 +1647,40 @@
         "profiles/ouros-gpui-v2/crates/ouros-ui/src/theme.rs",
         "profiles/ouros-gpui-v2/crates/ouros-ui/src/fonts.rs"
       ]
+    },
+    "web-auth": {
+      "id": "web-auth",
+      "use": "Actual customer sign-in and recovery gateway presentation",
+      "consumerOwner": "janestreetshiller/OurosProductionLive apps/gateway",
+      "consumerEntry": "presentation/auth-ui/customer-auth.tailwind.css",
+      "rule": "Preserve existing forms, endpoints, cream keys, supplied artwork and NoiseField. Compile shared core into the existing customer-auth stylesheet; no additional request.",
+      "sourceModules": [
+        "profiles/web-auth/apps/gateway/presentation/auth-ui/customer-auth.tailwind.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
+    },
+    "studio-portal": {
+      "id": "studio-portal",
+      "use": "Private owner Studio portal and native editor semantic adapters",
+      "consumerOwner": "Omarchy /home/algorithm/ouros-project/studio",
+      "consumerEntry": "app/tailwind.css; app/globals.css",
+      "rule": "Keep portal controls scoped, preserve native editor geometry and original projects. Generated action fill/foreground remain opaque in all states; native editor mint palette remains distinct.",
+      "sourceModules": [
+        "profiles/studio-portal/app/globals.css",
+        "profiles/studio-portal/app/tailwind.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
+    },
+    "web-product-demos": {
+      "id": "web-product-demos",
+      "use": "Source-authored embedded Loop and document demo artifacts",
+      "consumerOwner": "OurosProductionLive apps/web portal-source/frontend",
+      "consumerEntry": "product-demos.css",
+      "rule": "Keep the original scoped demo palette, typography, geometry and interactions; its warm decorative accent is separate from shared filled controls.",
+      "sourceModules": [
+        "profiles/web-product-demos/apps/web/portal-source/frontend/product-demos.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     }
   },
   "navigation": {
@@ -1662,7 +1699,7 @@
     "sourceRevision": "9b2f5265cd08f721894cb0722d2f4195d9f63157",
     "composition": "retained floating tray with original mobile circles; replaces rejected full-width bar"
   },
-  "profileModuleManifestSHA256": "e978e5fc2064c2a2995fc400e7a14f8ad83c7cba57bc72e9167c31093b36b63d",
+  "profileModuleManifestSHA256": "715deaa420b5e6161b1914eaaedc8b3d94daa227a60c5db15cce0472de429d4f",
   "assets": {
     "logo-wordmark-white": {
       "path": "/home/algorithm/ouros-project/studio/design-studio/data/assets/lll.png",
@@ -1680,7 +1717,7 @@
     }
   },
   "generatorSHA256": "77cb25281f17863d38ecd595e741ddcb651f29ae6b4fa213d14874bf1732d21d",
-  "checkerSHA256": "e88d1ffd7d779f5bb3c82db7aeaeeddd287dfeff865f508308ac6df11f17af0f",
+  "checkerSHA256": "afa55b5cd0ddf141e6005f416c9bc9109669fd317af4c5faade34cdff25bfffe",
   "rendererSHA256": {
     "termin8_renderer.py": "bc590f505b3d4b0eba81384629c8c6e4589855bcb0a4bb7688dd764301f25f79"
   },

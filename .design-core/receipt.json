@@ -1,7 +1,7 @@
 {
   "format": "ouros-pinned-design-core-v1",
-  "version": "1.1.0",
-  "sourceSHA256": "8c4e116d16c3bd188b4d71c8cc233fa5eb7f6e3e028e2f927bfecb17c0d383bc",
+  "version": "1.1.2",
+  "sourceSHA256": "14e59eab76487451db569ded7f9debbeaaf9d7c13419b46c7ebd51ab86f9f53a",
   "authority": {
     "repository": "janestreetshiller/OurosProductionLive",
     "path": "packages/design-core/source/core.json",
