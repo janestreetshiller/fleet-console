@@ -68,6 +68,11 @@ class UpdateIdentityTests(unittest.TestCase):
         (self.candidate / 'Contents/Info.plist').write_bytes(plistlib.dumps(dict(self.new, CFBundleShortVersionString='1.3.0')))
         self.assert_refused()
 
+    def test_wrong_bundle_is_refused_before_candidate_execution(self):
+        (self.candidate / 'Contents/Info.plist').write_bytes(plistlib.dumps(dict(self.new, CFBundleIdentifier='wrong.app')))
+        self.assert_refused()
+        self.assertFalse((self.root / 'candidate-ran').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

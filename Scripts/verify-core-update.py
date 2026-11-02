@@ -33,7 +33,10 @@ def check(installed, candidate, proof, core, revision):
 
 if __name__ == '__main__':
     try:
-        check(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5])
+        if len(sys.argv) == 3 and sys.argv[1] == '--snapshot':
+            print(json.dumps({'fleet': snapshot(Path(sys.argv[2]))}, indent=2))
+        else:
+            check(Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3]), sys.argv[4], sys.argv[5])
     except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
         print(str(error), file=sys.stderr)
         raise SystemExit(1)
