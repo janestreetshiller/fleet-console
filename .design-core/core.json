@@ -1,6 +1,6 @@
 {
   "format": "ouros-runtime-design-core-v1",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "authority": {
     "repository": "janestreetshiller/OurosProductionLive",
     "path": "packages/design-core/source/core.json",
@@ -38,87 +38,278 @@
     "website": {
       "id": "website",
       "use": "Public website and product marketing chrome",
-      "owner": "Omarchy /home/algorithm/ouros-project/app at main, apps/site",
-      "entry": "apps/site/docs/THEME.md",
       "theme": "data-theme on html; system default; theme storage key",
       "rule": "Use --site-* roles and cream key CTAs. Product artifacts retain native geometry and interaction.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/website/apps/site/lib/ouros-foundations.ts",
+        "profiles/website/apps/site/app/globals.css"
+      ],
+      "consumerOwner": "Omarchy /home/algorithm/ouros-project/app at main, apps/site",
+      "consumerEntry": "apps/site/docs/THEME.md",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "docs-reader": {
       "id": "docs-reader",
       "use": "Customer documentation reader",
-      "owner": "Same main repository, apps/docs",
-      "entry": "apps/docs/src/css/ouros-docs-layout.css",
       "theme": "html[data-theme=light|dark]",
       "rule": "Reader geometry and palette are independent of marketing chrome. Geist, Instrument Serif and Geist Mono.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
+        "profiles/docs-reader/apps/docs/src/css/custom.css"
+      ],
+      "consumerOwner": "Same main repository, apps/docs",
+      "consumerEntry": "apps/docs/src/css/ouros-docs-layout.css",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "web-admin": {
       "id": "web-admin",
       "use": "Staff administration, including Ant Design portals",
-      "owner": "Same main repository, apps/web/components/admin/admin-palette.ts",
-      "entry": "apps/web/components/admin/admin-palette.ts",
       "theme": "adminPalettes.light / dark and adminThemeTokens",
       "rule": "Use AntD token and component adapters. Do not repair AntD density through generic shadcn input/table changes.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/web-admin/apps/web/components/admin/admin-palette.ts"
+      ],
+      "consumerOwner": "Same main repository, apps/web/components/admin/admin-palette.ts",
+      "consumerEntry": "apps/web/components/admin/admin-palette.ts",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "web-app": {
       "id": "web-app",
       "use": "Customer dashboard, workspace, auth adapters",
-      "owner": "Same main repository, apps/web",
-      "entry": "apps/web/components/shell/brand-tokens.css",
       "theme": "Scoped --site-*, --workspace-*, --omp-* and appearance providers",
       "rule": "Resolve the actual route provider. Workspace, Obsidian Glass and embedded portal styles coexist; do not apply all globally.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/web-app/apps/web/app/omp-surfaces.css",
+        "profiles/web-app/apps/web/components/shell/brand-tokens.css",
+        "profiles/web-app/apps/web/portal-source/frontend/portal/portal.css",
+        "profiles/web-app/apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+        "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css"
+      ],
+      "consumerOwner": "Same main repository, apps/web",
+      "consumerEntry": "apps/web/app/omp-surfaces.css; portal-source/frontend/portal/workspace-presentation.css and lower-level palette adapters",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "shared-web": {
       "id": "shared-web",
       "use": "Existing @ouros/ui Obsidian Glass consumers",
-      "owner": "Same main repository, packages/ui and packages/tailwind-config",
-      "entry": "packages/ui/src/tokens.ts",
       "theme": "Obsidian Glass and Tailwind projection",
       "rule": "The shared package is not the universal website palette; preserve amber/telemetry semantics in its own consumers.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/shared-web/packages/ui/src/tokens.ts",
+        "profiles/shared-web/packages/ui/src/styles/obsidian-glass.css",
+        "profiles/shared-web/packages/tailwind-config/src/index.ts"
+      ],
+      "consumerOwner": "Same main repository, packages/ui and packages/tailwind-config",
+      "consumerEntry": "packages/ui/src/tokens.ts",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "ouros-x": {
       "id": "ouros-x",
       "use": "Ouros X native macOS application",
-      "owner": "metal-mini /Users/main/Code/ouros/ouros-x",
-      "entry": "DESIGN.md; THEME.md; Sources/Shared/OurosDesignTokens.swift",
       "theme": "Appearance, Glass/Matte material and rounded/squared shape are separate axes",
       "rule": "Current native source wins over copied Studio assets and old token-engine defaults. Preserve native contour and app-owned control geometry.",
-      "sourceModules": []
+      "sourceModules": [
+        "profiles/ouros-x/apps/desktop/ouros/Sources/Shared/OurosDesignTokens.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Sources/Shared/OurosMotion.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Sources/OurosBar/OurosThemeRegistry.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosBrandPalette.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosFinish.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosGlassControls.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosStackedCard.swift",
+        "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosReadingInk.swift",
+        "profiles/ouros-x/apps/mobile/Sources/UI/OurosMobileStyle.swift"
+      ],
+      "consumerOwner": "metal-mini /Users/main/Code/ouros/ouros-x",
+      "consumerEntry": "DESIGN.md; THEME.md; Sources/Shared/OurosDesignTokens.swift",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "ouros-gpui": {
       "id": "ouros-gpui",
       "use": "GPUI/Linux native shell counterpart",
-      "owner": "metal-mini /Users/main/Code/ouros/ouros-gpui",
-      "entry": "Current theme/material source in native source manifest",
       "theme": "Runtime native palette/material mapping",
       "rule": "Shared principles adapt through platform-native rendering. Do not import the OS theme into app chrome.",
       "sourceModules": [
         "profiles/ouros-gpui/crates/ouros-domain/src/lib.rs",
         "profiles/ouros-gpui/crates/ouros-ui/src/theme.rs",
         "profiles/ouros-gpui/crates/ouros-platform/src/launcher_material.rs"
-      ]
+      ],
+      "consumerOwner": "metal-mini /Users/main/Code/ouros/ouros-gpui",
+      "consumerEntry": "Current theme/material source in native source manifest",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "native-shell-registry": {
       "id": "native-shell-registry",
       "use": "Shared shell vocabulary and generated Studio/native exports",
-      "owner": "Omarchy /home/algorithm/ouros-project/studio/brand/ouros-brand-v1.json",
-      "entry": "brand/ouros-brand-v1.json",
       "theme": "dark/light platform adaptation",
       "rule": "Edit generation input rather than generated CSS/Rust/Swift. Registry is a source-backed contract, not proof every runtime matches it.",
-      "sourceModules": []
+      "sourceModules": [],
+      "nativeShell": {
+        "version": 1,
+        "name": "Ouros",
+        "principles": [
+          "One continuous shell; content does not paint a second window.",
+          "Quiet depth and restrained highlights; state is clearer than decoration.",
+          "A compact 64-point rhythm scales into working surfaces without changing control density.",
+          "Platform-native type and material are adaptations, not competing identities.",
+          "Motion explains a change of place or state and disappears under Reduce Motion."
+        ],
+        "color": {
+          "brandOrange": {
+            "$ref": "brand.signal"
+          },
+          "focusAmber": "#F59E0B",
+          "darkCanvas": "#18181B",
+          "darkShellBase": "#09090B",
+          "darkInk": "#F4F4F5",
+          "lightCanvas": "#F7F7F7",
+          "lightInk": "#000000",
+          "secondaryInkOpacity": 0.66,
+          "selectionOpacity": 0.1,
+          "hoverOpacity": 0.09,
+          "pressedOpacity": 0.16,
+          "actionBackground": {
+            "$ref": "brand.actionBackground"
+          },
+          "actionForeground": {
+            "$ref": "brand.actionForeground"
+          }
+        },
+        "geometry": {
+          "unit": 64,
+          "compactWidth": 400,
+          "compactHeight": 64,
+          "outerMargin": 20,
+          "surfaceRadius": 26,
+          "workspaceHeight": 700,
+          "resultRowHeight": 48,
+          "controlHeight": 32,
+          "footerHeight": 48,
+          "finderWidth": 1200,
+          "finderHeight": 700
+        },
+        "space": {
+          "micro": 4,
+          "small": 8,
+          "compact": 12,
+          "medium": 16,
+          "barInset": 20,
+          "section": 24,
+          "inset": 32
+        },
+        "type": {
+          "familyRole": "platform-system-sans",
+          "monoFamilyRole": "platform-monospace",
+          "composerSize": 20,
+          "composerLineHeight": 26,
+          "bodySize": 16,
+          "bodyLineHeight": 19.2,
+          "rowTitleSize": 14,
+          "rowTitleLineHeight": 17,
+          "metadataSize": 12,
+          "metadataLineHeight": 14,
+          "noteSize": 15,
+          "noteLineHeight": 18
+        },
+        "material": {
+          "darkBackdropOpacity": 0.7,
+          "darkTintOpacity": 0.24,
+          "lightBackdropOpacity": 0.48,
+          "lightTintOpacity": 0.2,
+          "specularHeight": 48,
+          "darkSpecularOpacity": 0.12,
+          "lightSpecularOpacity": 0.18
+        },
+        "motion": {
+          "standardDurationMs": 200,
+          "selectionDurationMs": 140,
+          "surfaceInsertionDurationMs": 120,
+          "surfaceInsertionDelayMs": 60,
+          "surfaceRemovalDurationMs": 80,
+          "curve": [
+            0.4,
+            0,
+            0.2,
+            1
+          ],
+          "readingPauseMs": 1200,
+          "readingPointsPerSecond": 24
+        },
+        "components": {
+          "shell": [
+            "material",
+            "continuous contour",
+            "content",
+            "optional state rim"
+          ],
+          "composer": [
+            "mode mark",
+            "editable value",
+            "optional trailing action"
+          ],
+          "resultRow": [
+            "leading identity",
+            "title",
+            "metadata",
+            "optional actions"
+          ],
+          "readingSurface": [
+            "navigation or context",
+            "content",
+            "status or actions"
+          ],
+          "conversation": [
+            "thread context",
+            "transcript",
+            "composer"
+          ],
+          "terminal": [
+            "bounded output",
+            "composer",
+            "status"
+          ],
+          "finder": [
+            "navigation",
+            "columns",
+            "preview",
+            "tool footer"
+          ]
+        },
+        "platforms": {
+          "macOS": {
+            "sans": "system font",
+            "mono": "system monospace",
+            "material": "NSVisualEffectView and SwiftUI material",
+            "contour": "continuous SwiftUI/AppKit corner"
+          },
+          "linux": {
+            "sans": "Adwaita Sans with Unicode fallbacks",
+            "mono": "desktop monospace",
+            "material": "GTK/Cairo tint plus compositor blur when available",
+            "contour": "exported native path"
+          },
+          "web": {
+            "sans": "system UI stack",
+            "mono": "system monospace or bundled Workflow Mono",
+            "material": "CSS reconstruction for authoring; native frame for final Mac pixels",
+            "contour": "exported native mask"
+          }
+        }
+      },
+      "consumerOwner": "Omarchy /home/algorithm/ouros-project/studio/brand/ouros-brand-v1.json",
+      "consumerEntry": "brand/ouros-brand-v1.json",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "termin8": {
       "id": "termin8",
       "use": "Termin8 native terminal and command palette",
-      "owner": "metal-mini /Users/main/Code/termin8",
-      "entry": "crates/termin8-app/src/ui_tokens.rs; docs/INTERFACE-STANDARD.md",
       "theme": "Product theme and palette variants",
       "rule": "Keep terminal content, command palette and outer chrome roles distinct. Marketing donut composition is a separate surface.",
-      "sourceModules": [],
+      "sourceModules": [
+        "profiles/termin8/crates/termin8-core/src/theme.rs",
+        "profiles/termin8/crates/termin8-command-palette/src/render/theme.rs",
+        "profiles/termin8/crates/termin8-app/src/ui_tokens.rs",
+        "profiles/termin8/crates/termin8-core/src/design_core.rs"
+      ],
       "palettes": {
         "loam": {
           "bg": [
@@ -1184,13 +1375,14 @@
         "grain": 0.0,
         "fallbackOpacity": 0.0,
         "accentDimOpacity": 0.2
-      }
+      },
+      "consumerOwner": "metal-mini /Users/main/Code/termin8",
+      "consumerEntry": "crates/termin8-app/src/ui_tokens.rs; docs/INTERFACE-STANDARD.md",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "fleet-console": {
       "id": "fleet-console",
       "use": "Fleet Console native console and popover",
-      "owner": "metal-mini /Users/main/Code/apps/fleet-console",
-      "entry": "Native theme/console and popover source in source manifest",
       "theme": "Separate console and popover ramps",
       "rule": "Preserve actual console columns, minimum sizes, popover measurements and native menu behavior.",
       "sourceModules": [
@@ -1199,15 +1391,15 @@
         "profiles/fleet-console/Sources/FleetConsoleApp/Design/Sketchfield.swift",
         "profiles/fleet-console/Sources/FleetConsoleApp/Design/StatusTone.swift",
         "profiles/fleet-console/Sources/FleetConsoleApp/Design/CorePalette.swift",
-        "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift",
-        "profiles/fleet-console/design/tokens.json"
-      ]
+        "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift"
+      ],
+      "consumerOwner": "metal-mini /Users/main/Code/apps/fleet-console",
+      "consumerEntry": "Native theme/console and popover source in source manifest",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "mandarin": {
       "id": "mandarin",
       "use": "Mandarin code editor and integrated Agent RX",
-      "owner": "metal-mini /Users/main/Code/mandarin",
-      "entry": "crates/mandarin-theme/src/lib.rs",
       "theme": "Dark, light, rust camo and native material variants",
       "rule": "Editor/syntax/status roles belong to Mandarin. Website body typography does not restyle the editor.",
       "sourceModules": [
@@ -1215,68 +1407,290 @@
         "profiles/mandarin/crates/mandarin-theme/src/contrast.rs",
         "profiles/mandarin/crates/mandarin-theme/src/rust_camo.rs",
         "profiles/mandarin/crates/mandarin-theme/src/glass.rs"
-      ]
+      ],
+      "consumerOwner": "metal-mini /Users/main/Code/mandarin",
+      "consumerEntry": "crates/mandarin-theme/src/lib.rs",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "agent-rx": {
       "id": "agent-rx",
       "use": "Agent RX terminal/composer/editor integration",
-      "owner": "metal-mini /Users/main/Code/agents/agent-rx",
-      "entry": "runtime/rx/crates/rx-cli/src/palette.rs and theme sources in manifest",
       "theme": "Terminal palette variants and semantic ANSI roles",
       "rule": "Preserve exact terminal palette roles. Website character model is a separate authored artifact.",
       "sourceModules": [
         "profiles/agent-rx/runtime/rx/crates/rx-core/src/ascii_hd.rs",
         "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme.rs",
         "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme/palettes.rs"
-      ]
+      ],
+      "consumerOwner": "metal-mini /Users/main/Code/agents/agent-rx",
+      "consumerEntry": "runtime/rx/crates/rx-tui/src/theme/palettes.rs; runtime/rx/crates/rx-core/src/ascii_hd.rs",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json",
+      "implementationBaseline": "f7792d680a018895f14e9af427e425b643280637"
     },
     "loop-builder": {
       "id": "loop-builder",
       "use": "Loop Builder application and website embedding",
-      "owner": "Omarchy main apps/ouros-loop-builder-application; retained standalone /home/algorithm/projects/omarchy-imports/ouros-loop-builder",
-      "entry": "app/globals.scss; components/loop-builder/loop-builder.scss",
       "theme": "Carbon .cds--white / .cds--g100 plus scoped zones; IBM Plex and Carbon Sass roles",
       "rule": "Original app behavior and constellation artifact survive the shared marketing shell. Carbon Sass imports own theme, type and spacing; preserve those separately from website tokens.",
-      "sourceModules": []
+      "sourceModules": [],
+      "consumerOwner": "Omarchy main apps/ouros-loop-builder-application; retained standalone /home/algorithm/projects/omarchy-imports/ouros-loop-builder",
+      "consumerEntry": "app/globals.scss; components/loop-builder/loop-builder.scss",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "loop-carbon-preset": {
       "id": "loop-carbon-preset",
       "use": "Imported Carbon theme, type, layout and motion definitions",
-      "owner": "Installed @carbon/themes, @carbon/type, @carbon/layout and @carbon/motion dependencies on Omarchy",
-      "entry": "research/web/carbon-resolved.json",
       "theme": "Imported package exports, including white/g10/g90/g100",
       "rule": "Versioned dependency evidence. This is not proof of current main lockfile equivalence or approval of every upstream theme on every Ouros surface.",
-      "sourceModules": []
+      "sourceModules": [],
+      "consumerOwner": "Installed @carbon/themes, @carbon/type, @carbon/layout and @carbon/motion dependencies on Omarchy",
+      "consumerEntry": "research/web/carbon-resolved.json",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "zilch": {
       "id": "zilch",
       "use": "Zilch.sh website and CLI output",
-      "owner": "Website main apps/site; Zilch command package embedded in Agent RX",
-      "entry": "Current Zilch product source and RX package source",
       "theme": "Surface-specific website roles; CLI rendering if present",
       "rule": "No independently verified standalone global Zilch theme was found. Use website roles for its site; no invented native palette.",
-      "sourceModules": []
+      "sourceModules": [],
+      "consumerOwner": "Website main apps/site; Zilch command package embedded in Agent RX",
+      "consumerEntry": "Current Zilch product source and RX package source",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "os-theme": {
       "id": "os-theme",
       "use": "Omarchy desktop and terminal skin only",
-      "owner": "Omarchy /home/algorithm/Downloads/ouros-theme-kit/palette",
-      "entry": "ouros.json; ouros.css; kitty.conf; waybar-colors.css",
       "theme": "Core intro colors; ANSI extension is a proposal",
       "rule": "Keep red/black OS skin out of product/web defaults; retain asset-rights restrictions.",
-      "sourceModules": []
+      "sourceModules": [],
+      "osTheme": {
+        "id": "os-theme-omarchy",
+        "title": "Ouros OS/terminal theme (Omarchy desktop skin)",
+        "meta": {
+          "whenToUse": "Desktop/terminal theming only: Omarchy window manager, kitty/waybar colors, wallpapers, intro video/audio, dragon sprites, greeter/splash/lock-screen art. Not a product or web UI palette.",
+          "authority": "Core colors match the approved intro film exactly. The extended ANSI set is a readable-terminal proposal layered on top, not an existing official Omarchy theme.",
+          "notAnOfficialTheme": "Derived from the Omarchy wordmark / Delta Corps Priest 1 lettering; not an official Omarchy theme.",
+          "source": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit",
+            "lastSynced": "2026-10-21"
+          }
+        },
+        "colors": {
+          "background": "#000000",
+          "surface": "#10070A",
+          "foreground": "#EEEDE7",
+          "muted": "#978E8F",
+          "red": "#D94340",
+          "deep_red": "#681020",
+          "ember": "#FF7257",
+          "ivory": "#FFF7DF",
+          "selection": "#45131C",
+          "border": "#36080D"
+        },
+        "usage": {
+          "base": "black (#000000)",
+          "mainText": "#EEEDE7",
+          "activeAccent": "#D94340",
+          "quietBorder": "#681020",
+          "urgencyHighlight": "#FF7257 (sparingly)",
+          "note": "Keep most UI neutral so the dragon stays the focal point. Test readability before placing text over the noisy wallpaper texture."
+        },
+        "ansi": [
+          "#10070A",
+          "#D94340",
+          "#9DAA86",
+          "#C7A16F",
+          "#949CA8",
+          "#AC8192",
+          "#96ABA6",
+          "#D4D5CF",
+          "#66545B",
+          "#FF7257",
+          "#BACA9F",
+          "#FFDA86",
+          "#BBC1CE",
+          "#D6A5B7",
+          "#B5CFC5",
+          "#EEEDE7"
+        ],
+        "assets": {
+          "logo-transparent": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/artwork/ouros-logo-transparent.png",
+            "mime": "image/png",
+            "dimensions": "1720x1140",
+            "usage": "RGBA logo, transparent background."
+          },
+          "wordmark-transparent": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/artwork/ouros-wordmark-transparent.png",
+            "mime": "image/png",
+            "dimensions": "1440x480",
+            "usage": "RGBA wordmark only."
+          },
+          "wallpaper-1080p": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/wallpapers/ouros-1920x1080.png",
+            "mime": "image/png",
+            "dimensions": "1920x1080"
+          },
+          "wallpaper-1440p": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/wallpapers/ouros-2560x1440.png",
+            "mime": "image/png",
+            "dimensions": "2560x1440"
+          },
+          "display-font": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/fonts/omarchy.ttf",
+            "mime": "font/ttf",
+            "usage": "Display lettering only, not a terminal body-text font. Community Omarchy Font by Mark Cuda, MIT license (see fonts/LICENSE.txt)."
+          },
+          "sprite-dragon-front": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/sprites/dragon-front.png",
+            "mime": "image/png"
+          },
+          "sprite-dragon-head": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/sprites/dragon-head.png",
+            "mime": "image/png"
+          },
+          "sprite-dragon-scale": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/sprites/dragon-scale.png",
+            "mime": "image/png"
+          },
+          "intro-video-1080p": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/video/OUROS-Intro-1080p.mp4",
+            "mime": "video/mp4",
+            "duration": "~9.8s",
+            "rights": "RESTRICTED — see rights note below."
+          },
+          "audio-intro-full": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/audio/OUROS-INTRO.wav",
+            "mime": "audio/wav",
+            "duration": "~16s",
+            "rights": "RESTRICTED — see rights note below."
+          },
+          "audio-final-cut": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/audio/ouros-final-cut.wav",
+            "mime": "audio/wav",
+            "duration": "~9s",
+            "rights": "RESTRICTED — see rights note below."
+          },
+          "kitty-snippet": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/palette/kitty.conf",
+            "mime": "text/plain"
+          },
+          "waybar-colors": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/palette/waybar-colors.css",
+            "mime": "text/css"
+          },
+          "palette-css": {
+            "path": "/home/algorithm/Downloads/ouros-theme-kit/palette/ouros.css",
+            "mime": "text/css"
+          }
+        },
+        "rights": {
+          "audioAndVideo": "The audio was supplied by the project owner for transfer to their own device(s). That does NOT establish rights to publish or redistribute it. Clear audio rights before publishing any public theme or video containing it (applies to audio-intro-full, audio-final-cut, and intro-video-1080p, which carries the audio track)."
+        },
+        "doNot": [
+          "Do not treat this as an official Omarchy theme.",
+          "Do not publish or redistribute the intro audio/video assets without clearing rights first (see rights.audioAndVideo).",
+          "Do not use this palette on product or marketing web surfaces."
+        ]
+      },
+      "consumerOwner": "Omarchy /home/algorithm/Downloads/ouros-theme-kit/palette",
+      "consumerEntry": "ouros.json; ouros.css; kitty.conf; waybar-colors.css",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
     "historical": {
       "id": "historical",
       "use": "Prior registry, flyers, design studies and reference exports",
-      "owner": "Captured source files under research",
-      "entry": "research/studio/sources/design-studio/data/index.json",
       "theme": "Historical snapshots dated 2026-10-21",
       "rule": "Searchable evidence only. Retired paths, black-on-orange labels and obsolete navigation are not active defaults.",
-      "sourceModules": []
+      "sourceModules": [],
+      "consumerOwner": "Captured source files under research",
+      "consumerEntry": "research/studio/sources/design-studio/data/index.json",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
+    },
+    "fleet-terminal": {
+      "id": "fleet-terminal",
+      "use": "Fleet terminal/GPUI integration palette, distinct from native AppKit",
+      "owner": "Fleet Console terminal design profile",
+      "entry": "design/tokens.json",
+      "sourceModules": [
+        "profiles/fleet-terminal/design/tokens.json"
+      ]
+    },
+    "linux-launcher": {
+      "id": "linux-launcher",
+      "use": "Actual GTK native launcher on Omarchy",
+      "consumerOwner": "/home/algorithm/ouros-project/workspaces/ouros-omarchy",
+      "consumerEntry": "crates/ouros-omarchy/src/appearance.rs; launcher.css",
+      "rule": "Preserve actual GTK renderer, appearance choices, existing runtime identity and blur-safety behavior.",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json",
+      "sourceModules": [
+        "profiles/linux-launcher/crates/ouros-omarchy/src/appearance.rs",
+        "profiles/linux-launcher/crates/ouros-omarchy/src/geometry.rs",
+        "profiles/linux-launcher/crates/ouros-omarchy/src/material.rs",
+        "profiles/linux-launcher/crates/ouros-omarchy/src/motion.rs",
+        "profiles/linux-launcher/crates/ouros-omarchy/assets/launcher.css",
+        "profiles/linux-launcher/crates/ouros-omarchy/assets/finder.css",
+        "profiles/linux-launcher/crates/ouros-omarchy/assets/creator-design-source.json"
+      ]
+    },
+    "ouros-gpui-v2": {
+      "id": "ouros-gpui-v2",
+      "use": "Actual installed Ouros GPUI v2 application",
+      "consumerOwner": "Ouros X experiments/gpui at installed-lineage095f9ae6",
+      "consumerEntry": "crates/ouros-ui/src/gui_v2.rs",
+      "rule": "Preserve installed v2 renderer, interaction and geometry; standalone GPUI remains a separate replacement profile.",
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json",
+      "sourceModules": [
+        "profiles/ouros-gpui-v2/crates/ouros-domain/src/lib.rs",
+        "profiles/ouros-gpui-v2/crates/ouros-domain/src/core_shell.rs",
+        "profiles/ouros-gpui-v2/crates/ouros-domain/src/gui_v2.rs",
+        "profiles/ouros-gpui-v2/crates/ouros-ui/src/theme.rs",
+        "profiles/ouros-gpui-v2/crates/ouros-ui/src/fonts.rs"
+      ]
+    },
+    "web-auth": {
+      "id": "web-auth",
+      "use": "Actual customer sign-in and recovery gateway presentation",
+      "consumerOwner": "janestreetshiller/OurosProductionLive apps/gateway",
+      "consumerEntry": "presentation/auth-ui/customer-auth.tailwind.css",
+      "rule": "Preserve existing forms, endpoints, cream keys, supplied artwork and NoiseField. Compile shared core into the existing customer-auth stylesheet; no additional request.",
+      "sourceModules": [
+        "profiles/web-auth/apps/gateway/presentation/auth-ui/customer-auth.tailwind.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
+    },
+    "studio-portal": {
+      "id": "studio-portal",
+      "use": "Private owner Studio portal and native editor semantic adapters",
+      "consumerOwner": "Omarchy /home/algorithm/ouros-project/studio",
+      "consumerEntry": "app/tailwind.css; app/globals.css",
+      "rule": "Keep portal controls scoped, preserve native editor geometry and original projects. Generated action fill/foreground remain opaque in all states; native editor mint palette remains distinct.",
+      "sourceModules": [
+        "profiles/studio-portal/app/globals.css",
+        "profiles/studio-portal/app/tailwind.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
+    },
+    "web-product-demos": {
+      "id": "web-product-demos",
+      "use": "Source-authored embedded Loop and document demo artifacts",
+      "consumerOwner": "OurosProductionLive apps/web portal-source/frontend",
+      "consumerEntry": "product-demos.css",
+      "rule": "Keep the original scoped demo palette, typography, geometry and interactions; its warm decorative accent is separate from shared filled controls.",
+      "sourceModules": [
+        "profiles/web-product-demos/apps/web/portal-source/frontend/product-demos.css"
+      ],
+      "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     }
   },
   "navigation": {
+    "surface": "#0e0e0e",
+    "foreground": "#FFFFFF",
+    "iconSize": 26,
+    "wordmarkWidth": 62,
+    "wordmarkHeight": 23,
+    "brandGap": 7,
+    "mobileIconSize": 44,
     "trayWidth": 700,
     "headerHeight": 80,
     "desktopHeight": 48,
@@ -1285,5 +1699,80 @@
     "sourceRevision": "9b2f5265cd08f721894cb0722d2f4195d9f63157",
     "composition": "retained floating tray with original mobile circles; replaces rejected full-width bar"
   },
-  "profileModuleManifestSHA256": "8d377d97ca68208157cb8178ef388bb39c87e7a46c85621df7ab032fb63720ed"
+  "profileModuleManifestSHA256": "715deaa420b5e6161b1914eaaedc8b3d94daa227a60c5db15cce0472de429d4f",
+  "assets": {
+    "logo-wordmark-white": {
+      "path": "/home/algorithm/ouros-project/studio/design-studio/data/assets/lll.png",
+      "bundlePath": "assets/lll.png",
+      "mime": "image/png",
+      "sha256": "d8da9e9dae999d5ac0e2ec7f6ff95c585bdc5fae4f1b1cf845bc8f1cafbf2420",
+      "usage": "Selected original artwork; preserve shape, proportions and transparency."
+    },
+    "logo-globe-star": {
+      "path": "/home/algorithm/ouros-project/studio/design-studio/data/assets/logo-dark.svg",
+      "bundlePath": "assets/logo-dark.svg",
+      "mime": "image/svg+xml",
+      "sha256": "a1a89a6a123d24dff19bb4fa970db0406d9be2381f08dbf27643417a4976a1f7",
+      "usage": "Selected original artwork; preserve shape, proportions and transparency."
+    }
+  },
+  "generatorSHA256": "77cb25281f17863d38ecd595e741ddcb651f29ae6b4fa213d14874bf1732d21d",
+  "checkerSHA256": "afa55b5cd0ddf141e6005f416c9bc9109669fd317af4c5faade34cdff25bfffe",
+  "rendererSHA256": {
+    "termin8_renderer.py": "bc590f505b3d4b0eba81384629c8c6e4589855bcb0a4bb7688dd764301f25f79"
+  },
+  "runtimeExports": {
+    "ouros-gpui-v2": [
+      {
+        "kind": "rust",
+        "path": "crates/ouros-domain/src/design_core.rs"
+      }
+    ],
+    "linux-launcher": [
+      {
+        "kind": "rust",
+        "path": "crates/ouros-omarchy/src/design_core.rs"
+      }
+    ],
+    "mandarin": [
+      {
+        "kind": "rust",
+        "path": "crates/mandarin-theme/src/design_core.rs"
+      }
+    ],
+    "agent-rx": [
+      {
+        "kind": "rust",
+        "path": "runtime/rx/crates/rx-core/src/design_core.rs"
+      }
+    ],
+    "ouros-gpui": [
+      {
+        "kind": "rust",
+        "path": "crates/ouros-domain/src/design_core.rs"
+      }
+    ],
+    "termin8": [
+      {
+        "kind": "rust",
+        "path": ".design-core/generated/brand.rs"
+      }
+    ],
+    "fleet-console": [
+      {
+        "kind": "swift",
+        "path": "Sources/FleetConsoleApp/Design/OurosCoreTokens.swift"
+      }
+    ],
+    "ouros-x": [
+      {
+        "kind": "swift",
+        "path": "apps/desktop/ouros/Sources/Shared/OurosCoreTokens.swift"
+      },
+      {
+        "kind": "swift",
+        "path": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosCoreTokens.swift"
+      }
+    ]
+  }
 }

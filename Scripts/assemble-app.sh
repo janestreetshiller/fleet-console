@@ -109,15 +109,20 @@ SOURCE_DIRTY=1
 if [ -n "$SOURCE_REVISION" ] && [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
     SOURCE_DIRTY=0
 fi
-python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" <<'SOURCE_PLIST'
+python3 - "$APP/Contents/Info.plist" "$SOURCE_REVISION" "$SOURCE_DIRTY" "$ROOT/.design-core/receipt.json" <<'SOURCE_PLIST'
+import json
 import plistlib
 import re
 import sys
-path, revision, dirty = sys.argv[1:]
+path, revision, dirty, receipt = sys.argv[1:]
+with open(receipt) as stream:
+    core = json.load(stream)
 with open(path, "rb") as stream:
     info = plistlib.load(stream)
 info["FleetSourceRevision"] = revision if re.fullmatch(r"[0-9a-f]{40,64}", revision) else "unrecorded"
 info["FleetSourceDirty"] = dirty != "0"
+info["OurosDesignCoreVersion"] = core["version"]
+info["OurosDesignCoreSHA256"] = core["sourceSHA256"]
 with open(path, "wb") as stream:
     plistlib.dump(info, stream, sort_keys=False)
 SOURCE_PLIST

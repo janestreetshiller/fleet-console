@@ -1,0 +1,418 @@
+{
+  "format": "ouros-core-modules-v1",
+  "modules": [
+    {
+      "profile": "agent-rx",
+      "repository": "agent-rx",
+      "target": "runtime/rx/crates/rx-core/src/ascii_hd.rs",
+      "template": "profiles/agent-rx/runtime/rx/crates/rx-core/src/ascii_hd.rs",
+      "sha256": "80b64089e7a7c6f9edcb655269cc99b10fa713c412b3292e85fe6e9523fe2a82"
+    },
+    {
+      "profile": "agent-rx",
+      "repository": "agent-rx",
+      "target": "runtime/rx/crates/rx-tui/src/theme.rs",
+      "template": "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme.rs",
+      "sha256": "e7f3b880b95ad7569927123b36e893691588c18c690f933c0c64a93cdfadc154"
+    },
+    {
+      "profile": "agent-rx",
+      "repository": "agent-rx",
+      "target": "runtime/rx/crates/rx-tui/src/theme/palettes.rs",
+      "template": "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme/palettes.rs",
+      "sha256": "7698aaddf327a6cca3155a5e0e39e9ec3f3bcf8dd7578d6235eda2a3762dbfd9"
+    },
+    {
+      "profile": "docs-reader",
+      "repository": "app",
+      "target": "apps/docs/src/css/custom.css",
+      "template": "profiles/docs-reader/apps/docs/src/css/custom.css",
+      "sha256": "6fb2eb718db8b04184ae071ac0d15c65a85062f2e8bb4ac4b827e92c7a84dff8"
+    },
+    {
+      "profile": "docs-reader",
+      "repository": "app",
+      "target": "apps/docs/src/css/ouros-docs-layout.css",
+      "template": "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
+      "sha256": "6e1d9b30edc921af916ca45107bfe42cf85367a2bfe44eec77ba3a0d432b8650"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetConsoleApp/Design/CorePalette.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/CorePalette.swift",
+      "sha256": "b0fe3cd12357b33ce07a9ada5a1cfa05c9445a8943515b0316a2fd8f2c8ad04a"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetConsoleApp/Design/Sketchfield.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Sketchfield.swift",
+      "sha256": "69d23b3433a6e5c2775f2d761064d16e3be8b4dd33a80773eed025970834886c"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetConsoleApp/Design/StatusTone.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/StatusTone.swift",
+      "sha256": "c43d2b25537a2e3006031a9bbdd1e80770d92e69ac774333fdafda84a8c386c8"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetConsoleApp/Design/Theme.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Theme.swift",
+      "sha256": "a3e3e93e31febcbb10f7a7ff09545dff215825620fabf79a29be178b0fe3cfcb"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetConsoleApp/Design/Tokens.swift",
+      "template": "profiles/fleet-console/Sources/FleetConsoleApp/Design/Tokens.swift",
+      "sha256": "b07f8388e433ea1c42c8fcdbbf97241d1e59b4e1c67886fdfa0e0e6552c08944"
+    },
+    {
+      "profile": "fleet-console",
+      "repository": "fleet-console",
+      "target": "Sources/FleetCore/ConsoleLayout.swift",
+      "template": "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift",
+      "sha256": "2cefff7d0896bca3f0735022ae558646d065982317ce9b0ef8c283322f95e614"
+    },
+    {
+      "profile": "fleet-terminal",
+      "repository": "fleet-console",
+      "target": "design/tokens.json",
+      "template": "profiles/fleet-terminal/design/tokens.json",
+      "sha256": "4f959786c73ff5319379473b96bd3ad070b444be2265ee612e7d54d5f3e632f7"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/assets/creator-design-source.json",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/assets/creator-design-source.json",
+      "sha256": "eee7af703d50f6b3f338534ebef3ff9f459f03119b6a61010b6c325c43124581"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/assets/finder.css",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/assets/finder.css",
+      "sha256": "c540d1b3cde8ccefde9c86ed4fc2759c6b8010945d4ca99b8bbce98074d1a016"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/assets/launcher.css",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/assets/launcher.css",
+      "sha256": "939c378a3b8ea6476bddc9d7a04d90cbaf94d6320bdaeb60ab5e7039a19399f2"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/src/appearance.rs",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/src/appearance.rs",
+      "sha256": "456da06618267e59b246646c55c214561d0595bc19635110b1aae72cdeec385e"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/src/geometry.rs",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/src/geometry.rs",
+      "sha256": "3e9aef7b755914dd89853b3dcee500219ebcbee5d5d356d94add3fde7848019b"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/src/material.rs",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/src/material.rs",
+      "sha256": "f50ebc6cefd9bcec6acb8da9f1667bd43cf667cc917efab7ccff1d28490c6d1e"
+    },
+    {
+      "profile": "linux-launcher",
+      "repository": "ouros-omarchy",
+      "target": "crates/ouros-omarchy/src/motion.rs",
+      "template": "profiles/linux-launcher/crates/ouros-omarchy/src/motion.rs",
+      "sha256": "30c6a6d5222dd5106d69562bbf2f15f86da4ff21492d72237a0023355e0e7b5b"
+    },
+    {
+      "profile": "mandarin",
+      "repository": "mandarin",
+      "target": "crates/mandarin-theme/src/contrast.rs",
+      "template": "profiles/mandarin/crates/mandarin-theme/src/contrast.rs",
+      "sha256": "42f2ca18819f64bff804ea2da2a78b09022b7895a1a4e03080484171acbb6796"
+    },
+    {
+      "profile": "mandarin",
+      "repository": "mandarin",
+      "target": "crates/mandarin-theme/src/glass.rs",
+      "template": "profiles/mandarin/crates/mandarin-theme/src/glass.rs",
+      "sha256": "7c19690f6c51514599f7572f10145228a55042a5111ec5ec7b1599f7e598d0a3"
+    },
+    {
+      "profile": "mandarin",
+      "repository": "mandarin",
+      "target": "crates/mandarin-theme/src/lib.rs",
+      "template": "profiles/mandarin/crates/mandarin-theme/src/lib.rs",
+      "sha256": "6158f54ddd35a30004135fee77e5972c40db41fb6e44220bc9330afa1fa44c53"
+    },
+    {
+      "profile": "mandarin",
+      "repository": "mandarin",
+      "target": "crates/mandarin-theme/src/rust_camo.rs",
+      "template": "profiles/mandarin/crates/mandarin-theme/src/rust_camo.rs",
+      "sha256": "133cad8c33f343cda5f672db02781d947106e3cae76832778d4e4d0e3d024b1a"
+    },
+    {
+      "profile": "ouros-gpui",
+      "repository": "ouros-gpui",
+      "target": "crates/ouros-domain/src/lib.rs",
+      "template": "profiles/ouros-gpui/crates/ouros-domain/src/lib.rs",
+      "sha256": "b404392ebf7a14f8d4b2d40a816d1f1f20b727fe55494d0f896bd253668ea0af"
+    },
+    {
+      "profile": "ouros-gpui",
+      "repository": "ouros-gpui",
+      "target": "crates/ouros-platform/src/launcher_material.rs",
+      "template": "profiles/ouros-gpui/crates/ouros-platform/src/launcher_material.rs",
+      "sha256": "6f22482be3f9bc837695fc566a982b382b27f3255dcda2d8e64fcba8bde727cf"
+    },
+    {
+      "profile": "ouros-gpui",
+      "repository": "ouros-gpui",
+      "target": "crates/ouros-ui/src/theme.rs",
+      "template": "profiles/ouros-gpui/crates/ouros-ui/src/theme.rs",
+      "sha256": "d15d13464c47c3331d44e741eed10dcfe1d2775ef4be80d74621bbc70687d852"
+    },
+    {
+      "profile": "ouros-gpui-v2",
+      "repository": "ouros-gpui-v2",
+      "target": "crates/ouros-domain/src/core_shell.rs",
+      "template": "profiles/ouros-gpui-v2/crates/ouros-domain/src/core_shell.rs",
+      "sha256": "a7bb45a921646095fe75c9d7d4e34b46e675e411b575c0e2ddd95b1f9fe43162"
+    },
+    {
+      "profile": "ouros-gpui-v2",
+      "repository": "ouros-gpui-v2",
+      "target": "crates/ouros-domain/src/gui_v2.rs",
+      "template": "profiles/ouros-gpui-v2/crates/ouros-domain/src/gui_v2.rs",
+      "sha256": "c2494dab57919e39f33167851129b005203847bed837e3ef240f9375af1393fb"
+    },
+    {
+      "profile": "ouros-gpui-v2",
+      "repository": "ouros-gpui-v2",
+      "target": "crates/ouros-domain/src/lib.rs",
+      "template": "profiles/ouros-gpui-v2/crates/ouros-domain/src/lib.rs",
+      "sha256": "b87c47b2884cdd21aaa7af53bf281ae6c9c61c41cf2138581fec3c2a5a2b75be"
+    },
+    {
+      "profile": "ouros-gpui-v2",
+      "repository": "ouros-gpui-v2",
+      "target": "crates/ouros-ui/src/fonts.rs",
+      "template": "profiles/ouros-gpui-v2/crates/ouros-ui/src/fonts.rs",
+      "sha256": "85e7e9f6c2c4b55937f945dbcc9c53c7298e18c3df21def1dfa1410c362d215e"
+    },
+    {
+      "profile": "ouros-gpui-v2",
+      "repository": "ouros-gpui-v2",
+      "target": "crates/ouros-ui/src/theme.rs",
+      "template": "profiles/ouros-gpui-v2/crates/ouros-ui/src/theme.rs",
+      "sha256": "ee31b847e257c8ae9b2a38e399d09ee770b60a7a4776af64e64a87dae8b723d5"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosBrandPalette.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosBrandPalette.swift",
+      "sha256": "3d9b31bc4dfa771570d9e1c0cda64b88ecae8ce1975fef293ea1a012f0c2b2b3"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosFinish.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosFinish.swift",
+      "sha256": "5f8f4be2f3a8822b6015aa3dd1b64857c0a9c80a77bf2a91aaff716efcacbafb"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosGlassControls.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosGlassControls.swift",
+      "sha256": "d7a426d8b0690b1dcd3db15c8d51736ea326294cfb56d461bfb8780e7574e918"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosReadingInk.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosReadingInk.swift",
+      "sha256": "90c74478205487254642971169f7c36e80533bc892911f4d935158ec0951176f"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Display/Sources/OurosDisplay/OurosStackedCard.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosStackedCard.swift",
+      "sha256": "80257aaee7cc983e3d17374c042a067aa7af5736a273f65f280f642ed8cb142f"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Sources/OurosBar/OurosThemeRegistry.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Sources/OurosBar/OurosThemeRegistry.swift",
+      "sha256": "68f5f6457ac2d46f274088dbb52f950138254f8d8acc11106f64570ea0877bb0"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Sources/Shared/OurosDesignTokens.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Sources/Shared/OurosDesignTokens.swift",
+      "sha256": "621fb3d399148747dd0f7eaf561b8ece828adc88719508605c634a76535d026c"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/desktop/ouros/Sources/Shared/OurosMotion.swift",
+      "template": "profiles/ouros-x/apps/desktop/ouros/Sources/Shared/OurosMotion.swift",
+      "sha256": "6309609139aa1814d46c087a97b5b694b9de6156743a7dafefaf2e14c3e126bb"
+    },
+    {
+      "profile": "ouros-x",
+      "repository": "ouros-x",
+      "target": "apps/mobile/Sources/UI/OurosMobileStyle.swift",
+      "template": "profiles/ouros-x/apps/mobile/Sources/UI/OurosMobileStyle.swift",
+      "sha256": "4994a519394cb14524cef36b867e0cc79e34703d47739b7c39cf98c958777700"
+    },
+    {
+      "profile": "shared-web",
+      "repository": "app",
+      "target": "packages/tailwind-config/src/index.ts",
+      "template": "profiles/shared-web/packages/tailwind-config/src/index.ts",
+      "sha256": "7bad1579742825c2fe44914d6aef822b3582621cb04a8cf195a124c510b5f132"
+    },
+    {
+      "profile": "shared-web",
+      "repository": "app",
+      "target": "packages/ui/src/styles/obsidian-glass.css",
+      "template": "profiles/shared-web/packages/ui/src/styles/obsidian-glass.css",
+      "sha256": "1394859517bee16a1799788d52b562da30c6edf81006d2452c7a72a1df148323"
+    },
+    {
+      "profile": "shared-web",
+      "repository": "app",
+      "target": "packages/ui/src/tokens.ts",
+      "template": "profiles/shared-web/packages/ui/src/tokens.ts",
+      "sha256": "24cfb878922fdd1801a78651fba2a61977ca933ecfdce7b541a7966c17796f69"
+    },
+    {
+      "profile": "studio-portal",
+      "repository": "studio",
+      "target": "app/globals.css",
+      "template": "profiles/studio-portal/app/globals.css",
+      "sha256": "7cadc1206695cb3694fb8f7ce518778d9e1e3d7c7d4e8734012473fa55343484"
+    },
+    {
+      "profile": "studio-portal",
+      "repository": "studio",
+      "target": "app/tailwind.css",
+      "template": "profiles/studio-portal/app/tailwind.css",
+      "sha256": "6900a635d1447f902370d0c5f646cba479c13159d8cd9f0d55361d990f2828b5"
+    },
+    {
+      "profile": "termin8",
+      "repository": "termin8",
+      "target": "crates/termin8-app/src/ui_tokens.rs",
+      "template": "profiles/termin8/crates/termin8-app/src/ui_tokens.rs",
+      "sha256": "6dc2ceca15838b6781ee3c01cd638507690ca766a4a01c6f703f395d6449c3b5"
+    },
+    {
+      "profile": "termin8",
+      "repository": "termin8",
+      "target": "crates/termin8-command-palette/src/render/theme.rs",
+      "template": "profiles/termin8/crates/termin8-command-palette/src/render/theme.rs",
+      "sha256": "8465c5b22e9d3aa9762ac7aefee27b37876405037315e7b9fdb4611459b7ca9a"
+    },
+    {
+      "profile": "termin8",
+      "repository": "termin8",
+      "target": "crates/termin8-core/src/design_core.rs",
+      "template": "profiles/termin8/crates/termin8-core/src/design_core.rs",
+      "sha256": "f7eaae46f0c3c977236340eafd41d7561feb90cc353bb29293617d528c750af3"
+    },
+    {
+      "profile": "termin8",
+      "repository": "termin8",
+      "target": "crates/termin8-core/src/theme.rs",
+      "template": "profiles/termin8/crates/termin8-core/src/theme.rs",
+      "sha256": "a21ffbfdd38dac64f5dccb32076968657563dbac5ab84c738921c7c54e060ee1"
+    },
+    {
+      "profile": "web-admin",
+      "repository": "app",
+      "target": "apps/web/components/admin/admin-palette.ts",
+      "template": "profiles/web-admin/apps/web/components/admin/admin-palette.ts",
+      "sha256": "ea8b902111a3324067a7bd07c57ca3e5130791d8f142908e81bb1cee42a2c21a"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/app/omp-surfaces.css",
+      "template": "profiles/web-app/apps/web/app/omp-surfaces.css",
+      "sha256": "2c9780cf9800702194c57497667cbaec3ac798a8e1e2f35ae0ca87dad1569d5f"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/components/shell/brand-tokens.css",
+      "template": "profiles/web-app/apps/web/components/shell/brand-tokens.css",
+      "sha256": "416ac895c3ff0490800aa51593558fa5c434489ecbe21218d948aa0caecc3c96"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/portal.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/portal.css",
+      "sha256": "f60dd14ab9aa0542f63ff6fa361ca1280d263f7203ff999c38b62bd2eb594c42"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/viewer-shell-density.css",
+      "sha256": "ad1baa918524c24d54c2def1cabfc4a98e40f2da1d49ae6e311e66c23d6b2695"
+    },
+    {
+      "profile": "web-app",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/portal/workspace-presentation.css",
+      "template": "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css",
+      "sha256": "379abd21d975c137949ad8b20934f53358cf206443bb49a27c039c5b61a60769"
+    },
+    {
+      "profile": "web-auth",
+      "repository": "app",
+      "target": "apps/gateway/presentation/auth-ui/customer-auth.tailwind.css",
+      "template": "profiles/web-auth/apps/gateway/presentation/auth-ui/customer-auth.tailwind.css",
+      "sha256": "26783d47f2b6e3104a20a4f3d254710f6afc89cde3b3ffbc1a06ae7b4824becd"
+    },
+    {
+      "profile": "web-product-demos",
+      "repository": "app",
+      "target": "apps/web/portal-source/frontend/product-demos.css",
+      "template": "profiles/web-product-demos/apps/web/portal-source/frontend/product-demos.css",
+      "sha256": "1be8fe9272badf6c9826b5259ce0631033963d7cc0b7440bf702678eaa1c5673"
+    },
+    {
+      "profile": "website",
+      "repository": "app",
+      "target": "apps/site/app/globals.css",
+      "template": "profiles/website/apps/site/app/globals.css",
+      "sha256": "764af0cb1918b2b0db304495638c813ec55f3b7d4d907dbe50f13dbd62ab4aaf"
+    },
+    {
+      "profile": "website",
+      "repository": "app",
+      "target": "apps/site/lib/ouros-foundations.ts",
+      "template": "profiles/website/apps/site/lib/ouros-foundations.ts",
+      "sha256": "dfb64a21de63ef20fa60cc8fb8136087fa874213f90ad54baa404e88cb7792f8"
+    }
+  ]
+}

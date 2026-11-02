@@ -25,7 +25,7 @@ enum ConsoleFont {
     /// Card numerals beside a gauge — the same emphasis as the dial's own
     /// readout plate, in text form.
     static let cardValue = Font.system(.title3, weight: .semibold)
-    static let metricValue = Font.system(.title, weight: .semibold)
+    static let metricValue = Font.system(.largeTitle, weight: .semibold)
     /// Body copy in a card or a welcome paragraph.
     static let body = Font.system(.body)
     /// Secondary row text, evidence, hints.
@@ -87,6 +87,8 @@ enum ConsoleMetrics {
     /// footer bars. Smaller than a card's interior, because a panel edge is
     /// already a boundary and needs less air than content inside it.
     static let panelInset: CGFloat = 8
+    /// One horizontal managed-work or detected-session line; never a flexible panel.
+    static let workRowHeight: CGFloat = 34
     /// Corner ramp, one rung per level of nesting: card, then a row inside it,
     /// then a control inside that, then a bar, then a heatmap tile. Adjacent
     /// rungs are a φ ratio apart, which is what makes a highlighted row inside a

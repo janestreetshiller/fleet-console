@@ -60,6 +60,17 @@ class ScriptFixture(unittest.TestCase):
             if (SCRIPTS / name).is_file():
                 # No rewritten guards: the fixture always runs current production bytes.
                 shutil.copyfile(SCRIPTS / name, scripts / name)
+        capsule = self.root / ".design-core"
+        shutil.copytree(SCRIPTS.parent / ".design-core", capsule,
+                        ignore=shutil.ignore_patterns("__pycache__"))
+        self.core_receipt = json.loads((capsule / "receipt.json").read_text())
+        for entry in self.core_receipt["outputs"]:
+            destination = (self.root / entry["path"]).resolve()
+            source = (SCRIPTS.parent / entry["path"]).resolve()
+            if not destination.is_relative_to(self.root) or not source.is_relative_to(SCRIPTS.parent):
+                self.fail("Pinned design output must stay inside its owning repository")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
         self.home = self.root / "home"
         self.home.mkdir()
         (self.root / "rust").mkdir()
@@ -136,6 +147,24 @@ class ScriptFixture(unittest.TestCase):
 
 
 class PackagingTests(ScriptFixture):
+    def test_design_core_drift_is_refused_before_building(self):
+        tokens = self.root / "Sources/FleetConsoleApp/Design/OurosCoreTokens.swift"
+        tokens.write_text(tokens.read_text() + "\n// TEST DATA: token drift\n")
+        result = self.run_script("build-app.sh", "release")
+        self.expect_failure(result, "Design core drift")
+        self.assertEqual(self.calls(), [])
+        self.assertFalse(self.app.exists())
+
+    def test_pinned_core_drift_is_refused_before_building(self):
+        core_path = self.root / ".design-core/core.json"
+        core = json.loads(core_path.read_text())
+        core["version"] = "0.0.0"
+        core_path.write_text(json.dumps(core))
+        result = self.run_script("build-app.sh", "release")
+        self.expect_failure(result, "Pinned source differs from its canonical receipt")
+        self.assertEqual(self.calls(), [])
+        self.assertFalse(self.app.exists())
+
     def test_offline_build_uses_one_job_and_the_selected_dependency_license(self):
         scratch = self.root / "offline-scratch"
         license_dir = scratch / "checkouts" / "SwiftTerm"
@@ -166,6 +195,8 @@ class PackagingTests(ScriptFixture):
         self.assertEqual(info["CFBundleVersion"], "7")
         self.assertEqual(info["FleetSourceRevision"], "unrecorded")
         self.assertTrue(info["FleetSourceDirty"])
+        self.assertEqual(info["OurosDesignCoreVersion"], self.core_receipt["version"])
+        self.assertEqual(info["OurosDesignCoreSHA256"], self.core_receipt["sourceSHA256"])
 
     def test_relative_scratch_is_refused_before_building(self):
         result = self.run_script("build-app.sh", "release", FLEETCONSOLE_SCRATCH_PATH="relative")
