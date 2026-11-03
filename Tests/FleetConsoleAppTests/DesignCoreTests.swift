@@ -1,4 +1,6 @@
 import AppKit
+import CryptoKit
+import Foundation
 import SwiftUI
 import Testing
 @testable import FleetConsoleApp
@@ -11,8 +13,16 @@ struct DesignCoreTests {
         #expect(abs(color.redComponent - 241.0 / 255.0) < 0.00001)
         #expect(abs(color.greenComponent - 123.0 / 255.0) < 0.00001)
         #expect(abs(color.blueComponent - 51.0 / 255.0) < 0.00001)
-        #expect(OurosCoreTokens.version == "1.1.0")
-        #expect(OurosCoreTokens.sourceSHA256.count == 64)
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let source = try Data(contentsOf: root.appendingPathComponent(".design-core/core.json"))
+        let core = try #require(JSONSerialization.jsonObject(with: source) as? [String: Any])
+        let version = try #require(core["version"] as? String)
+        let digest = SHA256.hash(data: source).map { String(format: "%02x", $0) }.joined()
+        #expect(OurosCoreTokens.version == version)
+        #expect(OurosCoreTokens.sourceSHA256 == digest)
     }
 
     @MainActor @Test("Shared filled actions retain white ink with normal-text contrast")
