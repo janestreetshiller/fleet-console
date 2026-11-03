@@ -492,25 +492,22 @@ impl RelationalTopologyGraph {
         let damping = 0.82;
         let center_gravity = 0.015;
 
-        let node_keys: Vec<String> = self.nodes.keys().cloned().collect();
-        let mut fx: HashMap<String, f32> = HashMap::new();
-        let mut fy: HashMap<String, f32> = HashMap::new();
-
-        for key in &node_keys {
-            fx.insert(key.clone(), 0.0);
-            fy.insert(key.clone(), 0.0);
+        // Snapshot positions in the existing map traversal order so pairwise
+        // accumulation keeps its floating-point operation order. Public IDs stay
+        // at the edge/integration boundary, outside the quadratic pairwise loop.
+        let mut positions = Vec::with_capacity(self.nodes.len());
+        let mut node_indices = HashMap::with_capacity(self.nodes.len());
+        for (id, node) in &self.nodes {
+            node_indices.insert(id.clone(), positions.len());
+            positions.push([node.x, node.y]);
         }
+        let mut forces = vec![[0.0_f32; 2]; positions.len()];
 
         // 1. Repulsive forces between every node pair
-        for i in 0..node_keys.len() {
-            for j in (i + 1)..node_keys.len() {
-                let id1 = &node_keys[i];
-                let id2 = &node_keys[j];
-                let n1 = &self.nodes[id1];
-                let n2 = &self.nodes[id2];
-
-                let dx = n2.x - n1.x;
-                let dy = n2.y - n1.y;
+        for i in 0..positions.len() {
+            for j in (i + 1)..positions.len() {
+                let dx = positions[j][0] - positions[i][0];
+                let dy = positions[j][1] - positions[i][1];
                 let dist_sq = (dx * dx + dy * dy).max(100.0);
                 let dist = dist_sq.sqrt();
 
@@ -518,38 +515,36 @@ impl RelationalTopologyGraph {
                 let f_x = (dx / dist) * rep_force;
                 let f_y = (dy / dist) * rep_force;
 
-                *fx.get_mut(id1).unwrap() -= f_x;
-                *fy.get_mut(id1).unwrap() -= f_y;
-                *fx.get_mut(id2).unwrap() += f_x;
-                *fy.get_mut(id2).unwrap() += f_y;
+                forces[i][0] -= f_x;
+                forces[i][1] -= f_y;
+                forces[j][0] += f_x;
+                forces[j][1] += f_y;
             }
         }
 
         // 2. Spring forces along edges
         for edge in &self.edges {
-            if let (Some(n1), Some(n2)) = (self.nodes.get(&edge.source), self.nodes.get(&edge.target)) {
-                let dx = n2.x - n1.x;
-                let dy = n2.y - n1.y;
-                let dist = (dx * dx + dy * dy).sqrt().max(1.0);
-                let delta = dist - natural_length;
-                let spring_force = k_spring * delta;
+            let (Some(&source), Some(&target)) = (
+                node_indices.get(edge.source.as_str()),
+                node_indices.get(edge.target.as_str()),
+            ) else {
+                // Telemetry refreshes can leave an edge whose endpoint is gone.
+                continue;
+            };
+            let dx = positions[target][0] - positions[source][0];
+            let dy = positions[target][1] - positions[source][1];
+            let dist = (dx * dx + dy * dy).sqrt().max(1.0);
+            let delta = dist - natural_length;
+            let spring_force = k_spring * delta;
 
-                let f_x = (dx / dist) * spring_force;
-                let f_y = (dy / dist) * spring_force;
+            let f_x = (dx / dist) * spring_force;
+            let f_y = (dy / dist) * spring_force;
 
-                if let Some(force_x) = fx.get_mut(&edge.source) {
-                    *force_x += f_x;
-                }
-                if let Some(force_y) = fy.get_mut(&edge.source) {
-                    *force_y += f_y;
-                }
-                if let Some(force_x) = fx.get_mut(&edge.target) {
-                    *force_x -= f_x;
-                }
-                if let Some(force_y) = fy.get_mut(&edge.target) {
-                    *force_y -= f_y;
-                }
-            }
+            // Keep these sequential: source and target may be the same node.
+            forces[source][0] += f_x;
+            forces[source][1] += f_y;
+            forces[target][0] -= f_x;
+            forces[target][1] -= f_y;
         }
 
         // 3. Center gravity and integration
@@ -562,8 +557,10 @@ impl RelationalTopologyGraph {
             let grav_x = -node.x * center_gravity;
             let grav_y = -node.y * center_gravity;
 
-            let total_fx = fx.get(id).cloned().unwrap_or(0.0) + grav_x;
-            let total_fy = fy.get(id).cloned().unwrap_or(0.0) + grav_y;
+            // No nodes are added or removed between the snapshot and integration.
+            let index = node_indices[id.as_str()];
+            let total_fx = forces[index][0] + grav_x;
+            let total_fy = forces[index][1] + grav_y;
 
             node.vx = (node.vx + total_fx * dt) * damping;
             node.vy = (node.vy + total_fy * dt) * damping;
