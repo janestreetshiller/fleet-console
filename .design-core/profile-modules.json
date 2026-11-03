@@ -27,14 +27,14 @@
       "repository": "app",
       "target": "apps/docs/src/css/custom.css",
       "template": "profiles/docs-reader/apps/docs/src/css/custom.css",
-      "sha256": "6fb2eb718db8b04184ae071ac0d15c65a85062f2e8bb4ac4b827e92c7a84dff8"
+      "sha256": "290892ffd9dd5232de5a839baaa700186230213b25610e9041c31c3eac535a85"
     },
     {
       "profile": "docs-reader",
       "repository": "app",
       "target": "apps/docs/src/css/ouros-docs-layout.css",
       "template": "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
-      "sha256": "6e1d9b30edc921af916ca45107bfe42cf85367a2bfe44eec77ba3a0d432b8650"
+      "sha256": "886dbb9c8e2e8d17194fcb5b49e6de342d44b6b566b4770da6e82a451c17b54d"
     },
     {
       "profile": "fleet-console",
@@ -384,7 +384,7 @@
       "repository": "app",
       "target": "apps/web/portal-source/frontend/portal/workspace-presentation.css",
       "template": "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css",
-      "sha256": "379abd21d975c137949ad8b20934f53358cf206443bb49a27c039c5b61a60769"
+      "sha256": "c49b844311632b5eaba84ea7a308ddb1951a8b9502cfde27c9b2449ba424fbe2"
     },
     {
       "profile": "web-auth",

@@ -1,6 +1,6 @@
 {
   "format": "ouros-runtime-design-core-v1",
-  "version": "1.1.2",
+  "version": "1.1.7",
   "authority": {
     "repository": "janestreetshiller/OurosProductionLive",
     "path": "packages/design-core/source/core.json",
@@ -52,7 +52,7 @@
       "id": "docs-reader",
       "use": "Customer documentation reader",
       "theme": "html[data-theme=light|dark]",
-      "rule": "Reader geometry and palette are independent of marketing chrome. Geist, Instrument Serif and Geist Mono.",
+      "rule": "Reader geometry is independent of marketing chrome. Paper #F9FAFB and Ink #121212 own the foundation; Action Orange #F36633 owns highlights and state signals. Sidebar navigation uses one flat selected destination with a plain section parent; categories default closed except for the active page group and labels remain readable without clipping. Hooked inset markers, rounded nested tabs and ornamental tree guides are prohibited. Tailwind owns component layout while narrowly scoped compatibility rules resolve Docusaurus/Infima conflicts without a global reset. Do not introduce a secondary green accent. Never substitute absolute white or black, general-purpose green highlights, or dark text on orange. Geist, Instrument Serif and Geist Mono.",
       "sourceModules": [
         "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
         "profiles/docs-reader/apps/docs/src/css/custom.css"
@@ -1699,7 +1699,7 @@
     "sourceRevision": "9b2f5265cd08f721894cb0722d2f4195d9f63157",
     "composition": "retained floating tray with original mobile circles; replaces rejected full-width bar"
   },
-  "profileModuleManifestSHA256": "715deaa420b5e6161b1914eaaedc8b3d94daa227a60c5db15cce0472de429d4f",
+  "profileModuleManifestSHA256": "a89a9f63f234fc7b8aa5cb76971f1f94cf90866c7adde91bd82ed3dd99be8e9a",
   "assets": {
     "logo-wordmark-white": {
       "path": "/home/algorithm/ouros-project/studio/design-studio/data/assets/lll.png",
