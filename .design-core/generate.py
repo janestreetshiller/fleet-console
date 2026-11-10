@@ -81,7 +81,8 @@ def base_outputs():
  for key,name in [('signal','brand-signal'),('artworkStar','artwork-star'),('actionBackground','action-background'),('actionForeground','action-foreground')]:css+='  --ouros-core-'+name+': '+brand[key]+';\n'
  for key,name in [('trayWidth','tray-width'),('headerHeight','header-height'),('desktopHeight','desktop-height'),('mobileSize','mobile-size'),('iconSize','icon-size'),('wordmarkWidth','wordmark-width'),('wordmarkHeight','wordmark-height'),('brandGap','brand-gap'),('mobileIconSize','mobile-icon-size')]:css+='  --ouros-core-navigation-'+name+': '+str(core['navigation'][key])+'px;\n'
  for key in ['surface','foreground']:css+='  --ouros-core-navigation-'+key+': '+core['navigation'][key]+';\n'
- css+='}\n'
+ for key,name in [('headingWrap','heading-wrap'),('bodyWrap','body-wrap'),('measure','measure'),('numeric','numeric')]:css+='  --ouros-core-text-'+name+': '+core['text'][key]+';\n'
+ css+='}\n'+core['text']['rules']
  js='export const coreVersion = '+json.dumps(version)+';\nexport const coreSha256 = '+json.dumps(sha)+';\nexport const designCore = '+json.dumps(core,ensure_ascii=False,separators=(',',':'))+';\n'
  safe='export const coreVersion = '+json.dumps(version)+';\nexport const coreSha256 = '+json.dumps(sha)+';\nexport const brand = '+json.dumps(brand,separators=(',',':'))+';\n'
  return {'generated/brand.mjs':safe,'generated/brand.ts':safe.replace(';\n',' as const;\n'),'generated/web.css':css,'generated/web.mjs':js,'generated/web.ts':js.replace('export const designCore = ','export const designCore = ').replace(';\n',' as const;\n'),'generated/OurosCoreTokens.swift':swift(),'generated/design_core.rs':rust(),'generated/design-registry.json':registry(),'generated/receipt.json':encoded({'version':version,'sourceSHA256':sha,'authority':core['authority']})}

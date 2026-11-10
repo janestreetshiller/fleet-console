@@ -1,6 +1,6 @@
 {
   "format": "ouros-runtime-design-core-v1",
-  "version": "1.1.7",
+  "version": "1.1.13",
   "authority": {
     "repository": "janestreetshiller/OurosProductionLive",
     "path": "packages/design-core/source/core.json",
@@ -52,7 +52,7 @@
       "id": "docs-reader",
       "use": "Customer documentation reader",
       "theme": "html[data-theme=light|dark]",
-      "rule": "Reader geometry is independent of marketing chrome. Paper #F9FAFB and Ink #121212 own the foundation; Action Orange #F36633 owns highlights and state signals. Sidebar navigation uses one flat selected destination with a plain section parent; categories default closed except for the active page group and labels remain readable without clipping. Hooked inset markers, rounded nested tabs and ornamental tree guides are prohibited. Tailwind owns component layout while narrowly scoped compatibility rules resolve Docusaurus/Infima conflicts without a global reset. Do not introduce a secondary green accent. Never substitute absolute white or black, general-purpose green highlights, or dark text on orange. Geist, Instrument Serif and Geist Mono.",
+      "rule": "Reader geometry is independent of marketing chrome. Paper #F9FAFB and Ink #121212 own the foundation; Action Orange #F36633 owns highlights and state signals. Sidebar navigation uses one flat selected destination with a plain section parent; categories default closed except for the active page group and labels remain readable without clipping. Hooked inset markers, rounded nested tabs and ornamental tree guides are prohibited. Tailwind owns component layout while narrowly scoped compatibility rules resolve Docusaurus/Infima conflicts without a global reset. Do not introduce a secondary green accent. Never substitute absolute white or black, general-purpose green highlights, or dark text on orange. Geist sets body text, headings and sidebar sections; Geist Mono sets code.",
       "sourceModules": [
         "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
         "profiles/docs-reader/apps/docs/src/css/custom.css"
@@ -119,7 +119,7 @@
         "profiles/ouros-x/apps/desktop/ouros/Display/Sources/OurosDisplay/OurosReadingInk.swift",
         "profiles/ouros-x/apps/mobile/Sources/UI/OurosMobileStyle.swift"
       ],
-      "consumerOwner": "metal-mini /Users/main/Code/ouros/ouros-x",
+      "consumerOwner": "ouros-x (apps/desktop/ouros)",
       "consumerEntry": "DESIGN.md; THEME.md; Sources/Shared/OurosDesignTokens.swift",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
@@ -133,7 +133,7 @@
         "profiles/ouros-gpui/crates/ouros-ui/src/theme.rs",
         "profiles/ouros-gpui/crates/ouros-platform/src/launcher_material.rs"
       ],
-      "consumerOwner": "metal-mini /Users/main/Code/ouros/ouros-gpui",
+      "consumerOwner": "ouros-gpui",
       "consumerEntry": "Current theme/material source in native source manifest",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
@@ -1376,7 +1376,7 @@
         "fallbackOpacity": 0.0,
         "accentDimOpacity": 0.2
       },
-      "consumerOwner": "metal-mini /Users/main/Code/termin8",
+      "consumerOwner": "termin8",
       "consumerEntry": "crates/termin8-app/src/ui_tokens.rs; docs/INTERFACE-STANDARD.md",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
@@ -1393,7 +1393,7 @@
         "profiles/fleet-console/Sources/FleetConsoleApp/Design/CorePalette.swift",
         "profiles/fleet-console/Sources/FleetCore/ConsoleLayout.swift"
       ],
-      "consumerOwner": "metal-mini /Users/main/Code/apps/fleet-console",
+      "consumerOwner": "fleet-console",
       "consumerEntry": "Native theme/console and popover source in source manifest",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
@@ -1408,7 +1408,7 @@
         "profiles/mandarin/crates/mandarin-theme/src/rust_camo.rs",
         "profiles/mandarin/crates/mandarin-theme/src/glass.rs"
       ],
-      "consumerOwner": "metal-mini /Users/main/Code/mandarin",
+      "consumerOwner": "mandarin",
       "consumerEntry": "crates/mandarin-theme/src/lib.rs",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json"
     },
@@ -1422,7 +1422,7 @@
         "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme.rs",
         "profiles/agent-rx/runtime/rx/crates/rx-tui/src/theme/palettes.rs"
       ],
-      "consumerOwner": "metal-mini /Users/main/Code/agents/agent-rx",
+      "consumerOwner": "agent-rx",
       "consumerEntry": "runtime/rx/crates/rx-tui/src/theme/palettes.rs; runtime/rx/crates/rx-core/src/ascii_hd.rs",
       "generationInput": "packages/design-core/source/core.json and source/profile-modules.json",
       "implementationBaseline": "f7792d680a018895f14e9af427e425b643280637"
@@ -1699,7 +1699,15 @@
     "sourceRevision": "9b2f5265cd08f721894cb0722d2f4195d9f63157",
     "composition": "retained floating tray with original mobile circles; replaces rejected full-width bar"
   },
-  "profileModuleManifestSHA256": "a89a9f63f234fc7b8aa5cb76971f1f94cf90866c7adde91bd82ed3dd99be8e9a",
+  "text": {
+    "use": "Global text formatting shared by the website, docs reader, dashboard and admin. Zero-specificity rules; any surface or product artifact rule overrides them.",
+    "headingWrap": "balance",
+    "bodyWrap": "pretty",
+    "measure": "68ch",
+    "numeric": "tabular-nums",
+    "rules": ":where(h1, h2, h3, h4) {\n  text-wrap: var(--ouros-core-text-heading-wrap);\n}\n:where(p, li, dd, blockquote, figcaption) {\n  text-wrap: var(--ouros-core-text-body-wrap);\n}\n:where(td, th, time, [data-numeric]) {\n  font-variant-numeric: var(--ouros-core-text-numeric);\n}\n"
+  },
+  "profileModuleManifestSHA256": "1963d8b6017d2855bb1e4ece35c44d7dc90f60415508aada9e58ad19dfcc466d",
   "assets": {
     "logo-wordmark-white": {
       "path": "/home/algorithm/ouros-project/studio/design-studio/data/assets/lll.png",
@@ -1716,8 +1724,8 @@
       "usage": "Selected original artwork; preserve shape, proportions and transparency."
     }
   },
-  "generatorSHA256": "77cb25281f17863d38ecd595e741ddcb651f29ae6b4fa213d14874bf1732d21d",
-  "checkerSHA256": "afa55b5cd0ddf141e6005f416c9bc9109669fd317af4c5faade34cdff25bfffe",
+  "generatorSHA256": "9929d81aa164a49cad366dd2b2d98d67c78f9991e8e3d69a3d946f64dbe7568e",
+  "checkerSHA256": "dc51d94719d623a7eef74a3e4a62bd97997c2d97880d4381c7c1f094ad248330",
   "rendererSHA256": {
     "termin8_renderer.py": "bc590f505b3d4b0eba81384629c8c6e4589855bcb0a4bb7688dd764301f25f79"
   },

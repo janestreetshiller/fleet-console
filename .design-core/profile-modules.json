@@ -27,14 +27,14 @@
       "repository": "app",
       "target": "apps/docs/src/css/custom.css",
       "template": "profiles/docs-reader/apps/docs/src/css/custom.css",
-      "sha256": "290892ffd9dd5232de5a839baaa700186230213b25610e9041c31c3eac535a85"
+      "sha256": "d8ae04eb47aca5bbd8aff00c9ac5cdee58bd9cb716a3a00af7d1e8907058a2ac"
     },
     {
       "profile": "docs-reader",
       "repository": "app",
       "target": "apps/docs/src/css/ouros-docs-layout.css",
       "template": "profiles/docs-reader/apps/docs/src/css/ouros-docs-layout.css",
-      "sha256": "886dbb9c8e2e8d17194fcb5b49e6de342d44b6b566b4770da6e82a451c17b54d"
+      "sha256": "e36359ab56e2fe501ac0d6471610b758c2916454711d8b90c8d4fa4849c13b4e"
     },
     {
       "profile": "fleet-console",
@@ -370,21 +370,21 @@
       "repository": "app",
       "target": "apps/web/portal-source/frontend/portal/portal.css",
       "template": "profiles/web-app/apps/web/portal-source/frontend/portal/portal.css",
-      "sha256": "f60dd14ab9aa0542f63ff6fa361ca1280d263f7203ff999c38b62bd2eb594c42"
+      "sha256": "fdcaf6ca083fbe2d3e913a3aa360df2d691e3c5424ce54450831d6cf0137a641"
     },
     {
       "profile": "web-app",
       "repository": "app",
       "target": "apps/web/portal-source/frontend/portal/viewer-shell-density.css",
       "template": "profiles/web-app/apps/web/portal-source/frontend/portal/viewer-shell-density.css",
-      "sha256": "ad1baa918524c24d54c2def1cabfc4a98e40f2da1d49ae6e311e66c23d6b2695"
+      "sha256": "f248158360afead52a090c5926205d8562b555a9a8ccdc33764f0b39df4e75c0"
     },
     {
       "profile": "web-app",
       "repository": "app",
       "target": "apps/web/portal-source/frontend/portal/workspace-presentation.css",
       "template": "profiles/web-app/apps/web/portal-source/frontend/portal/workspace-presentation.css",
-      "sha256": "c49b844311632b5eaba84ea7a308ddb1951a8b9502cfde27c9b2449ba424fbe2"
+      "sha256": "46a232d450abc328814ed775920a4e4dabb156a9d5b7215dd990da238cba03aa"
     },
     {
       "profile": "web-auth",
@@ -405,7 +405,7 @@
       "repository": "app",
       "target": "apps/site/app/globals.css",
       "template": "profiles/website/apps/site/app/globals.css",
-      "sha256": "764af0cb1918b2b0db304495638c813ec55f3b7d4d907dbe50f13dbd62ab4aaf"
+      "sha256": "60be972d44434441f271e1bd4a8a49723591aec47e4a12967ee3cac8e37dfbdd"
     },
     {
       "profile": "website",
