@@ -129,12 +129,19 @@ on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 ### Retro GPUI companion
 
 The experimental Rust companion is separate from the Swift app and its
-controller. On macOS or Linux, build and open its phosphor dashboard with:
+controller. On macOS or Linux, build an optimized local binary and open its
+phosphor dashboard with:
 
 ```sh
-cargo build --manifest-path rust/Cargo.toml --locked -p fleet-gpui
-./rust/target/debug/fleet-gpui --theme phosphor
+cargo build --manifest-path rust/Cargo.toml --locked --release -p fleet-gpui
+./rust/target/release/fleet-gpui --theme phosphor
 ```
+
+These are local, architecture-specific builds, not signed or notarized
+downloads. The GPUI binary is separate from `FleetConsole.app`; do not replace
+the native app or its controller with it. Use `--identity` for build identity
+and `--verify --read-only --socket /path/to/nonexistent.sock` to sample local
+telemetry without contacting a controller.
 
 Phosphor applies in dark system appearance; light appearance uses the paper
 palette. The companion reads local telemetry and connects to `fleetd` when
