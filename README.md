@@ -126,6 +126,24 @@ installation, and distribution. `fleetctl` is bundled at
 `FleetConsole.app/Contents/Resources/bin/fleetctl`; use that full path until it is
 on your PATH. `fleetctl doctor` checks controller connectivity and local state.
 
+### Retro GPUI companion
+
+The experimental Rust companion is separate from the Swift app and its
+controller. On macOS or Linux, build and open its phosphor dashboard with:
+
+```sh
+cargo build --manifest-path rust/Cargo.toml --locked -p fleet-gpui
+./rust/target/debug/fleet-gpui --theme phosphor
+```
+
+Phosphor applies in dark system appearance; light appearance uses the paper
+palette. The companion reads local telemetry and connects to `fleetd` when
+available. Linux has no local controller or tray item in this implementation;
+see [cross-platform clients](docs/CROSS-PLATFORM.md) for the SSH bridge and
+its security requirements. Native Windows and mobile builds are not supported.
+The companion has no PTY-backed terminal or platform accessibility tree and
+is not a replacement for the native app.
+
 ## Tools and keyboard access
 
 The interface uses macOS fonts, appearance colors and native controls. The sidebar

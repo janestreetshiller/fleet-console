@@ -1,5 +1,12 @@
 # Release notes
 
+## Unreleased
+
+- Keep the Rust lockfile on libc 0.2.189: GPUI 0.2.2's transitive
+  `xattr` 0.2.3 requires the Linux `ENOATTR` alias removed in libc 0.2.190.
+  Document how to run the existing phosphor GPUI companion and its platform
+  limits.
+
 ## 1.2.0 — 2026-10-23
 
 - Preserve the installed metric investigation menu and consolidated Operations
