@@ -51,6 +51,9 @@ struct DesignCoreTests {
         let output = URL(fileURLWithPath: path, isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         _ = NSApplication.shared
+        // Offscreen rendering still creates windows; .prohibited disallows them.
+        NSApp.setActivationPolicy(.accessory)
+        if !NSApp.isRunning { NSApp.finishLaunching() }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             for enabled in [true, false] {
                 let view = NSHostingView(rootView:
@@ -70,18 +73,77 @@ struct DesignCoreTests {
                 view.appearance = window.appearance
                 window.contentView = view
                 window.orderBack(nil)
+                defer { window.orderOut(nil) }
                 view.layoutSubtreeIfNeeded()
                 let until = Date().addingTimeInterval(0.2)
                 while Date() < until {
                     RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
                 }
                 let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+                bitmap.size = view.bounds.size
+                view.setNeedsDisplay(view.bounds)
+                window.displayIfNeeded()
                 view.cacheDisplay(in: view.bounds, to: bitmap)
                 let data = try #require(bitmap.representation(using: .png, properties: [:]))
                 try data.write(to: output.appendingPathComponent("primary-action-\(name)-\(enabled ? "enabled" : "disabled").png"))
                 #expect(bitmap.pixelsWide > 0 && bitmap.pixelsHigh > 0)
-                window.orderOut(nil)
+                var fillCount = 0
+                var minX = bitmap.pixelsWide
+                var minY = bitmap.pixelsHigh
+                var maxX = 0
+                var maxY = 0
+                for y in 0..<bitmap.pixelsHigh {
+                    for x in 0..<bitmap.pixelsWide {
+                        guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                        if color.redComponent > color.greenComponent + 0.15,
+                           color.greenComponent > color.blueComponent + 0.05 {
+                            fillCount += 1
+                            minX = min(minX, x)
+                            minY = min(minY, y)
+                            maxX = max(maxX, x)
+                            maxY = max(maxY, y)
+                        }
+                    }
+                }
+                try #require(fillCount > 100, "An enabled or unavailable primary action must actually paint the core orange fill, including an inactive window")
+                var whiteInkCount = 0
+                for y in minY...maxY {
+                    for x in minX...maxX {
+                        guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                        if color.redComponent > 0.95 && color.greenComponent > 0.95 && color.blueComponent > 0.95 {
+                            whiteInkCount += 1
+                        }
+                    }
+                }
+                #expect(whiteInkCount > 5, "The rendered primary action keeps explicit white label ink in every appearance and availability state")
             }
+        }
+    }
+
+    @MainActor @Test("Primary action styling preserves real activation and unavailable behavior")
+    func primaryActionActivation() throws {
+        _ = NSApplication.shared
+        // Permit the offscreen test window without activating the application.
+        NSApp.setActivationPolicy(.accessory)
+        if !NSApp.isRunning { NSApp.finishLaunching() }
+        for enabled in [true, false] {
+            var activations = 0
+            let view = NSHostingView(rootView: Button("Run") { activations += 1 }
+                .fleetPrimaryAction()
+                .disabled(!enabled)
+                .frame(width: 200, height: 100))
+            let window = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: 200, height: 100),
+                                  styleMask: .borderless, backing: .buffered, defer: false)
+            window.contentView = view
+            window.orderBack(nil)
+            defer { window.orderOut(nil) }
+            view.layoutSubtreeIfNeeded()
+            let until = Date().addingTimeInterval(0.1)
+            while Date() < until {
+                RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.02))
+            }
+            try sendSyntheticClick(at: NSPoint(x: 100, y: 50), in: window)
+            #expect(activations == (enabled ? 1 : 0))
         }
     }
 

@@ -126,7 +126,7 @@ struct TerminalAgentSessionTests {
                      .enabled(if: ToolBinary.resolve("tmux") != nil))
     func realSessionIsolation() async throws {
         let app = NSApplication.shared
-        app.setActivationPolicy(.prohibited)
+        app.setActivationPolicy(.accessory)
         app.finishLaunching()
         let directory = try fixtureDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -212,7 +212,7 @@ struct TerminalAgentSessionTests {
                      .enabled(if: ToolBinary.resolve("tmux") != nil))
     func durableShell() async throws {
         let app = NSApplication.shared
-        app.setActivationPolicy(.prohibited)
+        app.setActivationPolicy(.accessory)
         app.finishLaunching()
         _ = try #require(ToolBinary.resolve("tmux"))
         let socket = "fleet-test-" + UUID().uuidString
@@ -398,7 +398,7 @@ struct TerminalAgentSessionTests {
     @MainActor @Test("Measured terminal controls are removed from the coalesced row budget")
     func terminalChromeGeometry() async throws {
         let app = NSApplication.shared
-        app.setActivationPolicy(.prohibited)
+        app.setActivationPolicy(.accessory)
         app.finishLaunching()
         let tools = ChromeTools()
         let panel = try #require(tools.registry.surface(for: .terminal) as? TerminalPanel)
@@ -437,7 +437,7 @@ struct TerminalAgentSessionTests {
     @MainActor @Test("Agent surface fits narrow and wide layouts in light and dark", arguments: [false, true], [CGFloat(320), CGFloat(600)])
     func nativeSurface(dark: Bool, width: CGFloat) async throws {
         let app = NSApplication.shared
-        app.setActivationPolicy(.prohibited)
+        app.setActivationPolicy(.accessory)
         app.finishLaunching()
         let directory = try fixtureDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

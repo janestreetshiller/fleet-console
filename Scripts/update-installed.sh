@@ -4,6 +4,7 @@
 #   Scripts/update-installed.sh              # HEAD
 #   Scripts/update-installed.sh <git-ref>    # any commit, branch or tag
 #   Scripts/update-installed.sh <git-ref> --no-launch  # replace without launch
+#   Scripts/update-installed.sh <full-source-revision> --prebuilt  # reviewed signed artifact
 # Offline mode: FLEETCONSOLE_OFFLINE=1 and an existing FLEETCONSOLE_DEPENDENCY_CACHE.
 #
 # The build comes from a clean, detached worktree of the ref, so uncommitted
@@ -24,27 +25,52 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 REF="HEAD"
 RESTART_CONTROLLER=0
 RELAUNCH=1
+PREBUILT=0
 for arg in "$@"; do
     case "$arg" in
         --restart-controller) RESTART_CONTROLLER=1 ;;
         --no-launch) RELAUNCH=0 ;;
+        --prebuilt) PREBUILT=1 ;;
         -*) echo "✗ unknown option $arg" >&2; exit 2 ;;
         *) REF="$arg" ;;
     esac
 done
 
-COMMIT="$(git -C "$ROOT" rev-parse --verify "$REF^{commit}")"
+if [ "$PREBUILT" = 1 ]; then
+    [[ "$REF" =~ ^([a-f0-9]{40}|[a-f0-9]{64})$ ]] || { echo 'Prebuilt delivery requires the exact full source revision.' >&2; exit 2; }
+    : "${FLEETCONSOLE_PREBUILT_APP:?Supply the reviewed signed app}"
+    : "${FLEETCONSOLE_PREDECESSOR_PROOF:?Supply the reviewed installed predecessor}"
+    : "${FLEETCONSOLE_EXPECTED_CORE_SHA256:?Supply the accepted core SHA256}"
+    : "${FLEETCONSOLE_EXPECTED_TEAM:?Supply the reviewed Developer ID team}"
+    [[ "$FLEETCONSOLE_EXPECTED_TEAM" =~ ^[A-Z0-9]{10}$ ]] || exit 2
+    [[ "$FLEETCONSOLE_PREBUILT_APP" == /* && ! -L "$FLEETCONSOLE_PREBUILT_APP" && -d "$FLEETCONSOLE_PREBUILT_APP" ]] || exit 2
+    COMMIT="$REF"
+else
+    [[ -z "${FLEETCONSOLE_PREBUILT_APP:-}" ]] || { echo 'Select --prebuilt explicitly.' >&2; exit 2; }
+    COMMIT="$(git -C "$ROOT" rev-parse --verify "$REF^{commit}")"
+fi
 SHORT="${COMMIT:0:7}"
 STAGE="$(mktemp -d "${TMPDIR:-/tmp}/fleetconsole-update.XXXXXX")"
 WORKTREE="$STAGE/source"
 OUTPUT="$STAGE/out"
 INSTALLED="/Applications/FleetConsole.app"
 cleanup() {
-    git -C "$ROOT" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
+    if [ "$PREBUILT" = 0 ]; then
+        git -C "$ROOT" worktree remove --force "$WORKTREE" >/dev/null 2>&1 || true
+    fi
     rm -rf "$STAGE"
 }
 trap cleanup EXIT
 
+if [ "$PREBUILT" = 1 ]; then
+    WORKTREE="$ROOT"
+    REQUIREMENT="identifier \"com.fleetconsole.app\" and anchor apple generic and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$FLEETCONSOLE_EXPECTED_TEAM\""
+    codesign --verify --deep --strict "-R=$REQUIREMENT" "$FLEETCONSOLE_PREBUILT_APP"
+    xcrun stapler validate "$FLEETCONSOLE_PREBUILT_APP"
+    spctl --assess --type execute --verbose=2 "$FLEETCONSOLE_PREBUILT_APP"
+    mkdir -p "$OUTPUT"
+    ditto "$FLEETCONSOLE_PREBUILT_APP" "$OUTPUT/FleetConsole.app"
+else
 echo "▸ building $SHORT from a clean worktree…"
 git -C "$ROOT" worktree add --detach "$WORKTREE" "$COMMIT" >/dev/null
 # Offline mode consumes an existing pinned cache; it never fetches a package.
@@ -68,9 +94,10 @@ if [ "${FLEETCONSOLE_OFFLINE:-0}" = "1" ]; then
 fi
 FLEETCONSOLE_OUTPUT_DIR="$OUTPUT" FLEETCONSOLE_SCRATCH_PATH="$WORKTREE/.build" \
     "$WORKTREE/Scripts/build-app.sh" release
+fi
 NEW="$OUTPUT/FleetConsole.app"
 codesign --verify --deep --strict "$NEW"
-if [ -n "${FLEETCONSOLE_NOTARY_PROFILE:-}" ]; then
+if [ "$PREBUILT" = 0 ] && [ -n "${FLEETCONSOLE_NOTARY_PROFILE:-}" ]; then
     FLEETCONSOLE_OUTPUT_DIR="$OUTPUT" "$WORKTREE/Scripts/notarize.sh"
 fi
 # A local replacement must not silently downgrade the installed publisher or
@@ -96,6 +123,15 @@ if [ "$SOURCE_REVISION" != "$COMMIT" ] || [ "$SOURCE_DIRTY" != "false" ]; then
     exit 1
 fi
 
+verify_core_predecessor() {
+    if [ -n "${FLEETCONSOLE_PREDECESSOR_PROOF:-}" ]; then
+        : "${FLEETCONSOLE_EXPECTED_CORE_SHA256:?Supply the accepted core SHA256}"
+        python3 "$WORKTREE/Scripts/verify-core-update.py" "$INSTALLED" "$NEW" \
+            "$FLEETCONSOLE_PREDECESSOR_PROOF" "$FLEETCONSOLE_EXPECTED_CORE_SHA256" "$COMMIT"
+    fi
+}
+verify_core_predecessor
+
 echo "▸ quitting the running app…"
 osascript -e 'quit app id "com.fleetconsole.app"' >/dev/null 2>&1 || true
 for _ in $(seq 1 40); do
@@ -106,6 +142,8 @@ if pgrep -f "$INSTALLED/Contents/MacOS/FleetConsole" >/dev/null; then
     echo "✗ FleetConsole did not quit; nothing was changed." >&2
     exit 1
 fi
+
+verify_core_predecessor
 
 if [ -d "$INSTALLED" ]; then
     OLD_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INSTALLED/Contents/Info.plist" 2>/dev/null || echo unknown)"

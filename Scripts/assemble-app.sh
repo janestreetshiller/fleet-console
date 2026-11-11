@@ -117,6 +117,8 @@ import sys
 path, revision, dirty, receipt = sys.argv[1:]
 with open(receipt) as stream:
     core = json.load(stream)
+if not re.fullmatch(r"[0-9a-f]{64}", core["sourceSHA256"]):
+    raise SystemExit("Invalid design core identity")
 with open(path, "rb") as stream:
     info = plistlib.load(stream)
 info["FleetSourceRevision"] = revision if re.fullmatch(r"[0-9a-f]{40,64}", revision) else "unrecorded"
