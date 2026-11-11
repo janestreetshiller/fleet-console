@@ -35,14 +35,18 @@ struct HomeModule: View {
 
     var body: some View {
         ScrollView {
-            // No masthead. The attention list is what home puts first, and the
-            // sidebar's identity card already says who and how the fleet is.
-            QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
+            VStack(alignment: .leading, spacing: ConsoleMetrics.gutter) {
+                WorkspaceHeading(title: "Needs Attention",
+                                 detail: "Decisions and controller findings come first. Agent activity and saved tasks follow below.")
                 priorityCard
-                AgentsContent(model: model, openDashboard: {})
-                    .elevatedCard()
-                LaterTasksView()
-                modulesCard
+                    .accessibilityIdentifier("home.priority")
+                QuantizedCardGrid(minimumCellWidth: 360, maximumColumns: 2) {
+                    AgentsContent(model: model, openDashboard: {})
+                        .elevatedCard()
+                        .accessibilityIdentifier("home.agents")
+                    LaterTasksView()
+                    modulesCard
+                }
             }
             .padding(ConsoleMetrics.gutter)
         }

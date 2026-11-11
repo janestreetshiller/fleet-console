@@ -16,16 +16,14 @@ struct FleetSidebarView: View {
     @State private var managingDevices = false
 
     var body: some View {
-        // Two unlabelled clusters and the devices. The first is this Mac: where
-        // the window opens and the instruments that describe the machine. The
-        // second is the background work on it. Their spacing is the boundary;
-        // a heading over each restated what the rows already say.
+        // Keep both the awareness canvas and the detailed operations map reachable.
         List(selection: navigationSelection) {
             Section {
                 Label("Needs Attention", systemImage: "exclamationmark.circle")
                     .tag("attention")
                 ForEach([ConsoleModule.overview, .processes, .services]) { module in
                     Label(module.title, systemImage: module.symbol)
+                        .accessibilityIdentifier(module == .overview ? "sidebar.awareness" : "sidebar." + module.rawValue)
                         .tag("module:" + module.rawValue)
                 }
             }

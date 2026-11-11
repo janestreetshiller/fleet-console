@@ -142,10 +142,9 @@ struct OverviewViewportTests {
         try capture(window, name: "overview-unavailable-\(dark ? "dark" : "light")")
     }
 
-    // The shipping root requests refresh on appearance. Only its explicitly
-    // observational harness may run this test: registry-changing RPCs are denied
-    // before the actual native window is created.
-    @MainActor @Test("Shipping Overview keeps its instruments visible above scrollable evidence in both appearances",
+    // The shipping root requests refresh. Only the observational test harness
+    // may exercise its live controller/probe integration.
+    @MainActor @Test("Shipping agent map occupies the viewport with real observed activity in both appearances",
         .enabled(if: RPCRequestPolicy.forArguments(ProcessInfo.processInfo.arguments) == .observational))
     func shippingWindowViewport() async throws {
         initializeApplication()
@@ -159,6 +158,7 @@ struct OverviewViewportTests {
         settle()
         #expect(model.system.cpu.sampled)
         #expect(model.processes.rows.count >= 5)
+        #expect(!controller.console.sidebarRevealed)
         for dark in [false, true] {
             NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
             window.appearance = NSApp.appearance
@@ -168,41 +168,38 @@ struct OverviewViewportTests {
                 try await Task.sleep(for: .milliseconds(100))
                 settle()
                 let root = try #require(window.contentView)
-                let activeScrolls = scrollViews(in: root).filter {
-                    !$0.isHiddenOrHasHiddenAncestor && !$0.visibleRect.isEmpty
+                let canvas = try #require(element("awareness.canvas", in: root))
+                let summary = try #require(element("awareness.summary", in: root))
+                let canvasRect = try frame(canvas)
+                print("\(name) \(dark ? "dark" : "light") activity canvas: \(canvasRect); sessions: \(model.sessions.count)")
+                #expect(try frame(summary).height <= 180)
+                #expect(canvasRect.height >= root.bounds.height * 0.85)
+                #expect(canvasRect.width >= root.bounds.width * 0.95)
+                #expect(element("console.processes", in: root) == nil)
+                #expect(element("awareness.fit", in: root) != nil)
+                if let session = model.sessions.first {
+                    let agent = try #require(element("awareness.node.session:" + session.id, in: root))
+                    #expect(try frame(agent).height >= 80, "Agent activity must be readable on first presentation")
                 }
-                // The shipping workspace intentionally scrolls its process map
-                // and interval evidence below the fixed-height instruments.
-                // A sidebar List also scrolls; neither is an OverviewModule
-                // overflow (covered separately by compactOverviewDoesNotScroll).
-                let cpu = try #require(element("overview.cpu", in: root))
-                let cpuRect = root.convert(window.convertFromScreen(try frame(cpu)), from: nil)
-                let workspaceScrolls = activeScrolls.filter { root.convert($0.bounds, from: $0).contains(cpuRect) }
-                #expect(workspaceScrolls.count == 1)
-                let workspace = try #require(workspaceScrolls.first)
-                #expect((workspace.documentView?.bounds.height ?? 0) > workspace.contentView.bounds.height)
-                #expect(element("overview.process-map", in: root) != nil)
-                for id in ["overview.cpu", "overview.memory", "overview.glance", "overview.processes"] {
-                    let object = try #require(element(id, in: root))
-                    let rect = root.convert(window.convertFromScreen(try frame(object)), from: nil)
-                    print("\(name) \(dark ? "dark" : "light") \(id): \(rect)")
-                    #expect(rect.minX >= 0)
-                    #expect(rect.maxX <= root.bounds.width)
-                    if root.isFlipped {
-                        #expect(rect.maxY <= root.bounds.height)
-                    } else {
-                        #expect(rect.minY >= 0)
-                    }
-                }
-                // The workspace reserves a compact, fixed-height instrument
-                // area at both window sizes; width does not add process rows.
-                let processRows = Set(nodes(in: root)
-                    .compactMap { value("accessibilityIdentifier", from: $0) as? String }
-                    .filter { $0.hasPrefix("overview.process.") })
-                #expect(processRows.count == 3)
+                #expect(element("overview.process-map", in: root) == nil)
+                #expect(element("overview.focus", in: root) == nil)
                 try capture(window, name: "overview-\(name)-\(dark ? "dark" : "light")")
             }
         }
+        controller.console.goHome()
+        settle()
+        #expect(element("home.priority", in: try #require(window.contentView)) != nil)
+        controller.console.open(.overview)
+        settle()
+        #expect(element("awareness.canvas", in: try #require(window.contentView)) != nil)
+        let process = try #require(model.processes.rows.first)
+        controller.console.inspectConsoleProcess(process.pid)
+        settle()
+        #expect(controller.console.module == .overview)
+        #expect(controller.console.inspectorTarget() == .process(process.pid))
+        #expect(controller.console.inspectorRevealed)
+        #expect(controller.console.handleEscape())
+        #expect(controller.console.inspectorTarget() == .none)
         #expect(DaemonClient.shared.submittedObservationalOperations.allSatisfy {
             ["ping", "snapshot", "subscribe", "events", "logs", "messages"].contains($0)
         })

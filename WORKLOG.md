@@ -26,9 +26,23 @@
   was removed. Rerun `swift test --filter
   'TerminalAgentSessionTests/durableShell'` in a responsive GUI session before
   closing issue #9.
-- Release path: canonical local `main` started at `ed9ba3d`; remote `main`
-  was `31db7f6` and has diverged from the recovered local history. No push or
-  release was performed; reconciling those histories is required first.
+- Release integration: local `main` started at `ed9ba3d` and origin/main at
+  `31db7f6`. The local root `2f4beaa` was a recovered snapshot with no parent.
+  Integration temporarily used the last upstream commit before that recovery,
+  `129c474`, as the three-way base, then merged origin/main with both real
+  histories retained. The temporary replacement is removed after the merge.
+  No installed app or controller is replaced.
+- After integrating, `swift test --jobs 2 --filter
+  'ConsoleNavigationTests|AwarenessGraphTests|DirectoryCrystalTests'` built the
+  merged targets and passed 24 tests in three suites.
+- The post-merge `durableShell` GUI test timed out after 100 seconds without a
+  result. Do not close issue #9 until it passes in a responsive GUI session.
+- Do not push this merge as-is: preserving the recovered history would
+  publish historical maintainer identifiers removed in `4c7b81a` (six home
+  and six host matches in the removed lines). The existing source scanner
+  checks current files, not history, and the public-source exporter explicitly
+  excludes private Git history. Publication requires an approved history-safe
+  release approach, not a force-push.
 
 ## Optimized local GPUI companion — 2026-11-10
 
