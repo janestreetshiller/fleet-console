@@ -12,8 +12,8 @@
 - Native DesignCore suite5 passed: four actual light/dark enabled/disabled pixel captures, real button activation and disabled behavior.
 - Window fixtures now use Apple's window-capable accessory policy; pixel and lifecycle assertions remain intact.
 - Compiled app identity: core1.1.13, source SHA256 `8a9900dbbfe1d771b173ee7457d028136640336ff040a96ba0878d2e6f9d1ac1`, signal#F17B33, fill#B8460A, ink#FFFFFF.
-- Terminal persistence uses a private `fleet-test-<UUID>` tmux socket and real exported-variable/background-job assertions. Its native execution timed out in `NSApplication.shared`→SkyLight display-state IPC, in both SSH and Aqua contexts; the selected test body reached no window or shell assertions.
-- Independent OurosX initializer samples also stopped in SkyLight IPC. Only task-owned probe trees/jobs were terminated. User authorized GUI recovery; Dock service restart succeeded.
+- Terminal persistence uses a private `fleet-test-<UUID>` tmux socket. After Dock recovery, the actual Aqua `TerminalAgentSessionTests/durableShell` passed in58.056s: an exported shell variable and running background job survived window close and a new panel.
+- Initial SSH/Aqua samples stopped in NSApplication/SkyLight IPC. User authorized GUI recovery; Dock restart succeeded and the native AppKit probe initialized. Probe cleanup terminated only owned process trees/jobs.
 
 ## Custody and delivery
 - Target: local canonical main. Do not push recovered private history to the public remote; the established privacy-reviewed, history-free export owns public transfer.
