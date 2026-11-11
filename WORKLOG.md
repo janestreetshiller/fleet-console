@@ -1,5 +1,35 @@
 # FleetConsole current source handoff
 
+## Terminal persistence — 2026-11-11
+
+- Issue #9: the shell previously belonged to the window's PTY and was killed
+  on window close; changing context also restarted it. Fleet now attaches its
+  Shell to a separate `fleet-console` tmux server, and detaches the client
+  when the window closes or the app quits. The existing server session is
+  reattached when the shell opens again. tmux is required and its absence is
+  shown in the panel. Dedicated agent sessions retain their existing
+  stop-on-close ownership and are not restored.
+- Persistence is limited to the lifetime of the tmux server; logout, reboot,
+  ending the shell, or `tmux -L fleet-console kill-server` can end the work.
+  The initial context selects the directory for a new session; switching
+  selection does not change the directory of an existing shell.
+- `swift build --jobs 2` passed. An independent real-PTY tmux exercise
+  terminated the attached client, reattached a new client and observed both
+  an exported shell variable and completion of a background job. This proves
+  the multiplexer lifecycle, not the Fleet UI integration.
+- Native acceptance is not yet proven: the first targeted test reached the
+  test body but failed while the SwiftUI host was not yet available; the test
+  now waits for the host. A subsequent targeted run timed out while sampled in
+  `NSApplication.shared` → SkyLight `SLSCopyDisplayUUID` → `mach_msg`.
+  `launchctl asuser 502` was denied; a temporary service in the logged-in
+  Aqua domain also failed to return the targeted test result within 150s and
+  was removed. Rerun `swift test --filter
+  'TerminalAgentSessionTests/durableShell'` in a responsive GUI session before
+  closing issue #9.
+- Release path: canonical local `main` started at `ed9ba3d`; remote `main`
+  was `31db7f6` and has diverged from the recovered local history. No push or
+  release was performed; reconciling those histories is required first.
+
 ## Optimized local GPUI companion — 2026-11-10
 
 - Source revision `ea42e85af6ec9bd19fd34391d8b9b72ecfa89a2c`;

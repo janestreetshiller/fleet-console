@@ -158,9 +158,22 @@ toggle stays at the left edge; the inspector toggle stays at the right edge.
 Device fields retain their labels, selectable process rows work with the keyboard,
 and shared surfaces honor Reduce Motion and Increase Contrast.
 
-The dashboard's **View** menu opens Terminal and Files. Terminal is
-your shell; commands entered there become supervised only when launched through
-`fleetctl`. Files requires [Yazi](https://github.com/sxyazi/yazi).
+The dashboard's **View** menu opens Terminal and Files. Terminal requires
+[tmux](https://github.com/tmux/tmux): install it on the Mac and reopen Terminal
+if it is missing. Fleet attaches the shell to the `shell` session on the separate
+`fleet-console` tmux server. Closing the window or quitting Fleet detaches the
+client; shell state and running jobs remain until the session exits, the server
+is stopped, the user logs out, or the machine restarts. Reopening Fleet attaches
+to the existing session. To deliberately end it, exit its shell or run
+`tmux -L fleet-console kill-server` (this terminates its jobs). The working
+directory is selected when the session is first created; later navigation does
+not change a running shell's directory. Commands entered there become supervised
+only when launched through `fleetctl`. Files requires
+[Yazi](https://github.com/sxyazi/yazi).
+
+This persistence applies to the Shell session only. Dedicated agent sessions
+remain app-owned and are stopped when the window closes or Fleet quits; they
+are not restored or replayed.
 
 ### Agent-aware terminal sessions
 
