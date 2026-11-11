@@ -134,7 +134,7 @@ final class ConsoleWindowController {
                         }
                     } else if let command,
                               !self.tools.run(command, in: ToolContext(workingDirectory: URL(fileURLWithPath: directory), subject: subject)) {
-                        self.model.actionError = "Select Shell before starting a terminal command. Agent and read-only investigation sessions do not accept command injection."
+                        self.model.actionError = "Select Shell and install tmux before starting a terminal command. Agent and read-only investigation sessions do not accept command injection."
                     }
                 }
             })

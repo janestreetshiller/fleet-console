@@ -17,6 +17,13 @@ final class TerminalPanel: PTYBackedSurface {
     }
 
     private let shellSession = PTYSession(refusesBelowMinimum: false)
+    private let shellSocket: String
+    private var shellMultiplexer: URL?
+
+    init(shellSocket: String = "fleet-console") {
+        self.shellSocket = shellSocket
+    }
+
     private var investigationSession: PTYSession?
     private(set) var agents: [TerminalAgentSession] = []
     private(set) var selection: Selection = .shell {
@@ -38,7 +45,6 @@ final class TerminalPanel: PTYBackedSurface {
     private var investigationCancelling = false
     @ObservationIgnored private var investigationTask: Task<Void, Never>?
     private var currentContext = ToolContext()
-    private var activated = false
     private var lastGrid: TerminalGrid?
     private var showingDetails = false
     private var confirmingStop = false
@@ -135,21 +141,16 @@ final class TerminalPanel: PTYBackedSurface {
         // Selection/navigation cannot retarget or kill an agent or the background shell.
         guard selection == .shell else { session.focusTerminal(); return }
         let dir = ToolBinary.usableDirectory(context.workingDirectory)
-        if !activated {
-            currentContext = context
-            activated = true
-            shellSession.ensureRunning(makeLaunch(dir: dir))
-            shellSession.focusTerminal()
+        currentContext = context
+        guard let tmux = ToolBinary.resolve("tmux") else {
+            shellMultiplexer = nil
             return
         }
-        if dir != ToolBinary.usableDirectory(currentContext.workingDirectory) {
-            shellSession.restart(makeLaunch(dir: dir))
-            shellSession.focusTerminal()
-        } else {
-            // Reopen after a window close or shell exit, preserving the old scrollback.
-            shellSession.ensureRunning(makeLaunch(dir: dir))
-        }
-        currentContext = context
+        shellMultiplexer = tmux
+        // A changed selection must not restart an interactive shell or its jobs.
+        // The directory is used only when creating a new server session.
+        shellSession.ensureRunning(makeLaunch(tmux: tmux, dir: dir))
+        shellSession.focusTerminal()
     }
 
     func resize(to grid: TerminalGrid) {
@@ -249,8 +250,10 @@ final class TerminalPanel: PTYBackedSurface {
                     Text("Unconfirmed request: " + requestID).textSelection(.enabled)
                     Button("Acknowledge after reviewing account receipts") { billing.acknowledgeUnconfirmedInvestigation() }
                 }
+            } else if shellMultiplexer == nil {
+                Text("Install tmux to use the persistent shell, then reopen Terminal.")
             } else if case .exited = shellSession.phase {
-                Button("Restart shell") { self.activate(context: self.currentContext) }
+                Button("Reconnect shell") { self.activate(context: self.currentContext) }
             }
         }
         .font(ConsoleFont.caption)
@@ -294,17 +297,18 @@ final class TerminalPanel: PTYBackedSurface {
     /// Generic commands are accepted only in Shell; never inject them into an agent TUI.
     @discardableResult
     func run(_ commandLine: String) -> Bool {
-        guard selection == .shell else { return false }
-        shellSession.ensureRunning(makeLaunch(dir: ToolBinary.usableDirectory(currentContext.workingDirectory)))
+        guard selection == .shell, let tmux = shellMultiplexer else { return false }
+        shellSession.ensureRunning(makeLaunch(tmux: tmux, dir: ToolBinary.usableDirectory(currentContext.workingDirectory)))
         shellSession.send(commandLine + "\r")
         shellSession.focusTerminal()
         return true
     }
 
-    private func makeLaunch(dir: URL) -> PTYSession.Launch {
-        PTYSession.Launch(executable: ToolBinary.loginShell, arguments: [],
-                         argv0: "-" + ToolBinary.loginShell.lastPathComponent,
-                         workingDirectory: dir, environment: ToolBinary.environment(withSearchPath: false))
+    private func makeLaunch(tmux: URL, dir: URL) -> PTYSession.Launch {
+        PTYSession.Launch(executable: tmux,
+                         arguments: ["-L", shellSocket, "-f", "/dev/null", "new-session", "-A",
+                                     "-s", "shell", "-c", dir.path],
+                         workingDirectory: dir, environment: ToolBinary.environment(withSearchPath: true))
     }
 }
 

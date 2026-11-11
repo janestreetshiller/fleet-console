@@ -64,6 +64,18 @@ fleetctl stop "Local API"
 
 The View menu opens Terminal (the user's shell; commands become supervised only when launched through `fleetctl`) and Files (requires [Yazi](https://github.com/sxyazi/yazi)). The interface uses macOS fonts, appearance colors, and native controls; the sidebar toggle stays at the left edge and the inspector toggle at the right; shared surfaces honor Reduce Motion and Increase Contrast. Preferences includes Matte/Glass shell material, agent defaults, and account access; Reduce Transparency forces an opaque backing.
 
+Terminal requires [tmux](https://github.com/tmux/tmux). Fleet attaches Shell to
+the `shell` session on a separate `fleet-console` tmux server, so closing the
+window or quitting Fleet detaches the client without ending the shell or its
+running jobs. Reopening Terminal reattaches while that server remains alive.
+The working directory is selected when the session is created; navigating to
+another context does not change a running shell's directory. Exit the shell or
+run `tmux -L fleet-console kill-server` to end the session and its jobs.
+Logout, reboot, or stopping the server can also end it.
+
+This persistence is for Shell only. Dedicated agent sessions remain app-owned,
+stop when the window closes or Fleet quits, and are not restored or replayed.
+
 Linked devices: choose Link a Device…, connect the Ouros account, subscribe to multi-device access, then enter the device name and hostname or IP (optionally an SSH username and opt-in to reading its FleetConsole service inventory). The controller probes reachability and reads metrics through the existing SSH configuration; remote processes are read-only; unlinking removes only the configuration entry. The device screen links to Ouros billing for prepaid AI credits; the Agents section opens Ouros Agent for a credit-funded review of current problems and service records, using the connected account and the gateway's model catalog. Each model round is metered; a stopped or uncertain request is not retried automatically. The agent reads the supplied service snapshot and can propose a restart, which the operator approves separately and the controller performs only for a controller-launched service. This Mac must remain awake; deployable agents and the FleetConsole MCP remain planned. The $10/month subscription has a separate entitlement from Ouros Pro and does not include AI credits. See the [multi-device integration contract](docs/MULTI-DEVICE.md).
 
 Local data: registry and configuration in `~/Library/Application Support/FleetConsole`; daemon and service logs in `~/Library/Logs/FleetConsole`; the controller communicates over an owner-only Unix socket; network probes inspect connections and routing without changing them. Edit Configuration opens `config.json` (visible sections, polling intervals, known computers, expected listeners, optional process termination). Local agent-spend estimates are off by default because their price table needs verification; Ouros Agent displays the charge returned by the gateway for each review.

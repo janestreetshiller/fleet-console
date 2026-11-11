@@ -122,7 +122,8 @@ struct TerminalAgentSessionTests {
         #expect(panel.closeSelectedAgent())
     }
 
-    @MainActor @Test("Real PTYs isolate agent argv, working directory, shell and simultaneous sessions")
+    @MainActor @Test("Real PTYs isolate agent argv, working directory, shell and simultaneous sessions",
+                     .enabled(if: ToolBinary.resolve("tmux") != nil))
     func realSessionIsolation() async throws {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
@@ -137,7 +138,8 @@ struct TerminalAgentSessionTests {
           printf 'AGENT-INPUT:%s\\n' "$line"
         done
         """, directory: directory)
-        let panel = TerminalPanel()
+        let socket = "fleet-test-" + UUID().uuidString
+        let panel = TerminalPanel(shellSocket: socket)
         let size = CGSize(width: 500, height: 440)
         let hosting = NSHostingView(rootView: panel.makeView().frame(width: size.width, height: size.height))
         let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: size),
@@ -146,6 +148,7 @@ struct TerminalAgentSessionTests {
         window.contentView = hosting
         window.orderBack(nil)
         defer {
+            killServer(socket)
             panel.agents.forEach { $0.pty.terminate() }
             window.close()
         }
@@ -203,6 +206,64 @@ struct TerminalAgentSessionTests {
         panel.windowReopened()
         try await waitUntil { shellHost.terminal.process.running }
         #expect(shellHost.terminal.process.shellPid != shellPID)
+    }
+
+    @MainActor @Test("Shell state and a running job survive window close and a new panel",
+                     .enabled(if: ToolBinary.resolve("tmux") != nil))
+    func durableShell() async throws {
+        let app = NSApplication.shared
+        app.setActivationPolicy(.prohibited)
+        app.finishLaunching()
+        _ = try #require(ToolBinary.resolve("tmux"))
+        let socket = "fleet-test-" + UUID().uuidString
+        defer { killServer(socket) }
+        let directory = try fixtureDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let marker = directory.appendingPathComponent("job-finished")
+        let ready = directory.appendingPathComponent("job-started")
+        let size = CGSize(width: 500, height: 440)
+        let first = TerminalPanel(shellSocket: socket)
+        let hosting = NSHostingView(rootView: first.makeView().frame(width: size.width, height: size.height))
+        let window = NSWindow(contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: size),
+                              styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = hosting
+        window.orderBack(nil)
+        first.resize(to: TerminalGrid(columns: 80, rows: 24))
+        first.activate(context: ToolContext(workingDirectory: directory))
+        try await waitUntil { self.findHost(in: hosting) != nil }
+        let host = try #require(findHost(in: hosting))
+        try await waitUntil { host.terminal.process.running }
+        #expect(first.run("export FLEET_PERSIST_TEST=survived; (sleep 3; touch \"\(marker.path)\") & touch \"\(ready.path)\""))
+        try await waitUntil { FileManager.default.fileExists(atPath: ready.path) }
+        first.activate(context: ToolContext(workingDirectory: URL(fileURLWithPath: "/")))
+        window.close()
+        first.windowClosed()
+        let second = TerminalPanel(shellSocket: socket)
+        let secondHosting = NSHostingView(rootView: second.makeView().frame(width: size.width, height: size.height))
+        let secondWindow = NSWindow(contentRect: CGRect(origin: CGPoint(x: -20_000, y: -20_000), size: size),
+                                    styleMask: [.borderless], backing: .buffered, defer: false)
+        secondWindow.isReleasedWhenClosed = false
+        secondWindow.contentView = secondHosting
+        secondWindow.orderBack(nil)
+        defer { second.windowClosed(); secondWindow.close() }
+        second.resize(to: TerminalGrid(columns: 80, rows: 24))
+        second.activate(context: ToolContext(workingDirectory: URL(fileURLWithPath: "/")))
+        try await waitUntil { self.findHost(in: secondHosting) != nil }
+        let secondHost = try #require(findHost(in: secondHosting))
+        try await waitUntil { secondHost.terminal.process.running }
+        #expect(second.run("printf 'PERSIST-RESULT:%s\\n' \"$FLEET_PERSIST_TEST\""))
+        try await waitUntil { self.text(secondHost).contains("PERSIST-RESULT:survived") }
+        try await waitUntil { FileManager.default.fileExists(atPath: marker.path) }
+    }
+
+    private func killServer(_ socket: String) {
+        guard let tmux = ToolBinary.resolve("tmux") else { return }
+        let process = Process()
+        process.executableURL = tmux
+        process.arguments = ["-L", socket, "kill-server"]
+        process.standardError = FileHandle.nullDevice
+        if (try? process.run()) != nil { process.waitUntilExit() }
     }
 
     @MainActor @Test("A new external TUI cannot inherit the previous surface grid or launch below its minimum")
