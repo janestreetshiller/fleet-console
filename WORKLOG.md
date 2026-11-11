@@ -41,8 +41,11 @@
   publish historical maintainer identifiers removed in `4c7b81a` (six home
   and six host matches in the removed lines). The existing source scanner
   checks current files, not history, and the public-source exporter explicitly
-  excludes private Git history. Publication requires an approved history-safe
-  release approach, not a force-push.
+  excludes private Git history. The persistence-only commit `5aca84b` was
+  instead made directly on public `31db7f6` and fast-forwarded to origin/main,
+  without sending the recovered history. On that clean descendant the source
+  privacy scanner passed 10 tests over 333 text deliverables, and
+  `swift build --scratch-path <local scratch> --jobs 2` passed.
 
 ## Optimized local GPUI companion — 2026-11-10
 
