@@ -1,5 +1,40 @@
 # FleetConsole current source handoff
 
+## Optimized local GPUI companion — 2026-11-10
+
+- Source revision `ea42e85af6ec9bd19fd34391d8b9b72ecfa89a2c`;
+  integration documentation commit `4ad105d9a5aa244421d5ae79de0d5a667390d09e`
+  changes no Rust source or lockfile. Both builds used Rust 1.98.0 and
+  `cargo build --manifest-path rust/Cargo.toml --locked --release -p fleet-gpui`.
+- macOS 27.3 arm64: local launcher
+  `dist/gpui-ea42e85/Fleet GPUI.app` (open in Finder or with
+  `open 'dist/gpui-ea42e85/Fleet GPUI.app'`). Its executable SHA256 is
+  `2bde96540b362eafaef6001f5b6fef37fe65e1906ca395e4377b2bbe0f5f0b23`.
+  `lipo -archs` reported arm64; `--identity` reported 0.1.0 and fixtures
+  disabled. `--verify --read-only --socket /tmp/fleet-gpui-release-ea42e85-nonexistent.sock`
+  reported disconnected and two measured local telemetry samples. Launching
+  the app with those same read-only/socket arguments produced an on-screen
+  FleetConsole window (CoreGraphics, 1156×796); input was not tested.
+- Omarchy x86_64: exported that exact committed source using `git archive`,
+  built it at `/home/algorithm/ouros-project/workspaces/.release-builds/fleet-console-ea42e85`
+  with `CARGO_TARGET_DIR` set to the previous export's `rust/target`, then
+  copied the release binary to
+  `/home/algorithm/.local/share/fleet-gpui/releases/ea42e85/fleet-gpui`.
+  Its SHA256 is
+  `3b616057051c93b7bd7858d433fd381be45db665f0e9e98f9e82fe849531685e`.
+  `file` reported x86-64 ELF; `--identity` reported 0.1.0 and fixtures
+  disabled. The same disconnected read-only `--verify` invocation reported
+  two local telemetry samples. A `systemd-run --user --collect` launch with
+  `--theme phosphor` and the same read-only/socket options produced a mapped,
+  visible, input-accepting native Wayland client (Hyprland, 737×958); input
+  and visual contents were not tested.
+- Linux app menu entry: `~/.local/share/applications/fleet-gpui-ea42e85.desktop`
+  launches the local binary with phosphor theme. The macOS bundle and Linux
+  entry are separate from installed applications and controllers. These are
+  local artifacts, not Developer ID signed, notarized, or publicly distributed;
+  Linux dynamic-library compatibility beyond this host has not been tested.
+  Neither live controller actions nor full app feature parity were verified.
+
 ## Retro GPUI companion — 2026-11-10
 
 - The phosphor design and GPUI companion were already present on main; the
