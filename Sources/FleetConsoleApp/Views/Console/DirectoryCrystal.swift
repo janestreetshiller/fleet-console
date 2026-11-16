@@ -13,7 +13,7 @@ struct DirectoryCrystal: Equatable, Sendable {
         let depth: Int
         let childDirectoryCount: Int?
         let unreadable: Bool
-        let truncated: Bool
+        let truncate
         let isSymbolicLink: Bool
         let position: CGPoint
     }
