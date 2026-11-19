@@ -110,12 +110,11 @@ struct TerminalAgentSessionTests {
             panel.windowClosed()
         }
         try await waitUntil { FileManager.default.fileExists(atPath: ready.path) }
-        // SwiftTerm can clear `running` independently of the child lifetime.
-        // Exercise that state deterministically with its public teardown API;
-        // the fixture ignores TERM and keeps running without any PTY handles.
+        // SwiftTerm 2 asks the child to terminate and keeps tracking it through
+        // its own waiter; a child that ignores the request stays live and owns
+        // nothing of the pty. Exercise the request, then stop it for real.
         agent.pty.host.terminal.process.terminate()
-        #expect(!agent.pty.host.terminal.process.running)
-        #expect(kill(pid, 0) == 0, "A closed PTY is not proof of process exit")
+        #expect(kill(pid, 0) == 0, "A termination request is not proof of process exit")
         panel.stopSelectedAgent()
         try await waitUntil { agent.pty.phase == .exited(nil) }
         #expect(kill(pid, 0) != 0)
@@ -204,8 +203,8 @@ struct TerminalAgentSessionTests {
         // Closing the owned window terminates its shell. Same-directory reopen must recover.
         window.close()
         panel.windowReopened()
-        try await waitUntil { shellHost.terminal.process.running }
-        #expect(shellHost.terminal.process.shellPid != shellPID)
+        try await waitUntil { shellHost.terminal.process.shellPid != shellPID }
+        #expect(shellHost.terminal.process.running)
     }
 
     @MainActor @Test("Shell state and a running job survive window close and a new panel",
@@ -531,8 +530,8 @@ struct TerminalAgentSessionTests {
     }
 
     @MainActor private func text(_ host: PTYHostView) -> String {
-        let terminal = host.terminal.getTerminal()
-        return (0..<terminal.rows).compactMap { terminal.getLine(row: $0)?.translateToString(trimRight: true) }.joined()
+        guard let snapshot = host.terminal.terminalContentSnapshot(region: .viewport) else { return "" }
+        return snapshot.rows.map { $0.text }.joined()
     }
 
     @MainActor private func waitUntil(_ predicate: () -> Bool) async throws {

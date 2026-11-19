@@ -54,10 +54,9 @@ final class TerminalAgentSession: Identifiable {
                 if stopRequested { return pty.launch == nil ? "Cancelled before launch" : "Stopped by operator · review work" }
                 return "Ended · outcome unverified"
             }
-            let signal = status & 0x7f
-            if signal != 0 { return "Ended · signal \(signal)" }
-            let code = (status >> 8) & 0xff
-            return "Exited \(code) · review output"
+            // SwiftTerm 2 reports the normalized exit status: the exit code,
+            // or nil for a signal-ended or unwaitable child.
+            return "Exited \(status) · review output"
         }
     }
 

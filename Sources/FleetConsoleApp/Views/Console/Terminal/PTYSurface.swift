@@ -86,8 +86,14 @@ enum TerminalFont {
 
 extension TerminalCellMetrics {
     /// Measures the cell the way SwiftTerm does: ascent + descent + leading for
-    /// the height, the advance of `W` for the width, both snapped to the backing
-    /// store so adjacent cells cannot land on a half pixel.
+    /// the height, the advance of the character `W` for the width, both snapped
+    /// to the backing store so adjacent cells cannot land on a half pixel.
+    ///
+    /// The `W` advance is looked up through the character, not a glyph name:
+    /// fonts whose glyphs are unnamed resolve a named lookup to `.notdef`,
+    /// whose advance spreads text across twice as many columns. The snap uses
+    /// rounding to match the engine, so a frame built from these metrics fits
+    /// exactly the requested grid.
     ///
     /// Re-derived rather than read back, because SwiftTerm keeps its own
     /// `cellDimension` internal and the host needs a cell *before* the first
@@ -97,10 +103,15 @@ extension TerminalCellMetrics {
     init(font: NSFont, scale: CGFloat) {
         let ctFont = font as CTFont
         let lineHeight = ceil(CTFontGetAscent(ctFont) + CTFontGetDescent(ctFont) + CTFontGetLeading(ctFont))
-        var glyph = CTFontGetGlyphWithName(ctFont, "W" as CFString)
+        var characters: [UniChar] = [0x57]
+        var glyphs: [CGGlyph] = [0]
         var advance = CGSize.zero
-        CTFontGetAdvancesForGlyphs(ctFont, .horizontal, &glyph, &advance, 1)
-        self.init(width: max(1, ceil(advance.width * scale) / scale),
+        if CTFontGetGlyphsForCharacters(ctFont, &characters, &glyphs, 1) {
+            CTFontGetAdvancesForGlyphs(ctFont, .horizontal, &glyphs, &advance, 1)
+        } else {
+            advance = ("W" as NSString).size(withAttributes: [.font: font])
+        }
+        self.init(width: max(1, (advance.width * scale).rounded() / scale),
                   height: max(1, ceil(lineHeight * scale) / scale))
     }
 }
@@ -341,21 +352,27 @@ final class PTYHostView: NSView {
         // Self-correcting second pass: if SwiftTerm's width→columns arithmetic
         // ever disagrees with our re-derived cell, one extra signal is cheaper
         // than a permanently wrong grid.
-        let emulator = terminal.getTerminal()
-        if emulator.cols != grid.columns || emulator.rows != grid.rows {
+        let dimensions = terminal.terminalDimensions
+        if dimensions.cols != grid.columns || dimensions.rows != grid.rows {
             terminal.setFrameSize(CGSize(
-                width: terminal.frame.width + CGFloat(grid.columns - emulator.cols) * cell.width,
-                height: terminal.frame.height + CGFloat(grid.rows - emulator.rows) * cell.height))
+                width: terminal.frame.width + CGFloat(grid.columns - dimensions.cols) * cell.width,
+                height: terminal.frame.height + CGFloat(grid.rows - dimensions.rows) * cell.height))
         }
         needsLayout = true
     }
 
-    /// SwiftTerm reserves the scroller's width out of the drawable area whatever
-    /// the scroller's visibility, so the columns have to be measured against what
-    /// is left. Published so the host that computes the grid measures against the
-    /// same number this view lays out against.
+    /// SwiftTerm reserves the scroller's width out of the drawable area in the
+    /// legacy style only; an overlay scroller floats above the grid. Published
+    /// so the host that computes the grid measures against the same number this
+    /// view lays out against.
     var reservedWidth: CGFloat {
-        NSScroller.scrollerWidth(for: .regular, scrollerStyle: terminal.scrollerStyle)
+        // SwiftTerm reserves the scroller out of the drawable area only in the
+        // legacy style; an overlay scroller floats above the grid, so the
+        // columns have to be measured against the full frame width.
+        if terminal.scrollerStyle == .legacy {
+            return NSScroller.scrollerWidth(for: .regular, scrollerStyle: terminal.scrollerStyle)
+        }
+        return 0
     }
 
     private func size(for grid: TerminalGrid) -> CGSize {
@@ -558,23 +575,43 @@ final class PTYSession {
             deferredLaunch = launch
             return
         }
-        generation = UUID()
+        let attempt = UUID()
+        generation = attempt
         host.apply(grid)
         self.launch = launch
-        host.terminal.startProcess(executable: launch.executable.path,
-                                   args: launch.arguments,
-                                   environment: launch.environment,
-                                   execName: launch.argv0,
-                                   currentDirectory: launch.workingDirectory.path)
-        let process = host.terminal.process
-        reaper.process = process
-        // `startProcess` reports failure by simply not running: `forkpty` failed,
-        // or `execve` did and the child already `_exit(127)`ed.
-        phase = process?.running == true ? .running : .exited(nil)
-        if phase == .running, !pendingInput.isEmpty {
-            let queued = pendingInput
-            pendingInput = []
-            queued.forEach { host.terminal.send(txt: $0) }
+        attemptSpawn(launch, attempt: attempt)
+    }
+
+    /// SwiftTerm 2 silently ignores a start while the previous session is
+    /// still winding down after a stop. The checked entry point reports that
+    /// instead of swallowing it, so a relaunch that races the wind-down retries
+    /// until the engine accepts a child or the attempt is superseded.
+    private func attemptSpawn(_ launch: Launch, attempt: UUID) {
+        let result = host.terminal.process.startProcessChecked(
+            executable: launch.executable.path,
+            args: launch.arguments,
+            environment: launch.environment,
+            execName: launch.argv0,
+            currentDirectory: launch.workingDirectory.path)
+        switch result {
+        case .success:
+            guard generation == attempt else { return }
+            phase = host.terminal.process.running ? .running : .exited(nil)
+            reaper.process = host.terminal.process
+            if phase == .running, !pendingInput.isEmpty {
+                let queued = pendingInput
+                pendingInput = []
+                queued.forEach { host.terminal.send(txt: $0) }
+            }
+        case .failure(.alreadyRunning):
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                guard let self, self.generation == attempt,
+                      self.phase == .stopping || self.phase == .exited(nil) else { return }
+                self.attemptSpawn(launch, attempt: attempt)
+            }
+        case .failure:
+            guard generation == attempt else { return }
+            phase = .exited(nil)
         }
     }
 
@@ -586,25 +623,27 @@ final class PTYSession {
     }
 
     fileprivate func childExited(status: Int32?) {
-        // SwiftTerm calls this after attempting waitpid, before clearing `running`.
+        // SwiftTerm calls this after its waiter reaps, once the previous
+        // session is fully wound down — so a deferred relaunch is safe here.
         // Stops cancel that monitor, so they finish through our reaper instead.
-        guard phase == .running else { return }
+        guard phase == .running || phase == .stopping else { return }
         reaper.childExited()
         phase = .exited(status)
         // The scrollback is the evidence for *why* it exited, so the view keeps
         // showing it and the chrome's running indicator carries the fact. The
         // notice goes into that scrollback rather than over it.
         host.terminal.feed(text: "\r\n" + PTYSession.notice(for: status) + "\r\n")
+        if let deferred = deferredLaunch {
+            deferredLaunch = nil
+            spawn(deferred)
+        }
     }
 
-    /// SwiftTerm passes the raw `wait` status through as an "exit code", so it is
-    /// decoded here rather than printed as-is.
+    /// SwiftTerm 2 reports the normalized exit status: the exit code 0 through
+    /// 255, or nil when the child ended on a signal or the wait failed.
     private static func notice(for status: Int32?) -> String {
         guard let status else { return "[process ended]" }
-        let signal = status & 0x7f
-        if signal != 0 { return "[process killed — signal \(signal)]" }
-        let code = (status >> 8) & 0xff
-        return code == 0 ? "[process exited]" : "[process exited — status \(code)]"
+        return status == 0 ? "[process exited]" : "[process exited — status \(status)]"
     }
 
     /// SwiftTerm's process delegate is not main-actor bound, but every callback

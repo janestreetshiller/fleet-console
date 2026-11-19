@@ -232,6 +232,13 @@ pub struct Client {
 impl Client {
     pub fn connect(path: &std::path::Path) -> Result<Self, ClientError> {
         let stream = UnixStream::connect(path).map_err(ClientError::Io)?;
+        Self::from_stream(stream)
+    }
+
+    /// Callers that hardened the socket before connecting — owner-only path,
+    /// connect timeout, descriptor identity — hand the stream over here. The
+    /// read deadline matches `connect` so a stuck daemon cannot pin a client.
+    pub fn from_stream(stream: UnixStream) -> Result<Self, ClientError> {
         stream
             .set_read_timeout(Some(Duration::from_secs(15)))
             .map_err(ClientError::Io)?;

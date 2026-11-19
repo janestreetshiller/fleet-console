@@ -8,7 +8,13 @@ import FleetCore
 struct DirectoryCrystalWorkspaceTests {
     @MainActor @Test("Real directory roots render behind activity and branches can expand", arguments: [false, true])
     func directorySubstrate(dark: Bool) async throws {
-        let base = URL(fileURLWithPath: ProcessInfo.processInfo.environment["FLEET_CRYSTAL_TEST_TMP"] ?? FileManager.default.temporaryDirectory.path).resolvingSymlinksInPath()
+        let rawBase = ProcessInfo.processInfo.environment["FLEET_CRYSTAL_TEST_TMP"] ?? FileManager.default.temporaryDirectory.path
+        let base: URL = {
+            guard let resolved = realpath(rawBase, nil) else { return URL(fileURLWithPath: rawBase) }
+            let path = String(cString: resolved)
+            free(resolved)
+            return URL(fileURLWithPath: path)
+        }()
         let root = base.appendingPathComponent("TEST-DATA-crystal-" + UUID().uuidString)
         let ui = root.appendingPathComponent("Sources/App/UI")
         let leaf = ui.appendingPathComponent("Components/Views")

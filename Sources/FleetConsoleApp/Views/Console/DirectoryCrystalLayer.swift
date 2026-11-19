@@ -11,11 +11,30 @@ struct DirectoryCrystalLayer: View {
     let point: (CGPoint) -> CGPoint
     let select: (String) -> Void
 
+    private var nodes: [DirectoryCrystal.Node] { crystal?.nodes ?? [] }
+
     var body: some View {
-        let nodes = crystal?.nodes ?? []
+        ZStack {
+            canvas
+            ForEach(nodes.prefix(100)) { node in
+                Button { select(node.path) } label: {
+                    Text(" ").font(.system(size: 5))
+                }
+                .buttonStyle(.plain)
+                .frame(width: 9, height: 9)
+                .opacity(0.2)
+                .position(screen(node.position))
+                .accessibilityIdentifier("directory.node." + node.path)
+                .accessibilityLabel(node.name + ", " + (node.childDirectoryCount.map { "\($0) child folders" } ?? "child count unavailable"))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var canvas: some View {
         let index = Dictionary(uniqueKeysWithValues: nodes.map { ($0.path, $0) })
         let children = Dictionary(grouping: nodes.filter { $0.parentPath != nil }, by: { $0.parentPath! })
-        Canvas { context, _ in
+        return Canvas { context, _ in
             for parent in nodes {
                 let family = (children[parent.path] ?? []).sorted {
                     atan2($0.position.y - parent.position.y, $0.position.x - parent.position.x) <
@@ -72,17 +91,6 @@ struct DirectoryCrystalLayer: View {
         }
         .accessibilityLabel("Directory structure. Straight branches are observed parent–child folders; facets group their children.")
         .accessibilityIdentifier("directory.structure")
-        .accessibilityChildren {
-            // Virtual controls avoid hundreds of live SwiftUI card views. The
-            // detail's child navigator makes every observed branch reachable.
-            ForEach(nodes.prefix(100)) { node in
-                Button { select(node.path) } label: {
-                    Text(node.name + ", " + (node.childDirectoryCount.map { "\($0) child folders" } ?? "child count unavailable"))
-                }
-                .accessibilityIdentifier("directory.node." + node.path)
-            }
-        }
-        .allowsHitTesting(false)
     }
 
     private func screen(_ p: CGPoint) -> CGPoint {
