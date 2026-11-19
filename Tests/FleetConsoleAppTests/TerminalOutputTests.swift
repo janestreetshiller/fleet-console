@@ -221,7 +221,7 @@ struct TerminalOutputTests {
         try await waitFor(terminal, containing: "READY-fleet-output")
         panel.run("printf '\\033[2J\\033[H'")
         try await settle(0.2)
-        let blank = try bitmap(terminal)
+        let blank = try bitmap(hosting)
 
         panel.run("printf 'COMMAND  fleetctl status\\nRESULT   3 services healthy\\nSTATUS   ready\\n'")
         try await waitFor(terminal, containing: "STATUS   ready")
@@ -230,7 +230,7 @@ struct TerminalOutputTests {
         // Preserve hard line breaks and all spacing inside the actual output.
         #expect(withoutCellPadding(short).contains("COMMAND  fleetctl status\nRESULT   3 services healthy\nSTATUS   ready"))
         terminal.selectNone()
-        var shortBitmap = try capture(terminal, name: "regression-short-dark")
+        var shortBitmap = try capture(hosting, name: "regression-short-dark")
         // The window server composites asynchronously; under a loaded run the
         // first snapshot can predate the output paint, so re-sample briefly.
         let renderedDeadline = Date().addingTimeInterval(2)
