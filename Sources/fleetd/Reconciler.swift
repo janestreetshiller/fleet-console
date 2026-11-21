@@ -1,9 +1,6 @@
 import Foundation
 import FleetCore
 
-/// Detects processes that are running outside the registry. An agent with shell
-/// access can always bypass `fleetctl` — this is the layer that makes the bypass
-/// loud rather than preventing it (threat model T4).
 enum Reconciler {
 
     struct Inputs {
@@ -13,9 +10,6 @@ enum Reconciler {
         var uid: uid_t = geteuid()
     }
 
-    /// Matches declared local tools against what is actually running. A tool you
-    /// declared is never "unmanaged" — you meant it to be there — so it gets a
-    /// name, a port and an uptime instead of a warning.
     static func externalServices(_ inputs: Inputs) -> (services: [ExternalService], claimedPIDs: Set<Int32>) {
         var result: [ExternalService] = []
         var claimed: Set<Int32> = []
@@ -28,7 +22,6 @@ enum Reconciler {
                                           url: known.url)
             let needle = known.match.lowercased()
 
-            // Match by command line first, then by any of its declared ports.
             let match = inputs.table.byPID.values.first { proc in
                 guard proc.uid == inputs.uid else { return false }
                 if !needle.isEmpty, proc.commandLine.lowercased().contains(needle) { return true }
@@ -45,7 +38,6 @@ enum Reconciler {
                     .map(\.port).sorted()
                 service.startedAt = parseStartTime(match.startSignature)
                 claimed.insert(match.pid)
-                // Children of the tool count as part of it, not as strays.
                 for peer in inputs.table.processes(inGroup: match.pgid) { claimed.insert(peer.pid) }
             }
             result.append(service)
@@ -53,7 +45,6 @@ enum Reconciler {
         return (result.sorted { ($0.running ? 0 : 1, $0.name) < ($1.running ? 0 : 1, $1.name) }, claimed)
     }
 
-    /// `ps -o lstart` format, e.g. "Sun Jul 27 15:33:49 2026".
     static func parseStartTime(_ signature: String) -> Date? {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -67,15 +58,11 @@ enum Reconciler {
         let managedPGIDs = Set(live.compactMap { $0.pgid })
         let managedPIDs = Set(live.compactMap { $0.pid })
 
-        // Ports that a still-registered service claims. If such a port is held by a
-        // process outside its group, the group did not die cleanly.
         var portOwners: [Int: ServiceRecord] = [:]
         for service in live {
             for port in service.declaredPorts { portOwners[port] = service }
         }
 
-        // Processes we launched in the past whose records are terminal: if one of
-        // those pids is still alive, we leaked it despite thinking we cleaned up.
         var formerByPID: [Int32: String] = [:]
         for service in inputs.services where service.state.isTerminal {
             if let pid = service.pid, let signature = service.startSignature,
@@ -86,23 +73,16 @@ enum Reconciler {
 
         var found: [String: UnmanagedProcess] = [:]
 
-        // Identity must survive a controller restart, otherwise "first seen" resets
-        // and a process that has been leaking for a day looks brand new. Swift's
-        // String.hashValue is seeded per process, so it cannot be used here.
         func key(for proc: ProcessTable.Proc) -> String {
             "\(proc.pid):\(stableHash(proc.startSignature))"
         }
 
-        // 1. Listeners with no registry record.
         for listener in inputs.table.listeners {
             guard listener.uid == inputs.uid else { continue }
             guard let proc = inputs.table.process(listener.pid) else { continue }
             guard !managedPGIDs.contains(proc.pgid), !managedPIDs.contains(proc.pid) else { continue }
-            guard !claimedPIDs.contains(proc.pid) else { continue }   // a declared local tool
+            guard !claimedPIDs.contains(proc.pid) else { continue }
             if inputs.config.ignoredPorts.contains(listener.port) { continue }
-            // Ephemeral-range listeners are short-lived helpers. Flagging them
-            // produces an event and an alert for something that is already gone by
-            // the time you look — the definition of noise.
             if inputs.config.ephemeralPortFloor > 0,
                listener.port >= inputs.config.ephemeralPortFloor { continue }
             if isIgnored(command: listener.command, commandLine: proc.commandLine, config: inputs.config) { continue }
@@ -134,21 +114,16 @@ enum Reconciler {
             }
         }
 
-        // 2. Dev-server-shaped processes that have not (yet) bound a port.
         for proc in inputs.table.byPID.values {
             guard proc.uid == inputs.uid else { continue }
             guard !managedPGIDs.contains(proc.pgid), !managedPIDs.contains(proc.pid) else { continue }
-            guard !claimedPIDs.contains(proc.pid) else { continue }   // a declared local tool
+            guard !claimedPIDs.contains(proc.pid) else { continue }
             let id = key(for: proc)
             guard found[id] == nil else { continue }
-            // A shell whose argv merely *mentions* a dev-server command is not a
-            // dev server. Without this, every `zsh -c "… http.server …"` is a
-            // false positive, and a noisy unmanaged list is an ignored one.
             guard !shellExecutables.contains(proc.executableName) else { continue }
             let haystack = proc.commandLine.lowercased()
             guard inputs.config.devServerPatterns.contains(where: { haystack.contains($0.lowercased()) }) else { continue }
             if isIgnored(command: proc.executableName, commandLine: proc.commandLine, config: inputs.config) { continue }
-            // A process whose parent is also flagged adds noise, not information.
             if let parent = inputs.table.process(proc.ppid), parent.uid == inputs.uid,
                found[key(for: parent)] != nil { continue }
 
@@ -167,7 +142,6 @@ enum Reconciler {
         return found.values.sorted { ($0.ports.first ?? 0, $0.pid) < ($1.ports.first ?? 0, $1.pid) }
     }
 
-    /// FNV-1a: deterministic across runs, unlike Swift's seeded hashValue.
     static func stableHash(_ text: String) -> String {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in text.utf8 {
@@ -181,7 +155,6 @@ enum Reconciler {
         "zsh", "bash", "sh", "dash", "fish", "tcsh", "csh", "ksh", "login", "script", "env", "xargs",
     ]
 
-    /// Allow-list, not deny-list: an unknown listener always surfaces.
     static func isIgnored(command: String, commandLine: String, config: FleetConfig) -> Bool {
         let name = command.lowercased()
         let line = commandLine.lowercased()

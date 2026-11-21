@@ -1,35 +1,15 @@
-//! The relational map: one graph joining the controller, the devices it
-//! serves, the services it supervises, the agents it routes for, the local
-//! process tree and the mounted volumes, with the needs-attention reports
-//! pinned on the node they are about.
-//!
-//! Like `views::Dashboard::build`, this is a pure function of a dashboard.
-//! Every value on a node comes from a feed that measured it; when a feed is
-//! loading, stale or disconnected, its group is left out and the note says so
-//! instead of an estimated or simulated value. The layout is deterministic:
-//! the same dashboard always produces the same coordinates, and neither the
-//! model nor the window has an animation loop.
 
 use crate::format;
 use crate::observe::{Metric, Phase, Reason};
 use crate::thresholds::Level;
 use crate::views::{Dashboard, Freshness, NodeTile, ProcessLine, ProcessRole, Severity};
 
-/// Most linked devices drawn; the note names the rest.
 pub const MAX_DEVICES: usize = 6;
-/// Most services drawn; sorted by worst CPU, so the busy ones always win.
 pub const MAX_SERVICES: usize = 10;
-/// Most processes drawn; the local tree's heaviest rows first, plus every row
-/// a drawn service owns through its pid.
 pub const MAX_PROCESSES: usize = 8;
-/// Most volumes drawn; the least headroom first.
 pub const MAX_VOLUMES: usize = 5;
-/// Most reports pinned on one node; the rest collapse into a "+k more" line.
 pub const MAX_BADGES_PER_NODE: usize = 3;
-/// Force-layout steps applied once per build. With the bounded node count
-/// this stays well under a millisecond, so a rebuild never lags.
 pub const LAYOUT_STEPS: usize = 120;
-/// Map radius in map units; the renderer scales this to the viewport.
 pub const MAP_RADIUS: f32 = 340.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,20 +35,13 @@ impl NodeKind {
     }
 }
 
-/// Why an edge exists, in the words the legend uses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EdgeKind {
-    /// A linked device the controller reports on.
     ReportsOn,
-    /// The controller supervises a managed service.
     Supervises,
-    /// The controller routes agent turns and answers.
     RoutesTo,
-    /// A mounted volume the local machine reads and writes.
     MountedOn,
-    /// A service or the controller owns this process by pid.
     Owns,
-    /// One local process started another.
     ParentOf,
 }
 
@@ -85,38 +58,28 @@ impl EdgeKind {
     }
 }
 
-/// A health report pinned on the node it is about.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapBadge {
     pub id: String,
     pub severity: Severity,
     pub title: String,
     pub detail: String,
-    /// What can be done through the controller, as `AttentionRow` words it.
     pub available: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct MapNode {
-    /// Stable across rebuilds, in `kind:identity` form, used for selection.
     pub id: String,
     pub kind: NodeKind,
     pub label: String,
-    /// One honest secondary line: what was measured, or why nothing was.
     pub meta: String,
-    /// CPU as the heat of the node, measured only where a feed measured it.
     pub cpu: Metric,
-    /// The node's worst reported band.
     pub level: Option<Level>,
-    /// Whether the node's feed is live, stale or disconnected. Devices age.
     pub freshness: Freshness,
     pub badges: Vec<MapBadge>,
-    /// Reports beyond `MAX_BADGES_PER_NODE`, so a "+k more" line is exact.
     pub badge_overflow: usize,
-    /// Layout coordinates in map units, roughly -`MAP_RADIUS`..`MAP_RADIUS`.
     pub x: f32,
     pub y: f32,
-    /// Layout velocity, used only inside one build's settle steps.
     vx: f32,
     vy: f32,
 }
@@ -126,18 +89,13 @@ pub struct MapEdge {
     pub source: String,
     pub target: String,
     pub kind: EdgeKind,
-    /// Relative activity for strokes: the target's CPU fraction when it was
-    /// measured, `None` when it was not.
     pub activity: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct RelationalMap {
-    /// In drawing order: controller, devices, services, agents, processes,
-    /// volumes. Selection indexes into this list.
     pub nodes: Vec<MapNode>,
     pub edges: Vec<MapEdge>,
-    /// Lines about groups that are not drawn and why, in feed words.
     pub notes: Vec<String>,
 }
 
@@ -147,8 +105,6 @@ impl RelationalMap {
         let mut edges: Vec<MapEdge> = Vec::new();
         let mut notes: Vec<String> = Vec::new();
 
-        // The controller at the center. Its heat is the local device tile's
-        // CPU, so the map's center is honest about the machine it runs on.
         let controller_id = "kind:controller".to_string();
         let local_tile = dash.cluster.tiles.iter().find(|t| t.is_local);
         let (controller_label, controller_meta, controller_cpu, controller_freshness) =
@@ -188,7 +144,6 @@ impl RelationalMap {
             vy: 0.0,
         });
 
-        // Linked devices other than the local one, which is the center.
         let remote_tiles: Vec<&NodeTile> = dash
             .cluster
             .tiles
@@ -237,9 +192,6 @@ impl RelationalMap {
             ));
         }
 
-        // Services, busiest CPU first so the map keeps the active ones when a
-        // controller manages more than the bound. When the controller feed is
-        // not live, its rows are last read, which the node's freshness says.
         let mut services: Vec<&crate::views::ServiceRow> = dash.services.iter().collect();
         services.sort_by(|a, b| {
             b.cpu
@@ -281,10 +233,6 @@ impl RelationalMap {
             ));
         }
 
-        // Agents, routed by the controller. Their state and runtime are the
-        // transcript's words; no CPU is invented for them. Two sessions can
-        // share a name, so the id carries the target and, still with a
-        // collision, a stable ordinal.
         let mut agent_seen: std::collections::HashMap<String, usize> = Default::default();
         for row in &dash.agents.rows {
             let mut meta = format!("{} · {}", row.state, row.runtime);
@@ -321,9 +269,6 @@ impl RelationalMap {
             });
         }
 
-        // The local process tree, reduced to the rows worth drawing. A line a
-        // drawn service owns by pid keeps that edge; the rest hang from their
-        // nearest drawn ancestor or, without one, from the controller.
         if dash.processes.phase == Phase::Live {
             let parents = parent_map(&dash.processes.lines);
             let owned: Vec<u32> = dash
@@ -353,8 +298,6 @@ impl RelationalMap {
             for &i in ranked.iter().take(MAX_PROCESSES) {
                 picks.push(i);
             }
-            // A drawn service's process row must exist, or its "owns" edge
-            // would point at nothing.
             for pid in owned {
                 if picks.len() >= MAX_PROCESSES {
                     break;
@@ -434,7 +377,6 @@ impl RelationalMap {
             ));
         }
 
-        // Volumes, least headroom first, only while storage telemetry is live.
         if dash.storage.phase == Phase::Live {
             let mut volumes: Vec<&crate::views::VolumeRow> = dash.storage.volumes.iter().collect();
             volumes.sort_by(|a, b| {
@@ -478,9 +420,6 @@ impl RelationalMap {
             ));
         }
 
-        // Needs-attention reports pinned on the node they name. A report with
-        // a service id pins to that service; the rest pin on the controller,
-        // where the operator starts from anyway.
         let mut pinned: Vec<(String, MapBadge)> = Vec::new();
         for row in &dash.attention {
             let target = row
@@ -535,12 +474,10 @@ impl RelationalMap {
         map
     }
 
-    /// Keys the window's selection state uses for the map's rows.
     pub fn selection_keys(&self) -> Vec<String> {
         self.nodes.iter().map(|n| n.id.clone()).collect()
     }
 
-    /// The number of pinned reports, including the overflowed ones.
     pub fn badge_count(&self) -> usize {
         self.nodes
             .iter()
@@ -548,8 +485,6 @@ impl RelationalMap {
             .sum()
     }
 
-    /// One force step: repulsion between every pair, springs along edges and
-    /// a small pull toward the center. The controller stays at the center.
     fn settle_step(&mut self) {
         let count = self.nodes.len();
         if count < 2 {
@@ -564,8 +499,6 @@ impl RelationalMap {
                 let (bx, by) = (fx0[j].x, fx0[j].y);
                 let mut dx = bx - ax;
                 let mut dy = by - ay;
-                // Two nodes on the same spot are unseparated along no axis;
-                // give them a deterministic axis instead of dividing by zero.
                 if dx == 0.0 && dy == 0.0 {
                     dx = if i % 2 == 0 { 1.0 } else { -1.0 };
                     dy = if i % 3 == 0 { 1.0 } else { -1.0 };
@@ -620,10 +553,7 @@ impl RelationalMap {
 }
 
 const STEP: f32 = 16.0;
-/// Speed clamp, in map units per settle step, so the bounded loop always
-/// settles instead of oscillating into floating-point overflow.
 const MAX_SPEED: f32 = 3.0;
-/// Position clamp in map units; larger excursions cannot happen.
 const BOUNDS: f32 = 1_200.0;
 
 fn group_counts(map: &RelationalMap) -> [usize; 6] {
@@ -645,7 +575,6 @@ fn kind_index(kind: NodeKind) -> usize {
     }
 }
 
-/// The zero-based slot of a node within its kind group.
 fn map_slot(map: &RelationalMap, id: &str, kind: NodeKind) -> usize {
     let Some(index) = map.nodes.iter().position(|n| n.id == id && n.kind == kind) else {
         return 0;
@@ -653,7 +582,6 @@ fn map_slot(map: &RelationalMap, id: &str, kind: NodeKind) -> usize {
     map.nodes[..index].iter().filter(|n| n.kind == kind).count()
 }
 
-/// A deterministic starting template, one group per arc around the center.
 fn template(kind: NodeKind, index: usize, counts: [usize; 6]) -> (f32, f32) {
     let total = counts[kind_index(kind)];
     let (start, end, radius) = match kind {
@@ -720,9 +648,6 @@ fn service_meta(row: &crate::views::ServiceRow) -> String {
     parts.join(" · ")
 }
 
-/// Which pids a drawn process was started by, from the depth-first tree the
-/// process view already ordered and clipped. A line's parent is the most
-/// recent open line at the depth above it.
 fn parent_map(lines: &[ProcessLine]) -> std::collections::HashMap<u32, Option<u32>> {
     let mut parents = std::collections::HashMap::new();
     let mut stack: Vec<Option<u32>> = Vec::new();
@@ -745,8 +670,6 @@ pub fn service_id(service: &str) -> String {
     format!("kind:service:{service}")
 }
 
-/// `name@target`, with an ordinal when a controller runs two sessions of one
-/// name, so selection keys and edges stay unique.
 pub fn agent_id(agent: &str, target: &str, ordinal: usize) -> String {
     let base = format!("kind:agent:{agent}@{target}");
     if ordinal == 0 {
@@ -875,13 +798,10 @@ mod tests {
             kind_of(&map, NodeKind::Service).is_empty(),
             "no services were measured, so none are drawn"
         );
-        // Local telemetry is independent of the controller, so the process
-        // tree and volumes are still drawn from the local feeds.
         assert!(
             !kind_of(&map, NodeKind::Process).is_empty() || map.notes.iter().any(|n| n.contains("process tree")),
             "local telemetry draws processes or the note says why not"
         );
-        // The selection list has one entry per node and starts at the center.
         let keys = map.selection_keys();
         assert_eq!(keys.first().map(String::as_str), Some("kind:controller"));
         assert_eq!(keys.len(), map.nodes.len());
@@ -893,8 +813,6 @@ mod tests {
 
     #[test]
     fn duplicate_agent_sessions_get_unique_node_ids() {
-        // The healthy fixture carries two sessions named codex-3; the ids
-        // must differ without inventing state.
         let map = RelationalMap::build(&healthy());
         let keys = map.selection_keys();
         let agent_keys: Vec<&String> = keys

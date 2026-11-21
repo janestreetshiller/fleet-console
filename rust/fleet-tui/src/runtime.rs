@@ -1,12 +1,3 @@
-//! The full-screen event loop.
-//!
-//! One channel carries everything that can change the screen: terminal
-//! events from an input thread blocked in `crossterm::event::read`, and wake
-//! notes from the controller and telemetry workers. The loop blocks on that
-//! channel. It wakes for input, for new data (the workers' generation
-//! counters), for the log tail's next two-second read while the tail is open,
-//! and for the moment a live feed would turn stale. There is no clock and no
-//! periodic redraw.
 
 use crate::app::{App, Command, Key, Pane};
 use crate::source::{Settings, Source};
@@ -29,10 +20,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 
-/// How often the open log tail asks for the end of the log.
 pub const TAIL_INTERVAL: Duration = Duration::from_secs(2);
-/// Upper bound on a blocking wait, so a missed wake cannot leave the screen
-/// unchanged indefinitely.
 const IDLE_CEILING: Duration = Duration::from_secs(60);
 
 pub enum Msg {
@@ -47,8 +35,6 @@ pub fn channel() -> (SyncSender<Msg>, Receiver<Msg>) {
     mpsc::sync_channel(256)
 }
 
-/// A wake note for the workers. A full channel already holds a pending
-/// wake, so a failed send loses nothing.
 pub fn wake(tx: &SyncSender<Msg>) -> Wake {
     let tx = tx.clone();
     Arc::new(move || {
@@ -56,8 +42,6 @@ pub fn wake(tx: &SyncSender<Msg>) -> Wake {
     })
 }
 
-/// Block until the controller has answered once and telemetry has two
-/// samples (CPU needs two), or until `limit` passes.
 pub fn wait_for_data(source: &Source, rx: &Receiver<Msg>, limit: Duration) {
     let deadline = Instant::now() + limit;
     while !(source.controller_answered() && source.has_telemetry_samples(2)) {
@@ -137,8 +121,6 @@ pub fn map_key(ev: KeyEvent) -> Option<Key> {
     })
 }
 
-/// Raw mode, alternate screen and optional mouse capture, undone on drop and
-/// on panic so a crash never leaves the terminal unusable.
 struct TerminalGuard {
     mouse: bool,
 }
@@ -175,8 +157,6 @@ impl Drop for TerminalGuard {
     }
 }
 
-/// Read or request the tail's log text. Returns whether anything changed and
-/// when the next read is due, if one is.
 pub fn service_tail(app: &mut App, source: &Source, now: Instant) -> (bool, Option<Instant>) {
     let Some(tail) = app.tail.as_mut() else {
         return (false, None);
@@ -198,7 +178,6 @@ pub fn service_tail(app: &mut App, source: &Source, now: Instant) -> (bool, Opti
                     });
                     changed = true;
                 } else {
-                    // The stream switched while this read was in flight.
                     tail.last_sent = None;
                 }
             }
@@ -225,7 +204,6 @@ pub fn service_tail(app: &mut App, source: &Source, now: Instant) -> (bool, Opti
     }
 }
 
-/// When a live feed would turn stale with no new data.
 fn stale_deadline(source: &Source) -> Option<Instant> {
     let now_system = SystemTime::now();
     let now = Instant::now();
@@ -338,7 +316,6 @@ pub fn run(run: Interactive<'_>, tx: SyncSender<Msg>, rx: Receiver<Msg>) -> io::
             .unwrap_or(now + IDLE_CEILING);
         let message = rx.recv_timeout(deadline.saturating_duration_since(now));
 
-        // Handle this message and anything else already queued before drawing.
         let mut pending = match message {
             Ok(m) => vec![m],
             Err(RecvTimeoutError::Timeout) => {
@@ -432,7 +409,6 @@ mod tests {
             Some(Err(e)) => assert_eq!(e, crate::source::FIXTURE_REFUSAL),
             other => panic!("expected refusal, got {other:?}"),
         }
-        // Not due yet: nothing is sent.
         let (changed, due) = service_tail(&mut app, &source, now + Duration::from_millis(500));
         assert!(!changed);
         assert_eq!(due, Some(now + TAIL_INTERVAL));

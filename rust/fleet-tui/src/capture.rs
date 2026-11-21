@@ -1,6 +1,3 @@
-//! Documentation captures: every view of one fixture scenario rendered into
-//! `TestBackend` and written as plain text, one file per view, named
-//! `<scenario>-<view>-<cols>x<rows>.txt`. Fixture builds only.
 
 use crate::app::{App, View};
 use crate::output;

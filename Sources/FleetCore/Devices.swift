@@ -1,9 +1,5 @@
 import Foundation
 
-// The machine and the network around it: host metrics, local tools the app can
-// see, and the other devices on the tailnet.
-// MARK: - Host metrics
-
 public struct HostMetrics: Codable, Sendable, Hashable {
     public var cpuPct: Double?
     public var memUsedGB: Double?
@@ -43,14 +39,6 @@ public struct HostMetrics: Codable, Sendable, Hashable {
     }
 }
 
-// MARK: - Local tools
-//
-// Long-lived tools you run yourself — a dashboard, an inference server, a driver.
-// They are not launched through the controller and never will be, but they are
-// not "unmanaged" in the sense of a leak either: you meant them to be there.
-// Declaring them turns anonymous noise into an inventory, and it means their own
-// menu-bar apps have nothing left to tell you.
-
 public struct ExternalService: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
@@ -60,7 +48,6 @@ public struct ExternalService: Codable, Sendable, Identifiable, Hashable {
     public var ports: [Int]
     public var declaredPorts: [Int]
     public var commandLine: String?
-    /// Opened when you click the row, if it has a UI.
     public var url: String?
     public var startedAt: Date?
     public var checkedAt: Date
@@ -92,8 +79,6 @@ public struct ExternalService: Codable, Sendable, Identifiable, Hashable {
     }
 }
 
-// MARK: - Devices
-
 public struct DeviceEvidence: Codable, Sendable, Hashable {
     public var icmpOK: Bool?
     public var icmpRTTms: Double?
@@ -117,7 +102,6 @@ public struct DeviceEvidence: Codable, Sendable, Hashable {
         self.isSelf = isSelf
     }
 
-    /// Reachability is only claimed when a probe actually succeeded.
     public var reachable: Bool? {
         if icmpOK == true || tcpOK == true { return true }
         if icmpOK == nil && tcpOK == nil { return nil }
@@ -127,10 +111,10 @@ public struct DeviceEvidence: Codable, Sendable, Hashable {
 }
 
 public enum DeviceHealth: String, Codable, Sendable {
-    case reachable      // a probe succeeded
-    case partial        // some probes succeeded, others failed
-    case unreachable    // probes ran and all failed
-    case unknown        // no probe has completed yet
+    case reachable
+    case partial
+    case unreachable
+    case unknown
 
     public var label: String {
         switch self {
@@ -146,22 +130,16 @@ public struct DeviceRecord: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var name: String
     public var model: String
-    /// LAN hostname or IP, optional.
     public var localHost: String?
-    /// Tailscale DNS name or magic-DNS short name.
     public var tailscaleHost: String?
     public var tailscaleIP: String?
     public var localIP: String?
-    /// TCP port used as a reachability probe (e.g. 22).
     public var probePort: Int?
     public var evidence: DeviceEvidence
     public var lastReachableAt: Date?
-    /// Services managed by *that* machine's controller, fetched read-only over SSH.
-    /// FleetConsole never controls a remote process — it only reports one.
     public var remoteServices: [ServiceRecord] = []
     public var remoteError: String?
     public var remoteCheckedAt: Date?
-    /// CPU / RAM / SSD for this machine — what the AI-Pocket badge used to show.
     public var metrics: HostMetrics = HostMetrics()
 
     public init(id: String, name: String, model: String = "", localHost: String? = nil,

@@ -1,21 +1,9 @@
 import SwiftUI
 import AppKit
 
-// The Ouros app identity, in three sizes of one idea: the badge, the badge with
-// its name and one live line, and that row as the profile card that closes a
-// sidebar. Nothing here knows about FleetConsole — the mark and the words are
-// the caller's — so every Ouros app can wear the same three pieces.
-
-/// The product's mark, on its icon plate or on nothing at all.
-///
-/// With no plate the mark is ink on whatever surface it sits on, which is how
-/// it appears inside the app: a tile of another colour in the popover header
-/// or the sidebar reads as a sticker on the surface rather than part of it.
-/// The plate is for places that show the app *as an icon*.
 struct OurosAppBadge<Mark: View>: View {
     var size: CGFloat = 28
     var plate: Color?
-    /// Handed the badge's side length; the mark sets its own margin.
     @ViewBuilder var mark: (CGFloat) -> Mark
 
     private static var rim: Color { Color.black.opacity(0.18) }
@@ -34,8 +22,6 @@ struct OurosAppBadge<Mark: View>: View {
     }
 }
 
-/// Badge, product name and one live line. The line carries state, so it takes
-/// the tone's ink when there is something wrong and stays secondary otherwise.
 struct OurosIdentityRow<Mark: View>: View {
     let title: String
     let detail: String
@@ -61,9 +47,6 @@ struct OurosIdentityRow<Mark: View>: View {
     }
 }
 
-/// The bottom-left card: who this is, and the one menu for account and app
-/// links. A card rather than a footer, so it sits inside the sidebar's margins
-/// instead of ruling a line across the whole window.
 struct OurosProfileCard<Mark: View, MenuItems: View>: View {
     let title: String
     let detail: String
@@ -96,10 +79,7 @@ struct OurosProfileCard<Mark: View, MenuItems: View>: View {
     }
 }
 
-/// FleetConsole's mark: the blackletter F, drawn as a template so it takes the
-/// surface's own ink in light and dark — quiet beside the name, never a tile.
 struct FleetBadgeMark: View {
-    /// The badge's side length.
     let size: CGFloat
     var body: some View {
         if let letter = FleetBrand.letter {
@@ -116,14 +96,8 @@ struct FleetBadgeMark: View {
     }
 }
 
-/// FleetConsole's brand asset: the blackletter F, ink on a transparent ground.
 @MainActor
 enum FleetBrand {
-    /// Looked up by hand rather than through SwiftPM's `Bundle.module`, whose
-    /// generated accessor checks the .app's root — where a signed bundle cannot
-    /// hold a resource bundle — and then a build-machine path, and traps when
-    /// both miss. `assemble-app.sh` copies the bundle into Contents/Resources;
-    /// in a development build it sits beside the executable.
     static let letter: NSImage? = {
         let bundleName = "FleetConsole_FleetConsoleApp.bundle"
         let roots = [Bundle.main.resourceURL, Bundle.main.executableURL?.deletingLastPathComponent()]

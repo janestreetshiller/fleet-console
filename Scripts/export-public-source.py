@@ -69,7 +69,6 @@ def export_revision(root, output, revision="HEAD"):
         content[destination] = git(root, "cat-file", "blob", object_id)
     content[".gitignore"] = b".build/\n.swiftpm/\nrust/target/\n.DS_Store\n*.log\n*.sqlite*\n.env*\n"
     content["SOURCE-REVISION"] = (commit + "\n").encode()
-    # No replacement, merges, history, remotes or working-tree reads.
     output.mkdir(exist_ok=False)
     hashes = {}
     for name, data in sorted(content.items()):

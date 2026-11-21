@@ -2,17 +2,6 @@ import Foundation
 import UserNotifications
 import FleetCore
 
-/// macOS notifications for agent messages.
-///
-/// Deliberately narrow: only a question awaiting an answer or a reported problem
-/// interrupts you. Status messages appear in the popover and nowhere else — an
-/// agent that chats every thirty seconds must not be able to turn itself into a
-/// notification storm.
-///
-/// Main-actor isolated: `authorized` is written by the authorization callback on
-/// whatever queue UserNotifications chose, and read by `post(_:)` on the main
-/// actor. Both call sites are already main-actor, so the write hops instead of
-/// racing the read.
 @MainActor
 enum Notifier {
     private static var authorized = false

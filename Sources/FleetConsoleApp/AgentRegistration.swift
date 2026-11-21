@@ -3,8 +3,6 @@ import Foundation
 import Observation
 import FleetCore
 
-/// Shared by the Agents pane and task ownership picker. It has no daemon client
-/// or polling task: a roster edit is only an atomic client-local file write.
 @Observable
 @MainActor
 final class AgentRegistrationModel {

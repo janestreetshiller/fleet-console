@@ -1,10 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// The popover-ramp components. The status vocabulary they draw with —
-// `StatusTone` and the `ServiceState` / `DeviceHealth` mappings into it — is in
-// `Design/StatusTone.swift`.
-
 struct StatusDot: View {
     let tone: StatusTone
     var size: CGFloat = 8
@@ -17,14 +13,6 @@ struct StatusDot: View {
     }
 }
 
-/// The colour swatch that stands in for a name: a legend chip, a heatmap hover
-/// readout, a chart series key.
-///
-/// Not a `StatusPip` and not a `ConnectionPip`. Those carry a *state* and have
-/// to be legible as the only thing on screen, which is why they own a pulse and
-/// a popover-ramp label. A swatch carries nothing on its own — it exists to tie
-/// a colour to the text beside it — so it is one dot at one size, and every
-/// legend in the console gets the same one.
 struct Swatch: View {
     let color: Color
     var size: CGFloat = ConsoleMetrics.legendDot
@@ -37,8 +25,6 @@ struct Swatch: View {
     }
 }
 
-/// The evidence row. Four independent facts, never merged: this is the component
-/// that keeps the UI honest.
 struct EvidenceChips: View {
     let evidence: Evidence
     let health: HealthSpec
@@ -74,12 +60,6 @@ struct EvidenceChips: View {
     private func chip(title: String, state: Bool?, detail: String) -> some View {
         let tone: StatusTone = state == nil ? .unknown : (state! ? .good : .bad)
         HStack(spacing: 3) {
-            // The verdict glyph, not a coloured dot. The chip's word names the
-            // *subject* — "process", "port", "health" — so with a dot here the
-            // only thing carrying pass/fail/never-ran was hue, in the one
-            // component whose whole job is to be honest about what is known.
-            // The glyph is the same size as the label beside it, so the chip's
-            // metrics are unchanged.
             Image(systemName: tone.verdict)
                 .font(FleetFont.micro.weight(.bold))
                 .foregroundStyle(tone.ink)
@@ -92,14 +72,10 @@ struct EvidenceChips: View {
     }
 }
 
-/// The leading icon for every row in the app. The tile *tint* carries status, the
-/// *symbol* carries identity — so a row is scannable at a glance without reading
-/// a word, and the two meanings never fight each other.
 struct EntityIcon: View {
     let symbol: String
     var tone: StatusTone = .neutral
     var size: CGFloat = 28
-    /// Small corner dot, used when status needs to be legible independently of tint.
     var badge: StatusTone?
 
     var body: some View {
@@ -109,11 +85,6 @@ struct EntityIcon: View {
                                        : AnyShapeStyle(tone.chipFill))
                 .frame(width: size, height: size)
                 .overlay(
-                    // `ink`, not `color`: this glyph sits on a 16% tint of its own
-                    // hue, which is the same arrangement that measured 1.98–2.95:1
-                    // in light mode for `Tag`. The tile fill still carries the tone,
-                    // so status is unchanged — the symbol just stops dissolving
-                    // into the thing behind it.
                     Image(systemName: symbol)
                         .symbolRenderingMode(.hierarchical)
                         .font(.system(size: size * FleetMetrics.iconGlyphRatio, weight: .regular))
@@ -129,27 +100,11 @@ struct EntityIcon: View {
     }
 }
 
-/// The corner verdict dot on an icon tile.
-///
-/// Extracted from `EntityIcon` when `AppGlyph` needed the same badge over a real
-/// application icon. Duplicating twenty lines of geometry would have been the
-/// start of the two-implementations-that-drift problem this design system exists
-/// to prevent — and this particular geometry has already been got wrong once,
-/// which is what the note below is about.
 struct StatusBadge: View {
     let tone: StatusTone
     let size: CGFloat
 
     var body: some View {
-        // Sits *inside* the tile's bounds. It used to be pushed out by
-        // `size * 0.08`, and because `.offset` is a draw-time transform
-        // that never changes reported layout size, the ZStack still
-        // measured `size × size` while painting 2.1–3.0pt past its own
-        // edge: unreserved overflow into the row's icon-to-text gap on
-        // every badged row, and clipped outright by any ancestor that
-        // bounds its content. Corner-anchored with no offset, the badge
-        // is contained at every size the app uses, so a badged row and
-        // an unbadged row still start on the same vertical.
         Circle()
             .fill(tone.color)
             .frame(width: size * FleetMetrics.iconBadgeRatio,
@@ -167,8 +122,6 @@ struct StatusBadge: View {
     }
 }
 
-/// Role-based symbols. What a thing *is* should not change when it becomes
-/// unhealthy — only its colour should.
 enum Iconography {
     static func runtime(command: String, commandLine: String, hasPorts: Bool) -> String {
         let haystack = (command + " " + commandLine).lowercased()
@@ -199,12 +152,6 @@ enum Iconography {
         item.severity == .critical ? "exclamationmark.octagon.fill" : "exclamationmark.triangle.fill"
     }
 
-    /// Host resources. Each silhouette is deliberately unlike the others, for the
-    /// same reason the two menu-bar items are: these four rows sit adjacent and
-    /// permanently, so they have to be told apart without reading the label.
-    /// `gpu` looks like the obvious symbol and is not available on macOS 14 —
-    /// a hexagon cluster reads as "many small parallel units" and, unlike the
-    /// square chip outline of `cpu`, cannot be confused with it at row size.
     enum Metric {
         static let cpu = "cpu"
         static let gpu = "circle.hexagongrid.fill"
@@ -295,14 +242,6 @@ struct Tag: View {
     var body: some View {
         Text(text)
             .font(FleetFont.sectionLabel)
-            // A chip is a fixed word, not a paragraph. Without these it competes
-            // for width against a row title that holds `layoutPriority(1)`, loses,
-            // and compresses — truncating to "U…", or breaking mid-word into a
-            // stack one character tall per line, which is how "Unmanaged" became a
-            // four-line block in the popover. `fixedSize` makes it refuse to
-            // compress at all, so the row's variable-length element truncates
-            // instead. That is the right loser: the title already limits to one
-            // line and its full text is in the subtitle and the tooltip.
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 5).padding(.vertical, 2)
@@ -332,10 +271,6 @@ extension View {
     }
 }
 
-/// Confirmation payload for the two destructive verbs. It carries the evidence the
-/// action is based on so a wrong target is visible *before* clicking.
-/// Tiny inline chart for a service's recent CPU / memory. Deliberately unlabelled
-/// on the axes: it shows shape and trend, and the exact number sits beside it.
 struct Sparkline: View {
     let values: [Double]
     var tone: StatusTone = .good
@@ -370,12 +305,6 @@ struct Sparkline: View {
     }
 }
 
-/// A horizontal utilisation bar with its numeral beside it.
-///
-/// `value` is optional on purpose. A rate is a difference between two samples, so
-/// there is a real moment — the first tick after launch, or a key the accelerator
-/// declined to publish — when there is no value to draw. That case renders an empty
-/// grey track and a dash, never a confident bar sitting at zero.
 struct Meter: View {
     let value: Double?
     var tone: StatusTone = .good
@@ -410,23 +339,11 @@ struct Meter: View {
     }
 }
 
-/// One column per logical core, grouped by cluster.
-///
-/// Apple Silicon schedules background work onto the efficiency cores and
-/// foreground work onto the performance ones, so a single aggregate number hides
-/// the thing you actually want to know: whether the machine is busy, or merely
-/// tidying up. Mach enumerates efficiency cores first; the ranges come from
-/// `hw.perflevel*` rather than from that assumption.
 struct CoreGrid: View {
     let values: [Double]
     let topology: CPUTopology
 
     var body: some View {
-        // Each cluster is as wide as its cores and no wider, set side by side
-        // from the leading edge. Clusters used to divide the card's width
-        // between them, which parked P halfway across the card with nothing
-        // between it and E. The wrapping grid is only the fallback for a core
-        // count that cannot fit one row.
         ViewThatFits(in: .horizontal) {
             clusters(wrapping: false)
             clusters(wrapping: true)

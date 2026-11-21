@@ -2,8 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// Ownership IDs are a local address book. Detected sessions and the mailbox
-/// remain evidence from their existing sources, never fabricated by registration.
 struct AgentsContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
@@ -46,7 +44,6 @@ struct AgentsContent: View {
             }
     }
 
-    /// Waiting-for-you first, then the newest of everything else.
     private var latestMessages: [AgentMessage] {
         var seen = Set<Int64>()
         return (model.awaitingReplies + model.recentMessages.sorted { $0.createdAt > $1.createdAt })
@@ -59,10 +56,6 @@ struct AgentsContent: View {
     }
 }
 
-/// The Agents tab: who fixes things, what the agents are saying, who they are,
-/// and the hosted fixer. No scroll view, expanding detail or inline editor —
-/// four bands that fit the 300pt body, with the full roster and the mailbox one
-/// click away in their sheets.
 struct AgentGlanceContent: View {
     var profiles: [AgentProfile]
     var sessions: [AgentSession]
@@ -151,7 +144,6 @@ struct AgentGlanceContent: View {
     }
 }
 
-/// The designated fixer and the one action it exists for.
 struct FixerRow: View {
     @Bindable var settings: FixAgentSettings
     var problemCount: Int
@@ -195,7 +187,6 @@ struct FixerRow: View {
     }
 }
 
-/// One mailbox entry on one line: who, what kind when it matters, what, when.
 struct AgentMessageLine: View {
     let message: AgentMessage
 
@@ -235,7 +226,6 @@ struct AgentMessageLine: View {
     }
 }
 
-/// Credit-funded review through the connected Ouros account.
 struct CloudAgentCard: View {
     @Bindable var billing: OurosBilling
     var review: () -> Void = {}
@@ -279,7 +269,6 @@ struct CloudAgentCard: View {
     }
 }
 
-/// The complete roster and detected sessions live outside the fixed menu budget.
 struct AgentsManagerSheet: View {
     @Bindable var model: AppModel
     var registration: AgentRegistrationModel
@@ -330,8 +319,6 @@ struct AgentsManagerSheet: View {
     }
 }
 
-/// All provided messages remain reachable, with pending replies first. Reuse the
-/// existing reply loop rather than routing into a nonexistent dashboard module.
 struct AgentsMailboxSheet: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss
@@ -379,8 +366,6 @@ struct AgentsMailboxSheet: View {
     }
 }
 
-/// The registration workflow is usable even when the controller is offline and
-/// the roster is empty. The same observable roster feeds the task composer.
 struct AgentRosterSection: View {
     var profiles: [AgentProfile]
     @Bindable var registration: AgentRegistrationModel

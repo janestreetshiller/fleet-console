@@ -1,14 +1,9 @@
-// swift-tools-version: 6.0
 import PackageDescription
 
 let package = Package(
     name: "FleetConsole",
     platforms: [.macOS(.v14)],
     dependencies: [
-        // The app's only external dependency, and it buys one thing this package
-        // cannot honestly fake: a real VT100/xterm emulator for the chrome's
-        // terminal and Yazi panels. Kept off FleetCore, fleetd and fleetctl so
-        // the daemon and CLI stay dependency-free.
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
     ],
     targets: [
@@ -30,8 +25,6 @@ let package = Package(
         .executableTarget(
             name: "FleetConsoleApp",
             dependencies: ["FleetCore", .product(name: "SwiftTerm", package: "SwiftTerm")],
-            // The blackletter F: the mark in the window and popover, and the
-            // source `Scripts/appicon/Icon.swift` draws the app icon from.
             resources: [.copy("Brand/fleet-letter.png")],
             swiftSettings: [.swiftLanguageMode(.v6)],
             plugins: [.plugin(name: "VerifyDesignCore")]

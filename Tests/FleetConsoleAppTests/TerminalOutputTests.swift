@@ -4,8 +4,6 @@ import SwiftTerm
 import Testing
 @testable import FleetConsoleApp
 
-/// Exercises the shipping TerminalPanel -> shell PTY -> SwiftTerm view path.
-/// No desktop input, daemon mutation, clipboard mutation, or synthetic feed is involved.
 @Suite(.serialized)
 struct TerminalOutputTests {
     @MainActor
@@ -44,8 +42,6 @@ struct TerminalOutputTests {
             let raw = try String(contentsOf: path, encoding: .utf8)
             try #require(raw.contains("TEST DATA:"), "Source formatter fixtures must identify their test content.")
             window.appearance = NSAppearance(named: .darkAqua)
-            // cat streams the bytes produced by the Rust production formatter.
-            // This verifies rendering, not model admission or inference success.
             panel.run("printf '\\033[2J\\033[H'; /bin/cat " + shellQuote(path.path)
                 + "; printf '\\nFORMATTER-DONE:" + name + "\\n'")
             try await waitFor(terminal, containing: "FORMATTER-DONE:" + name)
@@ -67,7 +63,6 @@ struct TerminalOutputTests {
                 #expect(output.contains("Preparing proposal"))
             case "wrapped":
                 let paragraph = String(repeating: "Evidence, command, result and status remain readable with every original word preserved. ", count: 5)
-                // SwiftTerm's existing selection trims line-ending padding.
                 #expect(output.contains(paragraph.trimmingCharacters(in: .whitespaces)))
                 #expect(output.contains("    Indented evidence stays indented."))
                 #expect(output.contains("/a/long/path/whose/full/content/must/stay/copyable/without/truncation"))
@@ -139,8 +134,6 @@ struct TerminalOutputTests {
         panel.run("stty -echo; if [ -n \"$ZSH_VERSION\" ]; then unsetopt zle; fi; PS1=''; PS2=''; RPROMPT=''; printf '\\033[2J\\033[HAGENT-READY\\n'")
         try await waitFor(terminal, containing: "AGENT-READY")
         let questionArgument = styled ? "--prompt-file " + shellQuote(promptFile.path) : shellQuote(prompt)
-        // Keep the actual CLI's inference lock and controller discovery out of
-        // the operator's home. Only the owned loopback response is exercised.
         let command = "printf '\\033[2J\\033[H'; HOME=" + shellQuote(directory.path)
             + " FLEET_AGENT_LLM_URL=" + shellQuote(endpoint)
             + " FLEET_AGENT_LEDGER=" + shellQuote(directory.appendingPathComponent("meter.txt").path)
@@ -205,7 +198,7 @@ struct TerminalOutputTests {
         window.appearance = NSAppearance(named: .darkAqua)
         window.contentView = hosting
         window.orderBack(nil)
-        defer { window.close(); killServer(socket) } // Closes and reaps only this test's owned shell.
+        defer { window.close(); killServer(socket) }
         panel.resize(to: grid)
         panel.activate(context: ToolContext())
         try await settle(0.15)
@@ -215,8 +208,6 @@ struct TerminalOutputTests {
         #expect(terminal.process.running)
         #expect(!terminal.isUsingMetalRenderer)
 
-        // Standardize only this owned shell. Its login startup still ran through
-        // TerminalPanel.activate; no profile or user preference is changed.
         panel.run("stty -echo; if [ -n \"$ZSH_VERSION\" ]; then unsetopt zle; fi; PS1=''; PS2=''; RPROMPT=''; printf '\\033[2J\\033[HREADY-fleet-output\\n'")
         try await waitFor(terminal, containing: "READY-fleet-output")
         panel.run("printf '\\033[2J\\033[H'")
@@ -226,13 +217,9 @@ struct TerminalOutputTests {
         panel.run("printf 'COMMAND  fleetctl status\\nRESULT   3 services healthy\\nSTATUS   ready\\n'")
         try await waitFor(terminal, containing: "STATUS   ready")
         let short = selectedText(terminal)
-        // Cleared cells may copy as trailing padding depending on the SDK.
-        // Preserve hard line breaks and all spacing inside the actual output.
         #expect(withoutCellPadding(short).contains("COMMAND  fleetctl status\nRESULT   3 services healthy\nSTATUS   ready"))
         terminal.selectNone()
         var shortBitmap = try capture(hosting, name: "regression-short-dark")
-        // The window server composites asynchronously; under a loaded run the
-        // first snapshot can predate the output paint, so re-sample briefly.
         let renderedDeadline = Date().addingTimeInterval(2)
         while changedPixels(blank, shortBitmap) <= 500, Date() < renderedDeadline {
             try await settle(0.05)
@@ -261,7 +248,6 @@ struct TerminalOutputTests {
         #expect(errorRow.cells[0].attribute.fg == .ansi256(code: 1))
         _ = try capture(terminal, name: "regression-error-dark")
 
-        // A sleeping live shell creates a real chunk boundary in the PTY reader.
         panel.run("printf 'STREAM-BEGIN: first'; /bin/sleep 1.5; printf ' + second\\nSTREAM-END\\n'")
         try await waitFor(terminal, containing: "STREAM-BEGIN: first", timeout: 0.35)
         #expect(!bufferText(terminal).contains("STREAM-END"))
@@ -285,9 +271,6 @@ struct TerminalOutputTests {
         try await waitFor(terminal, containing: "SCROLL-READY")
         _ = try capture(terminal, name: "regression-scrollback-dark")
         try await waitFor(terminal, containing: "STREAM-WHILE-SCROLLED")
-        // The persistent multiplexer owns the scrollback. History scrolled out
-        // of the visible pane stays in the server, streaming does not disturb
-        // it, and the outer view keeps rendering the live tail.
         let history = try paneHistory(socket: socket)
         for index in 1...36 {
             #expect(history.contains(String(format: "SCROLL %02d: preserved output", index)))
@@ -296,8 +279,6 @@ struct TerminalOutputTests {
         #expect(history.contains("STREAM-WHILE-SCROLLED"))
         terminal.selectNone()
 
-        // Narrow resize goes through the production coalesced-grid endpoint,
-        // which deliberately avoids a DECSTR reset of the running emulator.
         panel.run("printf '\\033[?1hMODE-READY\\n'")
         try await waitFor(terminal, containing: "MODE-READY")
         var state = try #require(terminal.terminalContentSnapshot(region: .viewport)).inputState
@@ -320,8 +301,6 @@ struct TerminalOutputTests {
         var agentErrorOutput: String?
         if let binary = ProcessInfo.processInfo.environment["FLEET_TERMINAL_AGENT_BINARY"] {
             try #require(FileManager.default.isExecutableFile(atPath: binary))
-            // Isolate CLI presentation from the separate narrow-resize case;
-            // preserve its raw selection in the receipt for before/after review.
             panel.resize(to: grid)
             try await waitGrid(terminal, columns: grid.columns, rows: grid.rows)
             try await settle(0.1)
@@ -330,9 +309,6 @@ struct TerminalOutputTests {
                 + " propose 'inspect memory'; fleet_output_status=$?; printf '\\nAGENT-EXIT:%s\\n' \"$fleet_output_status\"")
             try await waitFor(terminal, containing: "AGENT-EXIT:1")
             let error = "fleet-agent: inference is not configured: set FLEET_AGENT_LLM_URL to an already running loopback model endpoint"
-            // The installed baseline copies this diagnostic with one physical
-            // wrap break at the original 56-column grid. Preserve that exact
-            // copy behavior while checking every original diagnostic character.
             let errorRows = [
                 "fleet-agent: inference is not configured: set FLEET_AGEN",
                 "T_LLM_URL to an already running loopback model endpoint"
@@ -381,9 +357,6 @@ struct TerminalOutputTests {
     }
 
     @MainActor private func waitGrid(_ terminal: LocalProcessTerminalView, columns: Int, rows: Int) async throws {
-        // The engine's pixel-snapped cells can leave the requested grid one
-        // column short on the first pass; the host's self-correcting second
-        // pass settles it on the next layout.
         let deadline = Date().addingTimeInterval(3)
         while !(terminal.terminalDimensions.cols == columns && terminal.terminalDimensions.rows == rows), Date() < deadline {
             try await settle(0.03)
@@ -418,8 +391,6 @@ struct TerminalOutputTests {
         text.replacingOccurrences(of: " +(?=\\n|$)", with: "", options: .regularExpression)
     }
 
-    /// The multiplexer, not the emulator, owns scrollback once the shell runs
-    /// in a persistent tmux server; its capture is the durable record.
     private func paneHistory(socket: String) throws -> String {
         let tmux = try #require(ToolBinary.resolve("tmux"))
         let process = Process()
@@ -448,13 +419,10 @@ struct TerminalOutputTests {
         let deadline = Date().addingTimeInterval(timeout)
         while !bufferText(view).contains(marker), Date() < deadline { try await settle(0.01) }
         try #require(bufferText(view).contains(marker), "Missing live PTY output: \(marker)")
-        try await settle(0.04) // Let the main-queue PTY delivery and display timer execute.
+        try await settle(0.04)
     }
 
     @MainActor private func settle(_ duration: TimeInterval) async throws {
-        // LocalProcess delivers stdout on DispatchQueue.main. A nested run loop
-        // inside a synchronous main-actor test cannot drain that GCD delivery;
-        // suspending the test lets the real PTY bridge feed the terminal view.
         try await Task.sleep(for: .seconds(duration))
     }
 
@@ -470,14 +438,10 @@ struct TerminalOutputTests {
     @MainActor private func bitmap(_ view: NSView) throws -> NSBitmapImageRep {
         let rep = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
         if let context = NSGraphicsContext(bitmapImageRep: rep), let layer = view.layer {
-            // The engine paints through a frame driver into its own layers; a
-            // layer-tree render is the honest raster regardless of window
-            // occlusion, which view-cacheDisplay cannot see past.
             layer.render(in: context.cgContext)
         } else {
             view.cacheDisplay(in: view.bounds, to: rep)
         }
-        // An independent snapshot makes blank/output pixel comparison meaningful.
         let png = try #require(rep.representation(using: .png, properties: [:]))
         return try #require(NSBitmapImageRep(data: png))
     }

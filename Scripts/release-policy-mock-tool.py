@@ -53,8 +53,6 @@ elif name == "cargo":
     binary.parent.mkdir(parents=True, exist_ok=True)
     binary.write_text("TEST DATA: fleet-agent executable\n")
 elif name == "git":
-    # Packaging fixtures have no source repository. Never run a system Git shim
-    # (which can initialize Xcode tooling) to obtain a synthetic revision.
     raise SystemExit(1)
 elif name == "ditto":
     if not Path(args[-2]).resolve().is_relative_to(root):

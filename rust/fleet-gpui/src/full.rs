@@ -1,7 +1,3 @@
-//! The full window: six views over the same dashboard, tabs across the top
-//! as in `design/tui.html`, the connection banner whenever the controller is
-//! not live, an activity strip with action outcomes, and the confirmation
-//! step for destructive actions.
 
 use crate::app::{self, Hub};
 use crate::feeds::Built;
@@ -29,14 +25,9 @@ const MAP_CELL: f32 = 10.0;
 const MAP_GAP: f32 = 2.0;
 const MAP_ROWS: usize = 3;
 const LOG_LINES: usize = 40;
-/// Header, tabs, banners, the activity strip and the key hints above and
-/// below the map panel. The map sizes itself to what is left of the window.
 const MAP_CHROME: f32 = 190.0;
-/// The legend and the notes strip at the bottom of the map panel.
 const MAP_FOOT: f32 = 64.0;
-/// Clear space around the graph so labels never touch the panel edge.
 const MAP_MARGIN: f32 = 90.0;
-/// The width of every clickable node label.
 const MAP_LABEL_W: f32 = 140.0;
 
 pub struct FullView {
@@ -48,8 +39,6 @@ pub struct FullView {
     _subscriptions: Vec<Subscription>,
 }
 
-/// GPUI keystroke to state-machine key. Modified keys other than the quit
-/// chord are left for the system.
 pub fn map_key(keystroke: &Keystroke) -> Option<Key> {
     let m = &keystroke.modifiers;
     if (m.platform || m.control) && keystroke.key == "q" {
@@ -393,8 +382,6 @@ impl FullView {
             .into_any_element()
     }
 
-    // ---- Overview ---------------------------------------------------------
-
     fn overview(&self, dash: &Dashboard, width: f32, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
         let s = &dash.cluster.summary;
@@ -485,7 +472,6 @@ impl FullView {
             Freshness::Stale => state_text.push_str(", stale"),
             Freshness::Disconnected => state_text.push_str(", controller disconnected"),
         }
-        // Group unavailable gauges by reason: "cpu, mem, gpu: node offline".
         let mut reasons: Vec<(String, Vec<&str>)> = Vec::new();
         for g in t.gauges.iter().filter(|g| g.label != "net") {
             if let Some(reason) = g.metric.reason() {
@@ -659,8 +645,6 @@ impl FullView {
             )
     }
 
-    // ---- Processes --------------------------------------------------------
-
     fn processes(&self, dash: &Dashboard, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
         let p = &dash.processes;
@@ -757,8 +741,6 @@ impl FullView {
             )
             .into_any_element()
     }
-
-    // ---- Services ---------------------------------------------------------
 
     fn services(&self, built: &Built, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
@@ -862,7 +844,6 @@ impl FullView {
             (ServiceCommand::Renew, "renew 30m  n"),
             (ServiceCommand::Logs, "logs  t"),
         ];
-        // Refusal reasons, grouped so a shared reason prints once.
         let mut refusals: Vec<(String, Vec<&str>)> = Vec::new();
         for (command, _) in commands {
             if let Control::Refused(reason) = command.control(row) {
@@ -980,8 +961,6 @@ impl FullView {
                     }),
             )
     }
-
-    // ---- Agents -----------------------------------------------------------
 
     fn agents(&self, dash: &Dashboard, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
@@ -1106,8 +1085,6 @@ impl FullView {
             .into_any_element()
     }
 
-    // ---- Storage ----------------------------------------------------------
-
     fn storage(&self, built: &Built, width: f32, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
         let st = &built.dashboard.storage;
@@ -1139,8 +1116,6 @@ impl FullView {
                 .child(largest_panel)
                 .into_any_element();
         }
-        // Proportional map: blocks per volume by total bytes, used blocks
-        // colored by the volume's band, one empty block between volumes.
         let bytes: Vec<(u64, u64)> = st
             .volumes
             .iter()
@@ -1268,8 +1243,6 @@ impl FullView {
             .into_any_element()
     }
 
-    // ---- Attention --------------------------------------------------------
-
     fn attention(&self, dash: &Dashboard, cx: &mut Context<Self>) -> AnyElement {
         let c = self.colors;
         if dash.attention.is_empty() {
@@ -1379,13 +1352,6 @@ impl FullView {
             .into_any_element()
     }
 
-
-    // ---- Map --------------------------------------------------------
-
-    /// The relational map: the controller at the center, devices, services,
-    /// agents, processes and volumes around it, laid out once per dashboard
-    /// by `RelationalMap`. Edges and node plates are canvas strokes; labels
-    /// are clickable overlays; the inspector explains the selected node.
     fn map_view(
         &mut self,
         dash: &Dashboard,
@@ -1395,16 +1361,11 @@ impl FullView {
         cx: &mut Context<Self>,
     ) -> AnyElement {
         let c = self.colors;
-        // The map opens with its first node selected so the inspector has
-        // something honest to show from the first frame, the way the Agents
-        // view prefers an open question.
         if !map.nodes.is_empty() && self.ui.selected(View::Map, dash).is_none() {
             self.ui.select(View::Map, 0, dash);
         }
         let selected = self.ui.selected(View::Map, dash);
         let accents = MapAccents::for_colors(&c);
-        // Only fog glass draws translucent chrome; phosphor and paper keep
-        // solid fills and full-color accents.
         let edge_alpha = |accent: Hsla| c.glass().map(|g| g.edge(accent)).unwrap_or(accent);
         let glow_alpha = |accent: Hsla| c.glass().map(|g| g.glow(accent)).unwrap_or(accent);
 
@@ -1412,8 +1373,6 @@ impl FullView {
         let panel_h = (f32::from(window.viewport_size().height) - MAP_CHROME).clamp(300.0, 680.0);
         let graph_h = panel_h - MAP_FOOT;
 
-        // Fit the settled layout into the drawing area. The margin leaves
-        // room for the labels under the nodes.
         let extent = map
             .nodes
             .iter()
@@ -1429,9 +1388,6 @@ impl FullView {
             .map(|n| (panel_w / 2.0 + n.x * scale, graph_h / 2.0 + n.y * scale))
             .collect();
 
-        // Paint values precomputed here so the canvas closure only paints:
-        // for each node its disc radius, its plate color, the glow behind it
-        // and, while the level is warning or critical, its level ring.
         let rings: Vec<Option<Hsla>> = map
             .nodes
             .iter()
@@ -1449,9 +1405,6 @@ impl FullView {
                 (node_radius(node.kind), accent, glow_alpha(accent))
             })
             .collect();
-        // Edges resolved to node indexes, in map order, with the overlay
-        // color for the activity stroke: the target's accent when its feed
-        // measured activity, `None` where it did not.
         let edges: Vec<(usize, usize, EdgeKind, Option<f64>)> = map
             .edges
             .iter()
@@ -1471,7 +1424,6 @@ impl FullView {
                     .map(|to| edge_alpha(accents.map_accent(map.nodes[to].kind)))
             })
             .collect();
-        // The selection ring, drawn for whichever node is selected now.
         let selected_ring: Option<(usize, Vec<(f32, f32)>)> = selected.map(|index| {
             let node = &map.nodes[index];
             let radius = node_radius(node.kind) + 6.0;
@@ -1509,11 +1461,6 @@ impl FullView {
                         let bright = c.bright;
                         move |bounds, _, window, _| {
                             let o = bounds.origin;
-                            // Edges first, under the node plates. The base
-                            // stroke's weight follows the edge kind; the
-                            // activity overlay rides on top only where a
-                            // feed measured it, so an unmeasured edge never
-                            // reads as active.
                             for (index, (from, to, kind, activity)) in
                                 edges.iter().enumerate()
                             {
@@ -1548,8 +1495,6 @@ impl FullView {
                                     }
                                 }
                             }
-                            // Node plates: the soft glow, the disc, the
-                            // level ring and the selection ring.
                             for (i, (radius, accent, glow)) in plates.iter().enumerate() {
                                 let p = points[i];
                                 ui::disc(window, o, p, radius + 7.0, *glow);
@@ -1588,8 +1533,6 @@ impl FullView {
                 let label_x = (x - MAP_LABEL_W / 2.0).clamp(2.0, panel_w - MAP_LABEL_W - 2.0);
                 let label_y = (y + node_radius(node.kind) + 4.0)
                     .min((graph_h - 34.0).max(2.0));
-                // The worst pinned report's word rides on the label, so the
-                // dot of severity never has to travel without its word.
                 let severity = node.badges.iter().map(|b| b.severity).max_by_key(|s| match s {
                     Severity::Critical => 2,
                     Severity::Warning => 1,
@@ -1661,8 +1604,6 @@ impl FullView {
                     })
             }));
 
-        // The legend names every line shape and hue with the word it stands
-        // for; color never travels alone.
         let legend = div()
             .flex()
             .flex_wrap()
@@ -1706,7 +1647,6 @@ impl FullView {
                 }),
             );
 
-        // The notes say which groups are not drawn and why, in feed words.
         let notes = div()
             .flex()
             .flex_col()
@@ -1735,9 +1675,6 @@ impl FullView {
             .child(legend)
             .child(notes);
 
-        // The inspector explains the selected node: its kind, heat, level,
-        // freshness and the reports pinned on it. `enter` opens and closes
-        // it over the selection.
         let inspector = selected
             .and_then(|index| map.nodes.get(index))
             .filter(|_| self.ui.inspecting)
@@ -1895,8 +1832,6 @@ impl FullView {
     }
 }
 
-/// Node plate sizes. The controller is the big center disc; groups get
-/// smaller toward the periphery so the map reads from the center out.
 fn node_radius(kind: NodeKind) -> f32 {
     match kind {
         NodeKind::Controller => 14.0,
@@ -1908,8 +1843,6 @@ fn node_radius(kind: NodeKind) -> f32 {
     }
 }
 
-/// Why a node's feed is not current, in the words the other views use. The
-/// current feed needs no word: the values on the node speak for it.
 fn freshness_words(freshness: Freshness) -> Option<&'static str> {
     match freshness {
         Freshness::Current => None,

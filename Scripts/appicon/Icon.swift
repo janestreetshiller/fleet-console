@@ -1,25 +1,12 @@
 import AppKit
 import Foundation
 
-// FleetConsole's app icon: the blackletter F printed on a sheet of paper.
-//
-// The F is `Sources/FleetConsoleApp/Brand/fleet-letter.png` — the same file the
-// window and the popover draw their mark from — so the Finder icon and the
-// in-app mark are one letter, not two drawings of one. It is ink on a
-// transparent ground, so the plate supplies the paper and the icon stays crisp
-// on any background the Dock or Finder puts behind it. Every size is drawn at
-// its own scale rather than downsampled from 1024.
-
 guard CommandLine.arguments.count > 2,
       let letter = NSImage(contentsOfFile: CommandLine.arguments[2]) else {
     FileHandle.standardError.write("usage: Icon.swift <iconset dir> <fleet-letter.png>\n".data(using: .utf8)!)
     exit(1)
 }
 
-// MARK: - Plate
-
-/// A superellipse. `NSBezierPath(roundedRect:)` draws circular arcs, which read
-/// visibly pinched against macOS's own continuous corners at 512pt and up.
 func squircle(in rect: CGRect, n: CGFloat = 5) -> NSBezierPath {
     let path = NSBezierPath()
     let a = rect.width / 2, b = rect.height / 2
@@ -35,7 +22,6 @@ func squircle(in rect: CGRect, n: CGFloat = 5) -> NSBezierPath {
     return path
 }
 
-/// macOS ships app icons as an 824pt plate inside a 1024pt canvas.
 func plateRect(canvas: CGFloat) -> CGRect {
     let inset = (canvas * 200 / 1024 / 2).rounded()
     return CGRect(x: inset, y: inset, width: canvas - inset * 2, height: canvas - inset * 2)
@@ -44,8 +30,6 @@ func plateRect(canvas: CGFloat) -> CGRect {
 func rgb(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
     NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: a)
 }
-
-// MARK: - Drawing helpers
 
 func clipped(to path: NSBezierPath, _ body: () -> Void) {
     NSGraphicsContext.saveGraphicsState()
@@ -72,19 +56,14 @@ func gradient(_ colors: [NSColor], at locations: [CGFloat]? = nil,
     g.draw(in: rect, angle: angle)
 }
 
-// MARK: - Palette
-
 let paperTop = rgb(251, 247, 238)
 let paperBottom = rgb(239, 231, 216)
-
-// MARK: - The icon
 
 func drawIcon(canvas: CGRect) {
     let c = canvas.width
     let rect = plateRect(canvas: c)
     let plate = squircle(in: rect)
 
-    // Lifted off the desktop the way every macOS icon plate is.
     shadowed(c * 0.022, -c * 0.009, rgb(0, 0, 0, 0.30)) {
         paperBottom.setFill()
         plate.fill()
@@ -106,8 +85,6 @@ func drawIcon(canvas: CGRect) {
     }
 }
 
-// MARK: - Output
-
 func render(size: CGFloat) -> NSBitmapImageRep {
     let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(size), pixelsHigh: Int(size),
                                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
@@ -123,8 +100,6 @@ func render(size: CGFloat) -> NSBitmapImageRep {
     return rep
 }
 
-/// Every slot `iconutil` expects. Each one is *drawn* at its own size rather
-/// than downsampled from 1024, which is the whole point of the detail ramp.
 let slots: [(String, CGFloat)] = [
     ("icon_16x16.png", 16), ("icon_16x16@2x.png", 32),
     ("icon_32x32.png", 32), ("icon_32x32@2x.png", 64),

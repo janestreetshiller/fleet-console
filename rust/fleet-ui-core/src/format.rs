@@ -1,4 +1,3 @@
-//! Text forms shared by both clients. Unavailable values render as `--`.
 
 use crate::observe::Metric;
 
@@ -42,7 +41,6 @@ pub fn rate(metric: Metric) -> String {
     }
 }
 
-/// `3d 4h`, `14m`, `42s`. Two units at most, matching `Fmt.duration` in Swift.
 pub fn duration(seconds: f64) -> String {
     if !seconds.is_finite() || seconds < 0.0 {
         return UNAVAILABLE.to_string();
@@ -60,7 +58,6 @@ pub fn duration(seconds: f64) -> String {
     }
 }
 
-/// `12s ago`, `4m ago`; `in 20m` for a future time such as a lease expiry.
 pub fn relative(then: f64, now: f64) -> String {
     let delta = now - then;
     if delta >= 0.0 {
@@ -83,7 +80,6 @@ pub fn ports(ports: &[i64]) -> String {
     }
 }
 
-/// Clip to a display width in characters, never splitting a code point.
 pub fn clip(text: &str, width: usize) -> String {
     if text.chars().count() <= width {
         return text.to_string();

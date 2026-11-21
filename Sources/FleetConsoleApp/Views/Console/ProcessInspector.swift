@@ -2,18 +2,6 @@ import SwiftUI
 import FleetCore
 import Darwin
 
-// Inspector: one process, deeply.
-//
-// Everything here is gathered the same way the rest of the app gathers facts:
-// Mach/libproc for what the kernel will tell an unprivileged peer, `ps`/`lsof`
-// for the rest. What macOS will not tell us — another user's environment, a
-// root daemon's sockets — is labelled "not collected" rather than left blank,
-// because a blank panel reads as a bug and a label reads as a policy.
-
-/// The kernel's account of one process, via `proc_pidinfo(PROC_PIDTASKINFO)`.
-/// Available for any process this user can see; thread *names* would need
-/// `task_threads`, which the kernel quite reasonably refuses for other users'
-// tasks.
 struct TaskInfo: Equatable {
     var residentBytes: UInt64
     var virtualBytes: UInt64
@@ -53,7 +41,6 @@ struct ProcessInspector: View {
 
     private var row: ProcessRow? { model.processes.row(pid) }
 
-    /// The service that owns this pid, if the controller launched it.
     private var owningService: ServiceRecord? {
         model.activeServices.first { $0.record.pid == pid || $0.record.pgid == pid }?.record
             ?? model.activeServices.first { $0.record.pgid == row?.pgid }?.record
@@ -97,8 +84,6 @@ struct ProcessInspector: View {
         }
     }
 
-    // MARK: Header
-
     private func header(_ row: ProcessRow) -> some View {
         InspectorHeader(symbol: Iconography.runtime(command: row.name,
                                                     commandLine: row.commandLine,
@@ -114,8 +99,6 @@ struct ProcessInspector: View {
         }
     }
 
-    // MARK: Identity
-
     private func identityCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Identity") {
             InspectorLine(key: "PID", value: "\(row.pid)", mono: true)
@@ -126,8 +109,6 @@ struct ProcessInspector: View {
             InspectorLine(key: "Command", value: row.commandLine, mono: true, wrap: true)
         }
     }
-
-    // MARK: Activity
 
     private func activityCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Activity") {
@@ -148,12 +129,9 @@ struct ProcessInspector: View {
         }
     }
 
-    // MARK: Tree
-
     private func treeCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Process Tree") {
             let ancestry = model.processes.ancestry(of: row)
-            // Root-most ancestor first: [grandparent, parent], depth = position.
             let lineage = Array(ancestry.reversed())
             ForEach(Array(lineage.indices), id: \.self) { index in
                 treeLine(lineage[index], depth: index, isCurrent: false)
@@ -175,9 +153,6 @@ struct ProcessInspector: View {
     private func treeLine(_ row: ProcessRow, depth: Int, isCurrent: Bool) -> some View {
         Button { select(pid: row.pid) } label: {
             HStack(spacing: 6) {
-                // Filled for you-are-here, hollow for the rest. Shapes rather than
-                // ● / ○ glyphs, which sat on the text baseline and drifted with the
-                // font's own metrics.
                 Group {
                     if isCurrent {
                         Circle().fill(Color.accentColor)
@@ -208,8 +183,6 @@ struct ProcessInspector: View {
         NotificationCenter.default.post(name: .init("com.fleetconsole.console.selectPID"),
                                         object: nil, userInfo: ["pid": pid])
     }
-
-    // MARK: Network
 
     private func networkCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Network") {
@@ -268,8 +241,6 @@ struct ProcessInspector: View {
         }
     }
 
-    // MARK: Environment
-
     @ViewBuilder
     private var environmentCard: some View {
         InspectorCard(title: "Environment") {
@@ -292,15 +263,10 @@ struct ProcessInspector: View {
         }
     }
 
-    // MARK: Actions
-
     private func actionsCard(_ row: ProcessRow) -> some View {
         InspectorCard(title: "Actions") {
             Button("Investigate with agent") { model.investigate(.process(row, model: model)) }
             if let service = owningService, let refusal = service.signalRefusal {
-                // Claimed: supervised, reported on, and deliberately without a
-                // single control. The sentence is the card's whole content, which
-                // is the honest shape — there is nothing to press.
                 Text(refusal)
                     .font(ConsoleFont.subtitle)
                     .foregroundStyle(.secondary)
@@ -348,20 +314,7 @@ struct ProcessInspector: View {
     }
 }
 
-// MARK: - Shared inspector primitives
-
-/// The block at the top of every inspector: what you are looking at, and the one
-/// fact that qualifies it.
-///
-/// There were five of these, hand-built, and they had already drifted — two
-/// spacings, three subtitle fonts, and a title that truncated in one and wrapped
-/// in none. Same reason `FleetRowLabel` exists: the header is chrome, and chrome
-/// belongs to one implementation.
 struct InspectorHeader<Accessory: View>: View {
-    /// How the qualifying line under the title is rendered. The distinction is
-    /// semantic, not cosmetic — a state word is coloured by the tone, an
-    /// identifier is monospaced because you will compare it character by
-    /// character, and a quantity is the headline fact so it keeps its weight.
     enum Subtitle {
         case status
         case identifier
@@ -380,9 +333,6 @@ struct InspectorHeader<Accessory: View>: View {
         HStack(alignment: .top, spacing: 10) {
             EntityIcon(symbol: symbol, tone: tone, size: ConsoleMetrics.iconInspector)
             VStack(alignment: .leading, spacing: 2) {
-                // Wraps rather than truncates: the name of the thing under
-                // inspection is the one string on the panel that must survive a
-                // narrow column intact.
                 Text(title)
                     .font(ConsoleFont.cardTitle)
                     .lineLimit(2)
@@ -432,8 +382,6 @@ extension InspectorHeader where Accessory == EmptyView {
     }
 }
 
-/// The inspector's card: one titled group of facts. Same elevation treatment
-/// as content-column cards, tighter padding for the narrower column.
 struct InspectorCard<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
@@ -452,7 +400,6 @@ struct InspectorCard<Content: View>: View {
     }
 }
 
-/// One key/value line inside an inspector card.
 struct InspectorLine: View {
     let key: String
     let value: String
@@ -473,15 +420,11 @@ struct InspectorLine: View {
                 .fixedSize(horizontal: false, vertical: wrap)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                // A single-line value in a 280pt column truncates, and a
-                // truncated path or command is not a fact. Selectable already,
-                // now also readable without selecting it.
                 .help(value)
         }
     }
 }
 
-/// Compact bordered action used inside the actions card.
 struct InspectorActionButton: View {
     let title: String
     let symbol: String

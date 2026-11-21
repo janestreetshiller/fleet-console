@@ -1,8 +1,6 @@
 import Foundation
 import Darwin
 
-/// A bounded metadata observation, not a dependency graph. Every branch is an
-/// observed immediate directory relationship; exclusions are reported separately.
 struct DirectoryCrystal: Equatable, Sendable {
     struct Node: Identifiable, Equatable, Sendable {
         var id: String { path }
@@ -30,8 +28,6 @@ struct DirectoryCrystal: Equatable, Sendable {
     let truncated: Bool
     let issues: [String]
 
-    /// Automatic workspace discovery avoids privacy prompts. A folder chosen
-    /// through the native picker is an explicit metadata scope, not an OS grant.
     static func requiresExplicitSelection(_ path: String, approvedRoots: Set<String> = []) -> Bool {
         if approvedRoots.contains(where: { path == $0 || path.hasPrefix($0 == "/" ? "/" : $0 + "/") }) { return false }
         let parts = path.split(separator: "/")
@@ -93,14 +89,10 @@ struct DirectoryCrystal: Equatable, Sendable {
             return stopped
         }
 
-        // Default discovery never requests private-folder/volume access. Native
-        // picker selections define a read-only metadata scope; OS grants still apply.
         func protected(_ path: String) -> Bool {
             DirectoryCrystal.requiresExplicitSelection(path, approvedRoots: approved)
         }
 
-        /// Walk every component relative to an open descriptor. O_NOFOLLOW also
-        /// rejects symlink roots and symlink ancestors, including a swap race.
         func openRoot(_ path: String) -> (Bool, Int32) {
             var fd = Darwin.open("/", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
             guard fd >= 0 else { return (false, -1) }
@@ -122,7 +114,6 @@ struct DirectoryCrystal: Equatable, Sendable {
         }
 
         func run(roots input: [String], now: Date) -> DirectoryCrystal {
-            // Do not resolve symlinks or silently reinterpret relative paths.
             func valid(_ path: String) -> Bool {
                 path.hasPrefix("/") && !path.utf8.contains(0) && !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." })
             }
@@ -135,8 +126,6 @@ struct DirectoryCrystal: Equatable, Sendable {
                 !candidates.contains { $0 != path && path.hasPrefix($0 == "/" ? "/" : $0 + "/") }
             }
             var roots: [String] = []
-            // Finish all actual priority chains globally, then expansion windows,
-            // before ordinary folders. Cached enumeration shares one entry budget.
             for phase in 0...2 {
                 for path in outermost.sorted(by: prioritized) where priority(path) <= phase {
                     if stop() { break }
@@ -252,7 +241,6 @@ struct DirectoryCrystal: Equatable, Sendable {
                     continue
                 }
                 let childFD = openat(fd, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
-                // Revalidate against a concurrent replacement before admitting it.
                 var info = stat()
                 guard fstatat(fd, name, &info, AT_SYMLINK_NOFOLLOW) == 0, (info.st_mode & S_IFMT) == S_IFDIR else {
                     if childFD >= 0 { close(childFD) }
@@ -283,7 +271,6 @@ struct DirectoryCrystal: Equatable, Sendable {
         }
 
         func seed(_ path: String) -> Int {
-            // Swift's randomized Hasher must not affect persistent geometry.
             var hash: UInt64 = 14695981039346656037
             for byte in path.utf8 { hash = (hash ^ UInt64(byte)) &* 1099511628211 }
             return Int(hash % 6)

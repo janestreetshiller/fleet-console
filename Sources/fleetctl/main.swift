@@ -1,9 +1,6 @@
 import Foundation
 import FleetCore
 
-// fleetctl — the launcher agents call instead of spawning background processes
-// themselves. Every managed process in FleetConsole enters the registry here.
-
 let usage = """
 fleetctl — request and control managed background services
 
@@ -105,7 +102,6 @@ func parseDuration(_ text: String) -> Double? {
     }
 }
 
-/// Tiny argument reader. Everything after `--` is the command to run, untouched.
 struct Args {
     var flags: [String: [String]] = [:]
     var positional: [String] = []
@@ -166,7 +162,6 @@ func stateGlyph(_ state: ServiceState) -> String {
     }
 }
 
-/// String(format:) does not pad %@ arguments, so columns are padded by hand.
 func pad(_ text: String, _ width: Int) -> String {
     let clipped = text.count > width ? String(text.prefix(width - 1)) + "…" : text
     return clipped.padding(toLength: width, withPad: " ", startingAt: 0)
@@ -224,8 +219,6 @@ func describe(_ service: ServiceRecord) {
             logs       \(service.stdoutPath)
           """)
 }
-
-// MARK: - Dispatch
 
 let argv = Array(CommandLine.arguments.dropFirst())
 guard let subcommand = argv.first, !subcommand.hasPrefix("-") else {
@@ -346,9 +339,6 @@ case "events":
     let limit = args.int("limit") ?? 50
     let events: [ServiceEvent]
     if args.has("offline") {
-        // Every other read verb goes over the socket and exits 69 when nothing answers —
-        // i.e. history becomes unreadable at exactly the moment you need it, which is
-        // after the controller died. This path opens the registry read-only instead.
         do {
             let registry = try Registry(readOnly: true)
             let serviceID = try args.positional.first.flatMap { needle -> String? in
@@ -537,9 +527,6 @@ case "doctor":
     check("launchd agent", agentLoaded.succeeded,
           agentLoaded.succeeded ? FleetPaths.agentLabel : "not loaded — run Scripts/install-agent.sh")
 
-    // launchd throttles restarts (ThrottleInterval), so a controller that is simply
-    // coming back up looks identical to a broken one for ~10 seconds. Waiting is
-    // the difference between a useful diagnosis and a false alarm.
     var pong = (try? UnixSocketClient.send(RPCRequest(op: .ping), timeout: 4))?.daemon
     if pong == nil && agentLoaded.succeeded {
         print("  … controller not answering; waiting for a launchd restart (throttled up to 12s)")
@@ -574,9 +561,6 @@ case "doctor":
 
     if let snapshot = (try? UnixSocketClient.send(RPCRequest(op: .snapshot), timeout: 6))?.snapshot {
         check("managed services", true, "\(snapshot.runningServices.count) running")
-        // Unmanaged processes are a state of the machine, not a fault in the
-        // install — reporting them as a failure here would contradict the whole
-        // point of the attention rules and make `doctor` cry wolf on every run.
         let leaked = snapshot.unmanaged.filter { $0.formerServiceID != nil }
         print("  · \(pad("unmanaged processes", 26))\(snapshot.unmanaged.count) (informational — `fleetctl reconcile` to review)")
         if !leaked.isEmpty {
@@ -636,9 +620,6 @@ case "claim":
     } else {
         print("\(service.friendlyName) (\(service.shortID)): claimed pid \(service.pid.map(String.init) ?? "?")"
               + " for \(service.ownerAgent); lease expires \(Fmt.relative(service.leaseExpiresAt))")
-        // Said every time, not buried in --help. The whole point of the verb is
-        // that it changes what you can *see*, and someone who reads "claimed" as
-        // "now under control" will be surprised by `stop` at the worst moment.
         print("The controller supervises it and will not signal it — it did not start it.")
     }
 
@@ -656,11 +637,6 @@ case "reconcile":
     }
 
 case "license":
-    // Offline key minting — the issuer side of License.swift's FLT1 format.
-    // This is the checkout seam for the freemium model: a store webhook (or the
-    // Ouros bar on the user's behalf) shells out here, prints a key, and the
-    // gate in the app opens. No daemon, no network: keys are deterministic
-    // HMAC over an issue date, so issuance works while the controller is down.
     guard args.first("secret") != nil || ProcessInfo.processInfo.environment["FLEET_LICENSE_SECRET"] != nil else {
         fail("licensing is scaffolding: pass --secret <s> (or FLEET_LICENSE_SECRET). "
            + "The app validates with its vendor secret, so a mismatched mint still fails at the gate.")

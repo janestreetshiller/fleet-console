@@ -1,22 +1,3 @@
-//! Metered usage, billed through Ouros.
-//!
-//! The same locality argument as the license keys (`docs/FREEMIUM.md`): Ouros
-//! already reaches this machine for the agent mailbox, so billing rides a local
-//! signed record instead of a cloud call. Every turn the engine runs appends
-//! one HMAC-signed record to the ledger under the FleetConsole support
-//! directory; the Ouros bar (or a store webhook) reads and totals it offline.
-//!
-//! Record format: `FLTA-<base32 payload>.<base32 HMAC-SHA256>` where the
-//! payload is a compact string of `|`-separated fields:
-//!
-//! ```text
-//! v1|<agent>|<period yyyyMMdd>|<model>|<input tokens>|<output tokens>|<turns>
-//! ```
-//!
-//! The signature is HMAC-SHA256 over the payload with the vendor secret — the
-//! same secret family as `FLT1` license keys, so a mint and a bill validate
-//! with the same offline machinery. `FLTB` can change everything after the
-//! dash without breaking old records.
 
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -32,7 +13,6 @@ use std::os::unix::fs::PermissionsExt;
 
 pub type HmacSha256 = Hmac<Sha256>;
 
-/// One metered turn: the raw counters the engine accumulated.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct TurnUsage {
     pub input_tokens: u64,
@@ -45,7 +25,6 @@ impl TurnUsage {
     }
 }
 
-/// A validated meter record (payload already parsed).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MeterRecord {
     pub agent: String,
@@ -57,7 +36,6 @@ pub struct MeterRecord {
 }
 
 impl MeterRecord {
-    /// The `|`-separated payload string this record signs.
     pub fn payload(&self) -> String {
         format!(
             "{}|{}|{}|{}|{}|{}|{}",
@@ -122,7 +100,6 @@ fn hmac_bytes(payload: &str, secret: &str) -> [u8; 32] {
     sig
 }
 
-/// Signs one record into `FLTA-<payload-b32>.<sig-b32>`.
 pub fn sign(record: &MeterRecord, secret: &str) -> String {
     let payload = record.payload();
     let sig = hmac_bytes(&payload, secret);
@@ -134,8 +111,6 @@ pub fn sign(record: &MeterRecord, secret: &str) -> String {
     )
 }
 
-/// Validates and parses a signed record. Mirrors `LicenseKey.isValid`: a
-/// record that validates today validates in ten years.
 pub fn verify(record: &str, secret: &str) -> Option<MeterRecord> {
     let rest = record.strip_prefix(RECORD_PREFIX)?;
     let (payload_b32, sig_b32) = rest.split_once('.')?;
@@ -175,29 +150,25 @@ fn parse_payload(payload: &str) -> Option<MeterRecord> {
     })
 }
 
-/// The local period key (UTC `yyyyMMdd`) for a unix-seconds timestamp.
 pub fn period_for_timestamp(secs: i64) -> String {
     let days = secs.div_euclid(86_400);
     let (y, m, d) = civil_from_days(days);
     format!("{y:04}{m:02}{d:02}")
 }
 
-/// Howard Hinnant's `civil_from_days` (canonical form, verified against the
-/// published algorithm), UTC, dependency-free.
 fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = z - era * 146_097;                                        // [0, 146096]
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;  // [0, 399]
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     let y = yoe + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);                  // [0, 365]
-    let mp = (5 * doy + 2) / 153;                                       // [0, 11]
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;                       // [1, 31]
-    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;                // [1, 12]
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
     (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
-/// Totals a ledger file's records: (valid records, invalid lines, summed usage).
 pub fn total_ledger(
     path: &std::path::Path,
     secret: &str,
@@ -223,7 +194,6 @@ pub fn total_ledger(
     Ok((records, invalid, usage))
 }
 
-/// Appends one signed record to the ledger, creating it 0600 with 0700 dirs.
 pub fn append_ledger(
     path: &std::path::Path,
     record: &MeterRecord,
@@ -266,7 +236,6 @@ mod tests {
     #[test]
     fn tampered_payload_is_rejected() {
         let signed = sign(&sample(), VENDOR_SECRET);
-        // Flip the last payload character (before the '.').
         let mut bytes = signed.into_bytes();
         let dot = bytes.iter().position(|&b| b == b'.').unwrap();
         let idx = if dot > RECORD_PREFIX.len() { dot - 1 } else { RECORD_PREFIX.len() };
@@ -318,9 +287,8 @@ mod tests {
 
     #[test]
     fn period_is_utc_year_month_day() {
-        assert_eq!(period_for_timestamp(1_760_230_400), "20251012"); // 2025-10-12T00:00:00Z
+        assert_eq!(period_for_timestamp(1_760_230_400), "20251012");
         assert_eq!(period_for_timestamp(0), "19700101");
-        // Year boundary: 2027-01-01T00:00:00Z = 1798764800
         assert_eq!(period_for_timestamp(1_798_764_800), "20270101");
     }
 }

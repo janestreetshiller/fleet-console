@@ -1,14 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Column two for a remote node: what the machine *is*, proven by probes.
-//
-// FleetConsole never controls a remote process — it reports one. Everything on
-// this screen is read-only evidence: the capability probe (SSH, fixed argv,
-// BatchMode so a password prompt fails instead of hanging), the link probe
-// (`tailscale ping`, worst sample not the mean), and the services that node's
-// own controller manages, fetched read-only.
-
 struct DeviceDetailView: View {
     @Bindable var model: AppModel
     let deviceID: String
@@ -45,12 +37,8 @@ struct DeviceDetailView: View {
         model.refreshDevices()
     }
 
-    // MARK: Health evidence
-
     private func healthCard(_ record: DeviceRecord) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            // The device is named by the card that proves it is there, not by
-            // a page heading above it.
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(record.name)
                     .font(ConsoleFont.cardTitle)
@@ -89,8 +77,6 @@ struct DeviceDetailView: View {
         }
         .elevatedCard()
     }
-
-    // MARK: Capabilities
 
     func capabilityCard(_ host: HostCapabilities) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -134,8 +120,6 @@ struct DeviceDetailView: View {
         }
         .elevatedCard()
     }
-
-    // MARK: Remote services
 
     private func servicesCard(_ record: DeviceRecord) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -191,9 +175,6 @@ struct DeviceDetailView: View {
     }
 }
 
-// MARK: - Bits
-
-/// One evidence fact: name, state, and the measurement behind the state.
 private struct EvidenceLine: View {
     let label: String
     let state: Bool?

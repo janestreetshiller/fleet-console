@@ -2,37 +2,11 @@ import AppKit
 import SwiftTerm
 import SwiftUI
 
-// Shared pseudo-terminal plumbing for the two PTY-backed chrome panels.
-//
-// The terminal and the file surface differ only in what they exec, so everything
-// else lives here: measure the character cell, spawn a child in a pty, hand it a
-// settled grid exactly once, and keep it warm across toggles.
-//
-// One structural decision drives the rest. `SwiftTerm.TerminalView` re-derives
-// its own column count from its frame inside `setFrameSize`, which is precisely
-// the per-frame `TIOCSWINSZ` + `SIGWINCH` that `ToolResizeCoalescer` exists to
-// prevent. So the terminal is never the view SwiftUI resizes: it sits inside
-// `PTYHostView`, whose bounds follow the sidebar spring freely while the
-// terminal's own frame changes only when a settled `TerminalGrid` arrives. That
-// makes "forward the settled grid straight to the pty" a single frame
-// assignment, with no debounce of our own stacked on the host's.
-
-// MARK: - Published cell metrics
-
-/// Additive to `ToolSurface` rather than folded into it: the seam file is shared
-/// with the rail, and only the two pty-backed panels have a
-/// cell to publish. The host reaches for this with `as?` when it needs to turn a
-/// panel's pixel size into a grid.
 @MainActor
 protocol PTYBackedSurface: ToolSurface {
     var cellMetrics: TerminalCellMetrics { get }
 
-    /// Panel width that is spent before the first column can be drawn. See
-    /// `TerminalGrid.fitting(_:cell:reservedWidth:)` — the host must measure the
-    /// columns against what is actually left, or it hands back a grid that does
-    /// not fit the panel it measured.
     var reservedWidth: CGFloat { get }
-    /// Actual height spent on controls above the emulator, not terminal rows.
     var chromeHeight: CGFloat { get }
 }
 
@@ -40,32 +14,12 @@ extension PTYBackedSurface {
     var chromeHeight: CGFloat { 0 }
 }
 
-// MARK: - Font and cell
-
 enum TerminalFont {
-    /// A Nerd Font when one is installed, SF Mono when none is.
-    ///
-    /// SF Mono was the original choice — the same family `ConsoleFont.mono()`
-    /// uses for ports, PIDs and paths — and it is a fine face for a shell. It
-    /// carries no Private Use Area glyphs, though, and Yazi draws its entire
-    /// file-type column out of that range. Every icon in the Files panel was
-    /// rendering as tofu, which reads as a broken panel rather than as a missing
-    /// font.
-    ///
-    /// The list is ordered most- to least-specific: a patched mono face first,
-    /// then the symbols-only face, which CoreText will fall back into for the
-    /// PUA range while keeping SF Mono for text. Nothing here is bundled — the
-    /// app cannot ship JetBrains Mono — so the final fallback stays SF Mono and
-    /// the panel keeps working with no Nerd Font at all, just without icons.
-    /// PostScript names, not family names — `NSFont(name:)` takes the former and
-    /// silently returns nil for the latter, which is how a plausible-looking
-    /// "SymbolsNerdFontMono-Regular" sat in this list resolving to nothing. Each
-    /// one below was verified against `NSFontManager.availableMembers`.
     private static let candidates = [
-        "JetBrainsMonoNFM-Regular",   // JetBrainsMono NFM
-        "JetBrainsMonoNF-Regular",    // JetBrainsMono NF
-        "IosevkaNF",                  // Iosevka Nerd Font
-        "SymbolsNFM",                 // Symbols Nerd Font Mono
+        "JetBrainsMonoNFM-Regular",
+        "JetBrainsMonoNF-Regular",
+        "IosevkaNF",
+        "SymbolsNFM",
     ]
 
     static var panel: NSFont {
@@ -76,30 +30,12 @@ enum TerminalFont {
         return NSFont.monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
-    /// Whether `panel` resolved to a face that can draw Yazi's icons. The Files
-    /// panel says so rather than leaving the user to wonder why the column is
-    /// blank.
     static var hasNerdGlyphs: Bool {
         candidates.contains { NSFont(name: $0, size: 12) != nil }
     }
 }
 
 extension TerminalCellMetrics {
-    /// Measures the cell the way SwiftTerm does: ascent + descent + leading for
-    /// the height, the advance of the character `W` for the width, both snapped
-    /// to the backing store so adjacent cells cannot land on a half pixel.
-    ///
-    /// The `W` advance is looked up through the character, not a glyph name:
-    /// fonts whose glyphs are unnamed resolve a named lookup to `.notdef`,
-    /// whose advance spreads text across twice as many columns. The snap uses
-    /// rounding to match the engine, so a frame built from these metrics fits
-    /// exactly the requested grid.
-    ///
-    /// Re-derived rather than read back, because SwiftTerm keeps its own
-    /// `cellDimension` internal and the host needs a cell *before* the first
-    /// frame is handed out. Matching the formula is what lets
-    /// `PTYHostView.apply(_:)` land on the grid it asked for in one step instead
-    /// of converging on it over several `SIGWINCH`es.
     init(font: NSFont, scale: CGFloat) {
         let ctFont = font as CTFont
         let lineHeight = ceil(CTFontGetAscent(ctFont) + CTFontGetDescent(ctFont) + CTFontGetLeading(ctFont))
@@ -116,13 +52,7 @@ extension TerminalCellMetrics {
     }
 }
 
-// MARK: - Child processes
-
 enum ToolBinary {
-    /// The user's login shell, from the password database rather than `$SHELL`.
-    /// A GUI process does not inherit the user's interactive environment, so
-    /// `$SHELL` is whatever launchd had; `getpwuid` is the same source
-    /// Terminal.app reads.
     static var loginShell: URL {
         if let pw = getpwuid(getuid()), let field = pw.pointee.pw_shell {
             let path = String(cString: field)
@@ -133,11 +63,6 @@ enum ToolBinary {
         return URL(fileURLWithPath: "/bin/zsh")
     }
 
-    /// Finds `name` the way a login shell would, without running one. The
-    /// inherited `PATH` comes first, then the prefixes package managers actually
-    /// install into — a Finder-launched app inherits a four-entry `PATH`, so
-    /// refusing to look past it would report a tool missing on a machine that
-    /// has it.
     static func resolve(_ name: String) -> URL? {
         searchPath
             .map { URL(fileURLWithPath: $0).appendingPathComponent(name) }
@@ -158,11 +83,6 @@ enum ToolBinary {
         return (inherited + prefixes).filter { seen.insert($0).inserted }
     }
 
-    /// SwiftTerm's defaults carry `TERM`, `COLORTERM` and a UTF-8 locale, and
-    /// deliberately omit `PATH` — a login shell rebuilds its own from the
-    /// profile. A tool exec'd directly has no such chance, so it gets the same
-    /// search path we resolved it with, otherwise its previewers and helpers
-    /// (`file`, `unar`, `$EDITOR`) are simply absent.
     static func environment(withSearchPath: Bool) -> [String] {
         var env = Terminal.getEnvironmentVariables(termName: "xterm-256color")
         if withSearchPath {
@@ -171,9 +91,6 @@ enum ToolBinary {
         return env
     }
 
-    /// A directory the child can actually start in. `forkpty`'s `chdir` failure
-    /// is silent, which would drop the child in the app bundle's cwd and quietly
-    /// contradict the panel header.
     static func usableDirectory(_ url: URL) -> URL {
         var isDirectory: ObjCBool = false
         if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue {
@@ -183,30 +100,17 @@ enum ToolBinary {
     }
 }
 
-/// Sends the child its `SIGTERM` and waits for it, from an object that is *not*
-/// main-actor bound. `LocalProcess.deinit` deliberately never signals the child,
-/// and `LocalProcess.terminate()` cancels the very dispatch source that would
-/// have `waitpid`ed — so without this a closed window leaves a live shell, and a
-/// restart leaves a zombie for the life of the app.
-///
-/// Only ever touched on the main queue; the `@unchecked Sendable` is for the
-/// notification closure.
 private final class ProcessReaper: @unchecked Sendable {
     var process: LocalProcess?
     private final class WeakReaper {
         weak var value: ProcessReaper?
         init(_ value: ProcessReaper) { self.value = value }
     }
-    // Main-queue-only registry; the group also retains cleanup jobs after a
-    // closed session's reaper has deallocated.
     nonisolated(unsafe) private static var reapers: [WeakReaper] = []
     private static let cleanup = DispatchGroup()
     nonisolated(unsafe) private static let terminationObserver = NotificationCenter.default.addObserver(
         forName: NSApplication.willTerminateNotification, object: nil, queue: .main
     ) { _ in
-        // Signal every owned group first, then share one escalation window.
-        // Detached tasks cannot survive app exit; they release the group before
-        // requesting their main-actor UI completion, so this cannot deadlock it.
         for reaper in reapers.compactMap(\.value) { reaper.reapNow() }
         cleanup.wait()
     }
@@ -225,27 +129,20 @@ private final class ProcessReaper: @unchecked Sendable {
             if let completion { Task { @MainActor in completion() } }
             return
         }
-        self.process = nil // Transfer ownership once; deinit must not repeat it.
+        self.process = nil
         let pid = process.shellPid
         var child = siginfo_t()
-        // `running` describes SwiftTerm's I/O, not child ownership. It can be
-        // false at PTY EOF, or true inside an exit callback after waitpid.
-        // WNOWAIT both proves this is still our child and reserves its PID.
         guard pid > 0, waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0 else {
             if waitForExit { Self.cleanup.wait() }
             if let completion { Task { @MainActor in completion() } }
             return
         }
-        // forkpty makes the child a new session/group leader. Never signal our
-        // own group, a recycled pid, or a group we did not create.
         let group: pid_t? = getpgid(pid) == pid && pid != getpgrp() ? pid : nil
         if let group { kill(-group, SIGTERM) }
-        process.terminate() // Cancels SwiftTerm's monitor and closes the owned PTY.
+        process.terminate()
         let work = Self.cleanup
         work.enter()
         Task.detached(priority: .utility) {
-            // Keep the direct child unreaped until escalation, reserving its pid
-            // and group identity even if it exits before a stubborn descendant.
             try? await Task.sleep(for: .seconds(2))
             var child = siginfo_t()
             let stillOwned = pid > 0 && waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0
@@ -255,44 +152,26 @@ private final class ProcessReaper: @unchecked Sendable {
             }
             var status: Int32 = 0
             if pid > 0 { _ = waitpid(pid, &status, 0) }
-            // Release a synchronous quit before hopping back to the main actor.
             work.leave()
             await completion?()
         }
         if waitForExit { work.wait() }
     }
 
-    /// SwiftTerm normally reaps before its delegate callback. If its nonblocking
-    /// wait has not collected the child yet, finish through the same verified
-    /// cleanup rather than dropping ownership of a future zombie.
     func childExited() { reapNow() }
 }
 
-// MARK: - The AppKit host
-
-/// Container for the terminal view. Exists so that SwiftUI can resize *this*
-/// view as often as it likes without any of those sizes reaching the child
-/// process: the terminal keeps whatever frame the last settled grid gave it, and
-/// the slack shows as terminal background at the trailing and bottom edges.
 @MainActor
 final class PTYHostView: NSView {
     let terminal: LocalProcessTerminalView
 
     private(set) var cell: TerminalCellMetrics
-    /// Called when a display change makes the measured cell stale, so the host
-    /// can recompute its grid against the new one.
     var onCellChange: ((TerminalCellMetrics) -> Void)?
     var onWindowClose: (() -> Void)?
 
     private weak var hostWindow: NSWindow?
-    /// Written once in `init`, read once in `deinit` — both on the main thread.
-    /// `deinit` is nonisolated in Swift 6 and the token is not Sendable, so the
-    /// access is spelled out as unchecked.
     private nonisolated(unsafe) var closeObserver: NSObjectProtocol?
 
-    /// Absorbs float error in `width / cellWidth`, which floors: a settled 80
-    /// columns must not become 79 because the last cell was a millionth of a
-    /// point short. Cannot overshoot while a cell is wider than half a point.
     private static let flooringGuard: CGFloat = 0.5
 
     init(font: NSFont) {
@@ -306,22 +185,14 @@ final class PTYHostView: NSView {
 
         clipsToBounds = true
         wantsLayer = true
-        // Frame-driven on purpose: the whole point is that the superview's
-        // layout does not propagate a size onto the terminal.
         terminal.autoresizingMask = []
         terminal.font = font
         addSubview(terminal)
         applyAppearance()
 
-        // A window can be closed while this panel is toggled off and detached,
-        // so the notification is matched against the window we last belonged to
-        // rather than the one we are in now.
         closeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: nil, queue: .main
         ) { [weak self] note in
-            // `queue: .main` already puts this on the main thread. The window's
-            // `ObjectIdentifier` crosses rather than the window, since `NSWindow`
-            // is not Sendable and identity is the only question asked of it.
             let closing = (note.object as? NSWindow).map(ObjectIdentifier.init)
             MainActor.assumeIsolated {
                 guard let self, let closing,
@@ -338,20 +209,10 @@ final class PTYHostView: NSView {
         if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
     }
 
-    /// Hands a settled grid to the pty. One frame assignment, one `TIOCSWINSZ`,
-    /// one `SIGWINCH`, one TUI repaint.
-    ///
-    /// Deliberately does *not* use `TerminalView.resize(cols:rows:)`, which
-    /// appends a DECSTR soft reset — that clears application-cursor mode and
-    /// unhides the cursor, so a running full-screen TUI would lose its arrow
-    /// keys and grow a stray caret on every resize.
     func apply(_ grid: TerminalGrid) {
         guard cell.isUsable else { return }
         terminal.setFrameSize(size(for: grid))
 
-        // Self-correcting second pass: if SwiftTerm's width→columns arithmetic
-        // ever disagrees with our re-derived cell, one extra signal is cheaper
-        // than a permanently wrong grid.
         let dimensions = terminal.terminalDimensions
         if dimensions.cols != grid.columns || dimensions.rows != grid.rows {
             terminal.setFrameSize(CGSize(
@@ -361,14 +222,7 @@ final class PTYHostView: NSView {
         needsLayout = true
     }
 
-    /// SwiftTerm reserves the scroller's width out of the drawable area in the
-    /// legacy style only; an overlay scroller floats above the grid. Published
-    /// so the host that computes the grid measures against the same number this
-    /// view lays out against.
     var reservedWidth: CGFloat {
-        // SwiftTerm reserves the scroller out of the drawable area only in the
-        // legacy style; an overlay scroller floats above the grid, so the
-        // columns have to be measured against the full frame width.
         if terminal.scrollerStyle == .legacy {
             return NSScroller.scrollerWidth(for: .regular, scrollerStyle: terminal.scrollerStyle)
         }
@@ -382,15 +236,6 @@ final class PTYHostView: NSView {
 
     override func layout() {
         super.layout()
-        // Pinned top-left: the prompt stays where the eye left it, and the slack
-        // between the settled grid and the panel's bounds sits at the far edge.
-        //
-        // Not clamped to zero. A grid that overshoots its panel — which is a bug
-        // upstream, but one this view should degrade honestly under — used to be
-        // pushed *down* until its first rows sat above the top edge and were
-        // clipped away, so a freshly spawned shell showed a panel with no prompt
-        // in it. Letting the origin go negative keeps the top-left corner where
-        // the name says it is and loses the overshoot off the bottom instead.
         terminal.setFrameOrigin(CGPoint(x: 0, y: bounds.height - terminal.frame.height))
     }
 
@@ -410,8 +255,6 @@ final class PTYHostView: NSView {
         applyAppearance()
     }
 
-    /// The cell is a function of the font *and* the display, so moving the window
-    /// between a Retina and a non-Retina screen changes it.
     private func remeasure() {
         let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 1
         let measured = TerminalCellMetrics(font: terminal.font, scale: scale)
@@ -420,10 +263,6 @@ final class PTYHostView: NSView {
         onCellChange?(measured)
     }
 
-    /// Text and background come from the system's semantic colours so the panel
-    /// follows the window's appearance. Resolved inside the current drawing
-    /// appearance because SwiftTerm snapshots the background into an RGB triple
-    /// for its own fills.
     private func applyAppearance() {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             terminal.configureNativeColors()
@@ -433,10 +272,6 @@ final class PTYHostView: NSView {
     }
 }
 
-// MARK: - Session
-
-/// Owns one child process and the view it draws into. The panels above are thin:
-/// they choose what to exec and answer the `ToolSurface` questions from here.
 @MainActor
 @Observable
 final class PTYSession {
@@ -444,15 +279,12 @@ final class PTYSession {
         case idle
         case running
         case stopping
-        /// Raw `wait` status, as SwiftTerm hands it over.
         case exited(Int32?)
     }
 
     struct Launch: Equatable {
         var executable: URL
         var arguments: [String] = []
-        /// Unix `argv[0]`. A leading dash is how a shell is asked to behave as a
-        /// login shell.
         var argv0: String?
         var workingDirectory: URL
         var environment: [String]
@@ -460,26 +292,17 @@ final class PTYSession {
 
     private(set) var phase: Phase = .idle
     private(set) var cell: TerminalCellMetrics
-    /// Last grid the host settled on, forwarded or not.
     private(set) var proposed: TerminalGrid?
-    /// Last grid the child was actually told about.
     private(set) var forwarded: TerminalGrid?
     private(set) var launch: Launch?
 
     @ObservationIgnored let host: PTYHostView
     @ObservationIgnored private let bridge = Bridge()
     @ObservationIgnored private let reaper = ProcessReaper()
-    /// A launch that is waiting for its first settled grid.
     @ObservationIgnored private var deferredLaunch: Launch?
     @ObservationIgnored private var generation = UUID()
-    /// Keystrokes sent before the child exists. The PTY would buffer them for
-    /// a running shell anyway; this only covers the gap before `forkpty`.
     @ObservationIgnored private var pendingInput: [String] = []
 
-    /// Whether a grid below `TerminalGrid.minimum` may reach the child at all.
-    /// Yazi's three panes collapse under it, so the file surface refuses and
-    /// shows a too-narrow state; a shell reflows honestly at any width, so the
-    /// terminal panel does not.
     @ObservationIgnored let refusesBelowMinimum: Bool
 
     init(font: NSFont = TerminalFont.panel, refusesBelowMinimum: Bool) {
@@ -492,8 +315,6 @@ final class PTYSession {
         host.onWindowClose = { [weak self] in self?.terminate() }
     }
 
-    /// See `PTYHostView.reservedWidth`. Forwarded so a panel can answer
-    /// `PTYBackedSurface` without reaching through to the view.
     var reservedWidth: CGFloat { host.reservedWidth }
 
     var isTooNarrow: Bool {
@@ -501,29 +322,20 @@ final class PTYSession {
         return !proposed.fitsMinimum
     }
 
-    /// Start the child if it is not already running. Never disturbs a live one —
-    /// the whole point of keeping it warm.
     func ensureRunning(_ launch: Launch) {
         guard phase != .running else { return }
         if phase == .stopping { deferredLaunch = launch; return }
         spawn(launch)
     }
 
-    /// Replace a live child only after its monitor, I/O and owned group have
-    /// finished cleanup. Reusing LocalProcess immediately can let an old EOF
-    /// clear the replacement's I/O state before its first input arrives.
     func restart(_ launch: Launch) {
         terminate()
         ensureRunning(launch)
     }
 
-    /// A settled, cell-aligned grid from the host. Forwarded as-is; the host has
-    /// already waited for the animation to stop.
     func settle(_ grid: TerminalGrid) {
         proposed = grid
         guard !refusesBelowMinimum || grid.fitsMinimum else {
-            // Leave the child at its last honest size. It keeps painting that
-            // grid behind the too-narrow state, and reappears without a reflow.
             return
         }
         if grid != forwarded {
@@ -536,7 +348,6 @@ final class PTYSession {
         }
     }
 
-    /// Types `text` into the child, or holds it until the child starts.
     func send(_ text: String) {
         guard phase == .running else {
             pendingInput.append(text)
@@ -545,8 +356,6 @@ final class PTYSession {
         host.terminal.send(txt: text)
     }
 
-    /// Ordinary stops are asynchronous; application termination must join the
-    /// same bounded cleanup before the process (and its tasks) can disappear.
     func terminate(waitForExit: Bool = false) {
         deferredLaunch = nil
         pendingInput.removeAll()
@@ -568,9 +377,6 @@ final class PTYSession {
     }
 
     private func spawn(_ launch: Launch) {
-        // The child inherits its window size at `forkpty`, so there is no point
-        // starting one before the host has settled a grid — it would open at
-        // SwiftTerm's default 80x25 and be resized a frame later.
         guard let grid = forwarded else {
             deferredLaunch = launch
             return
@@ -582,10 +388,6 @@ final class PTYSession {
         attemptSpawn(launch, attempt: attempt)
     }
 
-    /// SwiftTerm 2 silently ignores a start while the previous session is
-    /// still winding down after a stop. The checked entry point reports that
-    /// instead of swallowing it, so a relaunch that races the wind-down retries
-    /// until the engine accepts a child or the attempt is superseded.
     private func attemptSpawn(_ launch: Launch, attempt: UUID) {
         let result = host.terminal.process.startProcessChecked(
             executable: launch.executable.path,
@@ -615,23 +417,14 @@ final class PTYSession {
         }
     }
 
-    /// Focus for the panel that has just been opened. Called on first spawn only:
-    /// a selection change while the panel is open must not steal the caret from
-    /// the sidebar or the search field.
     func focusTerminal() {
         host.window?.makeFirstResponder(host.terminal)
     }
 
     fileprivate func childExited(status: Int32?) {
-        // SwiftTerm calls this after its waiter reaps, once the previous
-        // session is fully wound down — so a deferred relaunch is safe here.
-        // Stops cancel that monitor, so they finish through our reaper instead.
         guard phase == .running || phase == .stopping else { return }
         reaper.childExited()
         phase = .exited(status)
-        // The scrollback is the evidence for *why* it exited, so the view keeps
-        // showing it and the chrome's running indicator carries the fact. The
-        // notice goes into that scrollback rather than over it.
         host.terminal.feed(text: "\r\n" + PTYSession.notice(for: status) + "\r\n")
         if let deferred = deferredLaunch {
             deferredLaunch = nil
@@ -639,54 +432,32 @@ final class PTYSession {
         }
     }
 
-    /// SwiftTerm 2 reports the normalized exit status: the exit code 0 through
-    /// 255, or nil when the child ended on a signal or the wait failed.
     private static func notice(for status: Int32?) -> String {
         guard let status else { return "[process ended]" }
         return status == 0 ? "[process exited]" : "[process exited — status \(status)]"
     }
 
-    /// SwiftTerm's process delegate is not main-actor bound, but every callback
-    /// is delivered on the main queue (`LocalProcess` defaults its dispatch queue
-    /// to `.main`), so the isolation is asserted rather than hopped — a hop would
-    /// let a resize land between the exit and our record of it.
     private final class Bridge: LocalProcessTerminalViewDelegate, @unchecked Sendable {
-        /// The delegate protocol's methods are nonisolated, so the bridge must be
-        /// Sendable to reach SwiftTerm at all. Safe for the reason above: every
-        /// callback arrives on the main queue, the same thread that set this.
         nonisolated(unsafe) weak var session: PTYSession?
 
         func processTerminated(source: TerminalView, exitCode: Int32?) {
             MainActor.assumeIsolated { session?.childExited(status: exitCode) }
         }
 
-        // The pty is the authority on its own size, and the child owns its title
-        // and its cwd. Nothing in the chrome reads them back.
         func sizeChanged(source: LocalProcessTerminalView, newCols: Int, newRows: Int) {}
         func setTerminalTitle(source: LocalProcessTerminalView, title: String) {}
         func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
     }
 }
 
-// MARK: - SwiftUI surface
-
-/// The terminal itself. `makeNSView` returns a view the session already owns,
-/// which is what keeps the process and its scrollback alive across panel
-/// toggles and SwiftUI rebuilds.
 struct PTYTerminalView: NSViewRepresentable {
     let host: PTYHostView
 
     func makeNSView(context: Context) -> PTYHostView { host }
 
-    // Geometry arrives through `ToolSurface.resize(to:)` after the host has
-    // coalesced it. Reacting here as well would put a second, un-coalesced path
-    // to the pty back in.
     func updateNSView(_ nsView: PTYHostView, context: Context) {}
 }
 
-/// A pty panel's content: the terminal, or an honest reason it is not showing.
-/// No padding of its own — the host measures this area to compute the grid, and
-/// an inset here would be an inset the grid does not know about.
 struct PTYPanelView: View {
     let session: PTYSession
     let tooNarrowDetail: String

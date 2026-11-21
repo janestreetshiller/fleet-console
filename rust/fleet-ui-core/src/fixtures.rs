@@ -1,11 +1,3 @@
-//! Synthetic controller snapshots and host samples.
-//!
-//! Compiled only for tests and with the `fixtures` feature, which capture and
-//! screenshot builds enable and release builds do not. Every name, pid, path
-//! and number here is invented. The controller version is `MARKER`, so a
-//! capture made from fixtures says so on screen, and a release binary that
-//! contains the marker string has fixtures compiled in and fails the check in
-//! `Scripts/verify-rust-clients.sh`.
 
 use crate::model::{decode_snapshot, Snapshot};
 use crate::observe::{Feed, Metric, Phase, Reason};
@@ -15,7 +7,6 @@ use std::time::{Duration, SystemTime};
 
 pub const MARKER: &str = "synthetic-fixture-4c1e";
 
-/// The fixed clock fixtures are built around: 2027-01-15 09:20 UTC.
 pub fn now() -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(1_800_004_800)
 }
@@ -29,7 +20,6 @@ pub enum Scenario {
     Stale,
     Disconnected,
     Error,
-    /// Far more rows than any list keeps, to exercise the bounds.
     Flood,
 }
 
@@ -280,7 +270,6 @@ pub fn controller_feed(scenario: Scenario, now: SystemTime) -> Feed<Snapshot> {
     }
 }
 
-/// A host sample; `seed` varies the numbers for history.
 pub fn host_sample(seed: f64) -> HostSample {
     host_sample_for(Scenario::Healthy, seed, now())
 }

@@ -2,9 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// Agent-first spatial awareness. The projection is bounded and refreshed by
-/// existing observations; folder metadata has a bounded asynchronous cache,
-/// with no physics loop, extra process collector or paid request.
 struct AgentAwarenessWorkspace: View {
     let model: AppModel
     @Bindable var console: ConsoleModel
@@ -15,8 +12,6 @@ struct AgentAwarenessWorkspace: View {
     @State private var selectedDirectoryPath: String?
     @State private var selectedID: String?
     @State private var zoom: CGFloat = 1
-    // Observation bounds can change without moving any existing world node.
-    // Only fitting or focusing changes this camera anchor, never refresh().
     @State private var worldCenter: CGPoint = .zero
     @State private var pan: CGSize = .zero
     @State private var dragOrigin: CGSize?
@@ -275,7 +270,6 @@ struct AgentAwarenessWorkspace: View {
                                   projectPositions: Dictionary(uniqueKeysWithValues: nodes.filter { $0.kind == .project }.compactMap { node in node.projectPath.map { ($0, node.position) } }),
                                   zoom: zoom, point: { point($0, size: size) }, select: selectDirectory)
             Canvas { context, canvas in
-                // A spatial reference grid moves with the camera, not a data trace.
                 let step: CGFloat = max(18, 40 * zoom)
                 let ox = (canvas.width / 2 + pan.width).truncatingRemainder(dividingBy: step)
                 let oy = (canvas.height / 2 + pan.height).truncatingRemainder(dividingBy: step)
@@ -472,8 +466,6 @@ struct AgentAwarenessWorkspace: View {
     }
 
     private func fit(size: CGSize, nodes: [AwarenessGraph.Node]? = nil, minimumZoom: CGFloat = 0.2) {
-        // NSHostingView measures provisional tiny frames before the shipping
-        // window is sized. Never commit those measurements as a fitted camera.
         guard let graph, size.width >= 320, size.height >= 300 else { return }
         let bounds = nodes.map { list in list.reduce(CGRect.null) { $0.union(CGRect(x: $1.position.x - $1.size.width / 2, y: $1.position.y - $1.size.height / 2, width: $1.size.width, height: $1.size.height)) } } ?? graph.bounds
         guard !bounds.isNull else { return }

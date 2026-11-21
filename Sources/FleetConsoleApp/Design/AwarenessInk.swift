@@ -1,8 +1,6 @@
 import SwiftUI
 import AppKit
 
-/// Semantic canvas materials. Relationships use the user accent; selection is
-/// an outline, not an orange surface with appearance-dependent text.
 enum AwarenessMetrics {
     static let minimapSize = CGSize(width: 144, height: 89)
 }

@@ -1,25 +1,5 @@
 import Foundation
 
-// Bounded, evidence-based troubleshooting suggestions.
-//
-// The console observes; it does not act. This turns attention items, service
-// records and a slice of recent events into a short list of common problems a
-// person can look at, with checks and remedies as prose. Nothing here reads a
-// log, opens a socket, or signals a process.
-//
-// Recurrence is the count of matching events in the bounded recent slice the
-// caller passed — not a lifetime counter, not a fleet-wide rate. Missing
-// observations stay unavailable. Process existence is never treated as health.
-// Unmanaged and claimed processes are never offered a controller signal.
-
-// MARK: - Suggestion
-
-/// One problem, the evidence it rests on, and what a person may inspect or do.
-///
-/// `id` is stable for a (category, subject) pair so a UI can diff successive
-/// snapshots without inventing its own keys. `occurrences` is the number of
-/// matching events in the bounded recent log, or zero when only the current
-/// attention/record is present. It is not a failure probability or a lifetime total.
 public struct TroubleshootingSuggestion: Sendable, Hashable, Identifiable {
     public var id: String
     public var title: String
@@ -39,28 +19,17 @@ public struct TroubleshootingSuggestion: Sendable, Hashable, Identifiable {
     }
 }
 
-// MARK: - Entry point
-
 public enum Troubleshooting {
 
-    /// Hard caps so a large snapshot cannot grow a wall of advice.
     static let maxSuggestions = 8
     static let maxChecks = 4
     static let maxRemedies = 4
     static let maxEvents = 200
     static let maxEvidenceChars = 480
     static let maxLineChars = 240
-    /// Same window the controller uses for a daemon crash loop: two abnormal
-    /// exits inside six hours is a pattern; one is not.
     static let recencyWindow: TimeInterval = 6 * 3600
-    /// Evidence older than this is stale for listener/health claims. Wider than
-    /// the controller's tick×factor (15s) so a snapshot a few seconds old is
-    /// still usable, tight enough that an hour-old scan is not "current".
     static let staleTolerance: TimeInterval = 120
 
-    /// Derive suggestions from the current attention list, the service records
-    /// those items refer to, and a recent event slice. `now` is injected so the
-    /// path is fixture-testable.
     public static func suggestions(items: [AttentionItem],
                                    services: [ServiceRecord],
                                    events: [ServiceEvent],
@@ -110,11 +79,6 @@ public enum Troubleshooting {
         return result
     }
 
-    // MARK: Categories
-
-    /// Closed set of problems this function will name. Unknown attention IDs
-    /// and unrelated states are ignored rather than turned into a generic
-    /// "something is wrong".
     enum Category: String, Sendable, Hashable {
         case health
         case crash
@@ -136,8 +100,6 @@ public enum Troubleshooting {
         var service: ServiceRecord? = nil
         var events: [ServiceEvent] = []
     }
-
-    // MARK: Attention / state → key
 
     static func key(for item: AttentionItem) -> Key? {
         if item.id == "daemon-crashloop" { return Key(category: .crash, subject: "daemon") }
@@ -181,10 +143,6 @@ public enum Troubleshooting {
         }
     }
 
-    /// Missing listeners require a scan that actually ran, on a process that
-    /// is not known to be gone, with evidence that is not stale. An empty
-    /// `listeningPorts` array without `portScanRan` is "not checked", not
-    /// "nothing is listening".
     static func listenerKey(for service: ServiceRecord, now: Date) -> Key? {
         guard !service.state.isTerminal else { return nil }
         guard !service.declaredPorts.isEmpty else { return nil }
@@ -195,8 +153,6 @@ public enum Troubleshooting {
         guard !missing.isEmpty else { return nil }
         return Key(category: .listener, subject: service.id)
     }
-
-    // MARK: Events
 
     static func boundEvents(_ events: [ServiceEvent], now: Date) -> [ServiceEvent] {
         let cutoff = now.addingTimeInterval(-recencyWindow)
@@ -226,9 +182,6 @@ public enum Troubleshooting {
         }
     }
 
-    /// Port conflicts and unmanaged leaks are offered only when evidence
-    /// exists. Crash recurrence is offered when the bounded log shows a
-    /// pattern (two or more), even if the process is currently up.
     static func addEventOnlyDrafts(_ events: [ServiceEvent],
                                    to drafts: inout [Key: Draft],
                                    servicesByID: [String: ServiceRecord]) {
@@ -244,8 +197,6 @@ public enum Troubleshooting {
                 if draft.service == nil { draft.service = servicesByID[id] }
                 drafts[key] = draft
             case .becameUnmanaged:
-                // Legacy unmanaged events have no process identity. Do not
-                // merge unrelated processes or guess identity from free text.
                 guard let subject = event.serviceID, !subject.isEmpty else { continue }
                 let key = Key(category: .unmanaged, subject: subject)
                 var draft = drafts[key] ?? Draft(key: key, service: servicesByID[subject])
@@ -338,8 +289,6 @@ public enum Troubleshooting {
             return draft.events.contains { $0.kind == .becameUnmanaged }
         }
     }
-
-    // MARK: Render
 
     static func suggestion(from draft: Draft, now: Date) -> TroubleshootingSuggestion {
         let occurrences = draft.events.count

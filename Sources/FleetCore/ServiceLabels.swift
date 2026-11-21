@@ -1,6 +1,5 @@
 import Foundation
 
-/// A personal tag, not a health/status vocabulary.
 public enum ServiceTagColor: String, Codable, Sendable, CaseIterable, Identifiable {
     case blue, purple, teal, orange, pink, gray
 
@@ -8,7 +7,6 @@ public enum ServiceTagColor: String, Codable, Sendable, CaseIterable, Identifiab
     public var label: String { rawValue.capitalized }
 }
 
-/// Client-only presentation metadata. The controller's name and evidence stay intact.
 public struct ServiceLabel: Codable, Sendable, Equatable {
     public let name: String?
     public let color: ServiceTagColor?

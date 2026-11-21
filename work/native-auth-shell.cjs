@@ -2,8 +2,6 @@
 const { readFile } = require('node:fs/promises');
 const { resolve } = require('node:path');
 
-// The approved login document owns artwork, layout, typography and controls.
-// This adapter supplies only the already validated native authorization forms.
 function renderNativeAuthShell(template, nativeHtml) {
   const main = nativeHtml.match(/<main>([\s\S]*?)<\/main>/)?.[1];
   const title = main?.match(/<h1>([\s\S]*?)<\/h1>/)?.[1];
@@ -16,7 +14,6 @@ function renderNativeAuthShell(template, nativeHtml) {
   let controls;
   const approval = forms.find(form => /action="\/auth\/native\/approve"/.test(form));
   if (approval) {
-    // Keep the server's hidden PKCE/state/redirect fields byte-for-byte.
     controls = approval.replace('<button>', '<button class="btn btn-primary" type="submit">');
   } else {
     const providers = forms.filter(form => /action="\/auth\/login"/.test(form)).map(form => {
@@ -36,8 +33,6 @@ function renderNativeAuthShell(template, nativeHtml) {
   if (!marker.test(template)) throw new Error('Approved login shell is unavailable');
   return template.replace(marker, card + '</div></div><div class="cell auth-entry-copy"')
     .replace(/<title>[\s\S]*?<\/title>/, '<title>Ouros · Connect your account</title>')
-    // Ordinary account scripts redirect to Dashboard. Native forms retain
-    // their existing server-owned POST and callback/consent flow.
     .replace(/<script\b[^>]*src="\/(?:account-entry|account)\.js"[^>]*><\/script>/g, '')
     .replace(/<noscript>[\s\S]*?<\/noscript>/g, '');
 }
@@ -84,9 +79,6 @@ function createNativeAuthShell(handle, options = {}) {
     const formAction = headers.get('content-security-policy')?.match(/(?:^|;)\s*form-action\s+([^;]+)/)?.[1];
     if (!formAction) throw new Error('Native authorization form policy is unavailable');
     headers.set('content-security-policy', `default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action ${formAction}`);
-    // Native consent submits a same-origin HTML form. no-referrer would make
-    // its Origin null, so the existing CSRF guard could not admit the POST.
-    // The callback/consent redirect response retains its no-referrer policy.
     headers.set('referrer-policy', 'same-origin');
     headers.delete('content-length');
     return new Response(html, { status: response.status, statusText: response.statusText, headers });

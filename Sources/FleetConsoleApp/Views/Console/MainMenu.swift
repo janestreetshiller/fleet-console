@@ -1,19 +1,6 @@
 import AppKit
 import SwiftUI
 
-// The application's main menu.
-//
-// The app is AppKit-bootstrapped (status items predate the console window, and
-// `MenuBarExtra` cannot render the custom summary glyphs those items use), so
-// there is no SwiftUI scene to hang `CommandGroup` on. This is the same
-// contract expressed in AppKit: named commands, standard key equivalents,
-// routed through `ConsoleCommand` notifications the console window observes.
-//
-// Navigation opens the dashboard before posting its destination command. The
-// window controller installs those observers at init, before SwiftUI renders.
-
-/// `@MainActor` on the enum rather than each member: every function here touches
-/// `NSApp`, `NSMenu` or `NSMenuItem`. The isolation was always required.
 @MainActor
 enum MainMenu {
 
@@ -27,8 +14,6 @@ enum MainMenu {
         installWindowMenu(into: mainMenu)
         installHelpMenu(into: mainMenu)
     }
-
-    // MARK: Application
 
     private static func installApplicationMenu(into menu: NSMenu) {
         let item = menu.addItem(withTitle: "FleetConsole", action: nil, keyEquivalent: "")
@@ -51,13 +36,6 @@ enum MainMenu {
         item.submenu = submenu
     }
 
-    // MARK: Edit
-    //
-    // Standard responder-chain items. Without an Edit menu, ⌘C/⌘V/⌘A stop
-    // working inside text fields — including the toolbar search field — which
-    // is the kind of bug that makes an app feel not-native before you can say
-    // why.
-
     private static func installEditMenu(into menu: NSMenu) {
         let item = menu.addItem(withTitle: "Edit", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "Edit")
@@ -74,8 +52,6 @@ enum MainMenu {
         item.submenu = submenu
     }
 
-    // MARK: View
-
     private static func installViewMenu(into menu: NSMenu, openConsole: @escaping @MainActor () -> Void) {
         let actions = MenuActionTarget.shared
         actions.openConsole = openConsole
@@ -83,11 +59,6 @@ enum MainMenu {
         let item = menu.addItem(withTitle: "View", action: nil, keyEquivalent: "")
         let submenu = NSMenu(title: "View")
 
-        // "Open Dashboard", not "Show Console". One command had three labels —
-        // this menu said Show Console, the status-item dropdown said Open
-        // Dashboard…, and the popover footer's button said Open Dashboard —
-        // which reads as three destinations to anyone who has not opened all
-        // three. README documents it as Open Dashboard (⌘0), so that is the name.
         let console = submenu.addItem(withTitle: "Open Dashboard",
                                       action: #selector(MenuActionTarget.showConsole),
                                       keyEquivalent: "0")
@@ -96,18 +67,12 @@ enum MainMenu {
 
         submenu.addItem(.separator())
 
-        // Attention is the landing surface, so it sits above the modules — but it is
-        // not one of them, which is why it takes a shifted equivalent and leaves
-        // ⌘1…⌘n bound to exactly the module indices, whatever their count.
         submenu.addItem(needsAttentionItem())
 
         for entry in moduleItems() { submenu.addItem(entry) }
 
         submenu.addItem(.separator())
 
-        // The chrome tools. `ConsoleTool.shortcut` is the declared key and this
-        // is the only place it is bound, so the rail's tooltips and the menu
-        // cannot drift apart.
         for tool in ConsoleTool.allCases {
             let entry = submenu.addItem(withTitle: tool.title,
                                         action: #selector(MenuActionTarget.toggleTool(_:)),
@@ -137,9 +102,6 @@ enum MainMenu {
         sidebar.keyEquivalentModifierMask = [.command, .control]
         sidebar.target = actions
 
-        // The inspector's menu entry. The sidebar's toggle comes free from
-        // AppKit; the trailing column's does not, so both halves of the window
-        // are reachable from the keyboard by the same route.
         let inspector = submenu.addItem(withTitle: "Toggle Inspector",
                                         action: #selector(MenuActionTarget.toggleInspector),
                                         keyEquivalent: "i")
@@ -148,13 +110,6 @@ enum MainMenu {
 
         submenu.addItem(.separator())
 
-        // There was no Full Screen item here for as long as the window set
-        // `.fullScreenNone`, and that was correct: AppKit would never have
-        // validated `toggleFullScreen:`, so the entry could only ever render
-        // grey, which is rule 10 exactly. The window resizes freely on both
-        // axes now and takes `.fullScreenPrimary`, so the capability is real
-        // and the chrome comes back with it. `toggleFullScreen:` is AppKit's
-        // own responder-chain action — nil target, no shim.
         let fullScreen = submenu.addItem(withTitle: "Enter Full Screen",
                                          action: #selector(NSWindow.toggleFullScreen(_:)),
                                          keyEquivalent: "f")
@@ -162,8 +117,6 @@ enum MainMenu {
 
         item.submenu = submenu
     }
-
-    // MARK: Shared items
 
     static func needsAttentionItem() -> NSMenuItem {
         let item = NSMenuItem(title: "Needs Attention",
@@ -183,21 +136,6 @@ enum MainMenu {
         return [guide, setup]
     }
 
-    /// The console modules as menu items, generated from `ConsoleModule.allCases`
-    /// and targeted at the shared action object.
-    ///
-    /// Built once and used twice — the View menu and the status item's dropdown.
-    /// The dropdown previously offered no route to a module at all: reaching the
-    /// process table from the menu bar meant opening the dashboard and then
-    /// finding it, on the app's most-used surface. Duplicating the loop over
-    /// there would have meant two lists that drift the moment a module is added,
-    /// which is the failure `shortcutIndex` and `allCases` exist to prevent, so
-    /// there is one builder instead.
-    ///
-    /// The equivalents shown are the real ones. They are live whenever the app is
-    /// active — the deployment is `.accessory`, so that means the console window
-    /// is focused, which is the only context in which selecting a module means
-    /// anything anyway.
     static func moduleItems() -> [NSMenuItem] {
         ConsoleModule.allCases.map { module in
             let entry = NSMenuItem(title: module.title,
@@ -209,8 +147,6 @@ enum MainMenu {
             return entry
         }
     }
-
-    // MARK: Window
 
     private static func installWindowMenu(into menu: NSMenu) {
         let item = menu.addItem(withTitle: "Window", action: nil, keyEquivalent: "")
@@ -236,8 +172,6 @@ enum MainMenu {
     }
 }
 
-/// Setup reads the current bundle rather than assuming an installation path or
-/// modifying the person's shell. Copying the quoted command never executes it.
 @MainActor
 enum FleetctlHelp {
     static let guideURL = URL(string: "https://github.com/janestreetshiller/fleet-console#readme")!
@@ -281,11 +215,6 @@ enum FleetctlHelp {
     }
 }
 
-/// Obj-C reachable target for menu items. Menus outlive any one window, so the
-/// target is a shared instance rather than a view controller.
-///
-/// `@MainActor` states what AppKit guarantees: menu actions dispatch on the main
-/// thread, and `openConsole` is installed from `applicationDidFinishLaunching`.
 @MainActor
 @objc private final class MenuActionTarget: NSObject {
     static let shared = MenuActionTarget()

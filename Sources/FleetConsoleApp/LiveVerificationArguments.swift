@@ -1,5 +1,3 @@
-/// Separates observational verifier options from its optional duration.
-/// Kept independent of AppKit so tests exercise the shipping argument parser.
 enum LiveVerificationArguments {
     static func duration(_ arguments: [String]) -> Double? {
         if arguments.contains("--review-ui") && !arguments.contains("--verify-quick-view") { return nil }

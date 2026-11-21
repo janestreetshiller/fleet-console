@@ -1,11 +1,3 @@
-//! Interface state and the key-handling state machine.
-//!
-//! `App::handle_key` is a pure function of the current state, the key and the
-//! dashboard. It never talks to the controller: it returns a `Command`, and
-//! the runtime submits any action and reports the result back with
-//! `App::submitted`. That keeps the confirmation rule testable without a
-//! socket: a destructive action only ever leaves as `Command::Submit` after a
-//! `y` on its confirmation line.
 
 use crate::content;
 use fleet_ui_core::controller::{Action, LogStream};
@@ -13,7 +5,6 @@ use fleet_ui_core::views::{Control, Dashboard, APPROVE_REPLY, DENY_REPLY};
 use fleet_ui_core::model::LogChunk;
 use std::time::Instant;
 
-/// Lease length the `n` key renews to, matching `fleetctl renew --lease 30m`.
 pub const RENEW_SECONDS: f64 = 30.0 * 60.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -51,7 +42,6 @@ impl View {
         }
     }
 
-    /// Lowercase name for commands and capture file names.
     pub fn name(self) -> &'static str {
         match self {
             View::Overview => "overview",
@@ -64,7 +54,6 @@ impl View {
     }
 }
 
-/// Keys the interface reacts to, independent of the terminal library.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Key {
     Char(char),
@@ -81,13 +70,11 @@ pub enum Key {
     Interrupt,
 }
 
-/// What the runtime does after a key.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     None,
     Quit,
     Submit(Action),
-    /// The log tail opened, closed or switched stream: poll now.
     TailChanged,
 }
 
@@ -123,7 +110,6 @@ pub struct Tail {
     pub service_id: String,
     pub name: String,
     pub stream: LogStream,
-    /// The `Logs` request in flight, if any.
     pub request: Option<u64>,
     pub last_sent: Option<Instant>,
     pub chunk: Option<Result<LogChunk, String>>,
@@ -131,7 +117,6 @@ pub struct Tail {
 
 #[derive(Debug, Clone, Default)]
 struct Selection {
-    /// Position in the filtered list.
     position: usize,
     key: Option<String>,
 }
@@ -144,11 +129,9 @@ pub struct App {
     pub confirm: Option<Confirm>,
     pub status: Option<Status>,
     pub tail: Option<Tail>,
-    /// The filter being typed, if any; the view's filter is updated live.
     pub editing_filter: bool,
     filters: [String; 6],
     selections: [Selection; 6],
-    /// First visible row of each view's list, kept between frames.
     pub offsets: [usize; 6],
     quit_armed: bool,
     pub read_only: bool,
@@ -180,7 +163,6 @@ impl App {
         content::visible(view, dash, self.filter(view))
     }
 
-    /// Position of the selection within the filtered list.
     pub fn position(&self, view: View, dash: &Dashboard) -> Option<usize> {
         let visible = self.visible(view, dash);
         if visible.is_empty() {
@@ -198,7 +180,6 @@ impl App {
         Some(sel.position.min(visible.len() - 1))
     }
 
-    /// Index into the view's underlying list for the selected row.
     pub fn selected(&self, view: View, dash: &Dashboard) -> Option<usize> {
         let visible = self.visible(view, dash);
         self.position(view, dash).map(|p| visible[p])
@@ -217,14 +198,10 @@ impl App {
         };
     }
 
-    /// Select a row by its position in the filtered list (mouse clicks).
     pub fn click_row(&mut self, dash: &Dashboard, position: usize) {
         self.select_position(self.view, dash, position);
     }
 
-    /// Re-anchor selections after the dashboard changed, so a selected row
-    /// stays selected when rows above it come or go. On the Agents view the
-    /// first open question is selected until the person moves.
     pub fn sync(&mut self, dash: &Dashboard) {
         for view in View::ALL {
             if view == View::Agents && self.selections[view.index()].key.is_none() {
@@ -284,7 +261,6 @@ impl App {
         }
     }
 
-    /// Record the runtime's result for a submitted action.
     pub fn submitted(&mut self, action: &Action, result: Result<u64, String>) {
         match result {
             Ok(_) => {
@@ -314,7 +290,6 @@ impl App {
                     Command::None
                 }
                 _ => {
-                    // Anything else leaves the question open.
                     self.confirm = Some(confirm);
                     Command::None
                 }
@@ -604,7 +579,6 @@ mod tests {
         assert!(confirm.prompt.contains("pid 3302"));
         assert!(confirm.prompt.contains("owner codex-1"));
 
-        // Keys other than y and n leave the question open and send nothing.
         assert_eq!(app.handle_key(Key::Char('j'), &dash), Command::None);
         assert!(app.confirm.is_some());
 
@@ -694,7 +668,6 @@ mod tests {
                 body: DENY_REPLY.into()
             })
         );
-        // A status line is not a question.
         app.handle_key(Key::Char('g'), &dash);
         assert_eq!(app.handle_key(Key::Char('y'), &dash), Command::None);
         assert!(app.status.unwrap().text.contains("open agent question"));

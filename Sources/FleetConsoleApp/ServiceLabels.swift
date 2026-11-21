@@ -4,7 +4,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// Local presentation preferences shared by popover and dashboard, never sent over RPC.
 @MainActor
 @Observable
 final class ServiceLabelsStore {
@@ -20,7 +19,6 @@ final class ServiceLabelsStore {
             let data = try Data(contentsOf: path)
             labels = try JSONDecoder().decode([String: ServiceLabel].self, from: data)
         } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-            // First use: do not create anything until a label is actually saved.
         } catch {
             loadError = "Could not read service labels: \(error.localizedDescription)"
         }
@@ -58,7 +56,6 @@ final class ServiceLabelsStore {
     }
 }
 
-/// The editor owns a draft. Dismissal never writes, and failed saves keep the draft open.
 @MainActor
 @Observable
 final class ServiceLabelEditorModel {
@@ -211,7 +208,6 @@ struct ServiceLabelEditor: View {
     }
 }
 
-/// Tags use their own glyph and neutral text. They never recolor a service's status icon.
 struct ServiceColorTag: View {
     let color: ServiceTagColor
     var compact = false

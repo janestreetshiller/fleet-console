@@ -1,33 +1,13 @@
-//! The agent's tool surface: typed operations over the fleetd socket.
-//!
-//! Forked from the rx MCP procedure: byte-stable tool definitions as module
-//! literals (no timestamps, counts, paths or host state in a schema), a pinned
-//! schema hash, canonical JSON serialization, and fail-closed behavior when
-//! the backing daemon is missing. The agent never gets raw shell execution —
-//! every capability is a typed RPC against the controller, which is the whole
-//! point of the console: agents call the CLI/daemon instead of spawning
-//! processes themselves (`docs/RUNBOOKS.md`).
 
 use serde_json::{json, Value};
 
 pub const FLEET_AGENT_ID: &str = "fleet-agent";
 
-/// Pinned SHA-256 of the canonical `tools/list` payload. A host (or test)
-/// asserts against this constant; a drifting schema invalidates prompt caches,
-/// which is the entire reason it is pinned.
 pub const SCHEMA_SHA256: &str = "e03ae4f09b80f4424a5bd35d91cce34d9fe47c4b65df5cbeabe6754a101499a0";
 
-// ---------------------------------------------------------------------------
-// Tool definitions
-// ---------------------------------------------------------------------------
-
-/// One tool's schema, as a pre-serialized canonical JSON object literal.
-/// Written by hand (not built from structs) so the bytes are stable by
-/// construction and reviewable in one place.
 struct ToolDef {
     name: &'static str,
     description: &'static str,
-    /// Canonical JSON: sorted keys, no whitespace.
     input_schema: &'static str,
 }
 
@@ -109,7 +89,6 @@ const TOOLS: &[ToolDef] = &[
     },
 ];
 
-/// The canonical `tools/list` result: sorted keys, compact separators.
 pub fn tools_list_payload() -> String {
     let tools: Vec<Value> = TOOLS
         .iter()
@@ -125,10 +104,7 @@ pub fn tools_list_payload() -> String {
     canonical(&payload)
 }
 
-/// Canonical JSON: sorted keys, compact separators — the cache-stable form.
 pub fn canonical(value: &Value) -> String {
-    // serde_json's Value preserves insertion order; canonicalize by
-    // re-serializing through a sorted map walk.
     fn write_canonical(value: &Value, out: &mut String) {
         match value {
             Value::Object(map) => {
@@ -184,10 +160,6 @@ pub fn is_mutating(name: &str) -> bool {
     !READ_ONLY_TOOLS.contains(&name)
 }
 
-// ---------------------------------------------------------------------------
-// Dispatch — every tool call becomes exactly one controller RPC.
-// ---------------------------------------------------------------------------
-
 pub struct DispatchError(pub String);
 
 impl std::fmt::Display for DispatchError {
@@ -208,8 +180,6 @@ pub struct Dispatcher<'a> {
 }
 
 impl<'a> Dispatcher<'a> {
-    /// Executable proposal boundary. Model-supplied `confirm=true` cannot opt
-    /// into controller mutations, including lease renewal and mailbox writes.
     pub fn call_read_only(
         &mut self,
         name: &str,
@@ -257,8 +227,6 @@ impl<'a> Dispatcher<'a> {
         ) {
             Ok(response) => response,
             Err(error) => {
-                // A partial or oversized frame cannot be safely reused by a
-                // later tool request. Drop it instead of reading stale bytes.
                 *self.client = None;
                 return Err(DispatchError(format!(
                     "controller round trip failed: {error}"
@@ -304,9 +272,6 @@ impl<'a> Dispatcher<'a> {
         }
     }
 
-    /// Fail closed with a reason when the daemon is missing: an agent
-    /// surface that fabricates success over a dead socket is the defect
-    /// class this codebase keeps having to remove.
     fn daemon(&mut self) -> Result<&mut fleet_proto::Client, DispatchError> {
         match self.client {
             Some(client) => Ok(client),
@@ -337,14 +302,12 @@ impl<'a> Dispatcher<'a> {
             .map_err(|e| DispatchError(format!("controller round trip failed: {e}")))?;
         let mut out = serde_json::to_value(OpaqueResponse::from(response))
             .map_err(|e| DispatchError(format!("encode response: {e}")))?;
-        // Present a stable, agent-friendly shape: ok/error first-class.
         if let Some(obj) = out.as_object_mut() {
             obj.insert("op".into(), json!(op_debug));
         }
         Ok(out)
     }
 
-    /// Execute one tool call. Returns the JSON `result` object.
     pub fn call(&mut self, name: &str, args: &Value) -> Result<Value, DispatchError> {
         if !is_known_tool(name) {
             return Err(DispatchError(format!(
@@ -518,8 +481,6 @@ impl<'a> Dispatcher<'a> {
     }
 }
 
-// The controller reply is half-opaque by design (`fleet-proto` docs); wrap it
-// so serde keeps every field the daemon sent, none invented.
 #[derive(serde::Serialize)]
 struct OpaqueResponse {
     ok: bool,
@@ -565,10 +526,6 @@ fn response_json_unused() {}
 fn str_field(args: &Value, key: &str) -> Option<String> {
     args.get(key).and_then(|v| v.as_str()).map(String::from)
 }
-
-// ---------------------------------------------------------------------------
-// Specialized analysis over a snapshot payload
-// ---------------------------------------------------------------------------
 
 fn f64_at(value: &Value, pointer: &[&str]) -> Option<f64> {
     let mut current = value;
@@ -679,7 +636,6 @@ fn mem_advice(snapshot_response: &Value, service_id: Option<&str>) -> Result<Val
             "budgetBreaches": breaches,
         }));
     }
-    // System-wide: read the telemetry block the snapshot carries when present.
     let external = snapshot.get("external").cloned().unwrap_or(json!([]));
     let sessions = snapshot.get("sessions").cloned().unwrap_or(json!([]));
     Ok(json!({
@@ -731,8 +687,6 @@ mod tests {
         assert!(is_mutating("fleet_stop"));
         assert!(is_mutating("fleet_launch"));
         assert!(is_mutating("fleet_reconcile"));
-        // renew and message mutate controller state but not processes;
-        // they stay un-gated by design and are documented as such.
         assert!(is_mutating("fleet_renew"));
     }
 
@@ -770,8 +724,6 @@ mod tests {
             let err = dispatcher.call("fleet_stop", &args).unwrap_err();
             assert!(err.0.contains("refused"), "got: {}", err.0);
         }
-        // Missing daemon means we never reach the confirm-passed path's send,
-        // so a true confirm must produce the *socket* error, not a panic.
         let err = dispatcher
             .call(
                 "fleet_stop",
@@ -803,7 +755,6 @@ mod tests {
         assert_eq!(top[0]["trend"], json!("Climbing"));
         assert_eq!(top[2]["id"], json!("small"));
         assert_eq!(top[2]["rssMB"], json!(90.0));
-        // limit truncates
         let out2 = top_memory(&response, 1);
         assert_eq!(out2.get("top").unwrap().as_array().unwrap().len(), 1);
     }

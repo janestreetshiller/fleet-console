@@ -2,8 +2,6 @@ import Foundation
 import AppKit
 import Observation
 
-/// Folder metadata follows the existing process-observation pulse. A root change
-/// or explicit expansion cancels the obsolete scan; there is no extra timer.
 @MainActor @Observable
 final class DirectoryCrystalStore {
     struct Request: Hashable {

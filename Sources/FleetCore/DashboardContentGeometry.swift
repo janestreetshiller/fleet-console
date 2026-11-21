@@ -1,6 +1,5 @@
 import CoreGraphics
 
-/// Keep Overview readable on wide screens without squeezing compact windows.
 public enum DashboardContentGeometry {
     public static let maximumWidth: CGFloat = 1_100
 

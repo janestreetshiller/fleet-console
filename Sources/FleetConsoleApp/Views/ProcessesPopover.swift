@@ -1,15 +1,11 @@
 import SwiftUI
 import FleetCore
 
-/// One process ranking, with CPU and memory as explicit sort choices.
 struct ProcessesContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
 
-    /// The row awaiting confirmation. Ending a process is not undoable, so it
-    /// gets the same treatment the destructive service verbs get.
     @State private var pendingTermination: ProcessRow?
-    /// Set when a signal was refused between the click and the syscall.
     @State private var refusal: String?
     @State private var weight: ProcessWeight = .cpu
 
@@ -70,12 +66,6 @@ struct ProcessesContent: View {
         }
     }
 
-    // MARK: - Summary
-
-
-    /// States worth naming are named; the ordinary majority is not enumerated.
-    /// A line reading "612 sleeping" every time would train you to skip it, and
-    /// then you would skip it on the day it said "1 zombie".
     private var census: String {
         var parts: [String] = []
         let stopped = inventory.rows.filter { $0.state == .stopped }.count
@@ -89,9 +79,6 @@ struct ProcessesContent: View {
         }
         return parts.joined(separator: " · ")
     }
-
-
-    // MARK: - Lists
 
     @ViewBuilder
     private func list(_ rows: [ProcessRow], weight: ProcessWeight) -> some View {
@@ -113,12 +100,6 @@ struct ProcessesContent: View {
         }
     }
 
-    // MARK: - Actions
-
-    /// Opens the dashboard on Processes with this pid selected. The console
-    /// already has a notification for exactly this — the process heatmap uses it
-    /// to hand a tile off to the inspector — so the menu bar reuses it rather
-    /// than inventing a second route to the same place.
     private func inspect(_ row: ProcessRow) {
         openDashboard()
         NotificationCenter.default.post(
@@ -133,18 +114,8 @@ struct ProcessesContent: View {
     }
 }
 
-// MARK: - Row
-
-/// One process, at popover density.
-///
-/// Composed from `CompactRow`'s vocabulary rather than reimplementing it: fixed
-/// height (rule 5 — this list promises not to scroll within its section), the
-/// shared `EntityIcon`, the shared hover highlight. What it adds over
-/// `CompactRow` is a trailing usage figure that has to stay on the baseline
-/// while the number changes, and the two verbs.
 private struct ProcessPopoverRow: View {
     let row: ProcessRow
-    /// What the process is, in words — see `ProcessRole`.
     let role: String?
     let weight: ProcessWeight
     let block: ProcessInventory.TerminationBlock?
@@ -176,9 +147,6 @@ private struct ProcessPopoverRow: View {
 
             Spacer(minLength: 4)
 
-            // The state word, only when it is one you would act on. `neutral`
-            // covers running/sleeping/idle, which is every process almost all of
-            // the time, and a tag on every row is a tag on no row.
             if row.state.tone != .neutral {
                 Tag(text: row.state.label, tone: row.state.tone)
             }
@@ -190,16 +158,6 @@ private struct ProcessPopoverRow: View {
                 .lineLimit(1)
                 .fixedSize()
 
-            // Reserved, not conditional. The verbs still only appear on hover —
-            // a row full of buttons you are not pointing at is noise — but the
-            // room they take is held on every row, always.
-            //
-            // Inserting them into the stack instead moved 46pt of content the
-            // instant the pointer arrived: the usage figure is the column this
-            // list is read down, and it slid left under the cursor while the
-            // name beside it truncated and then untruncated as you moved away.
-            // The popover header two levels up already reserves this exact slot
-            // for this exact reason; a row is the same argument at row scale.
             HStack(spacing: 2) {
                 IconButton(symbol: "info.circle", help: "Inspect in the dashboard", action: inspect)
                 if hovering && block == nil { endButton }
@@ -221,13 +179,6 @@ private struct ProcessPopoverRow: View {
         }
     }
 
-    /// Disabled with its reason attached rather than hidden.
-    ///
-    /// The Processes module already argues this for its context menu: a menu
-    /// that hides the verb invites the question, and a menu that explains it
-    /// teaches the model. Here the reason is usually "the flag is off", which
-    /// is a thing you can go and change — hiding the button would leave no
-    /// trace of the setting existing.
     @ViewBuilder
     private var endButton: some View {
         if let block {
@@ -238,8 +189,6 @@ private struct ProcessPopoverRow: View {
         }
     }
 
-    /// What it is first; the pid and owner are in the tooltip and the
-    /// inspector, which is where you go once you know you care.
     private var subtitle: String { role ?? identity }
 
     private var identity: String {
@@ -256,11 +205,6 @@ private struct ProcessPopoverRow: View {
         }
     }
 
-    /// Colour-coded severity, from the same thresholds the console uses, so
-    /// "busy" cannot mean one thing in the menu bar and another in the window.
-    /// Memory has no equivalent single-machine threshold — 400 MB is normal for
-    /// a browser tab and alarming for a shell — so that list stays achromatic
-    /// and lets the ordering carry the ranking.
     private var severity: StatusTone {
         switch weight {
         case .cpu: return SystemThresholds.cpuActivity(percent: row.cpuPercent)
@@ -275,11 +219,6 @@ private struct ProcessPopoverRow: View {
     }
 }
 
-/// Which of the two weights a list is ranked by.
-///
-/// Top level rather than nested inside the section: the row is a separate type
-/// and has to name it, and a nested enum would mean the row referring back up to
-/// the view that happens to own it today.
 enum ProcessWeight: Hashable {
     case cpu, memory
 
@@ -295,12 +234,6 @@ enum ProcessWeight: Hashable {
     }
 }
 
-// MARK: - Role
-
-/// A process described by what it is to you, from the evidence the app already
-/// holds: a service the controller launched (with the purpose its agent gave),
-/// an agent session, an app, a server on a port, or part of macOS. Nil when
-/// none of those is known, rather than a guess.
 enum ProcessRole {
     @MainActor
     static func describe(_ row: ProcessRow, model: AppModel) -> String? {

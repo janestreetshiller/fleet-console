@@ -1,7 +1,6 @@
 import SwiftUI
 import FleetCore
 
-/// Immutable observation captured by the rendered surface, never a shell fragment.
 struct InvestigationRequest: Encodable, Sendable {
     struct ProcessEvidence: Encodable, Sendable {
         let pid: Int32
@@ -16,7 +15,6 @@ struct InvestigationRequest: Encodable, Sendable {
         init(_ row: ProcessRow) {
             pid = row.pid; parentPID = row.ppid
             startSignature = String(row.startSignature.prefix(64))
-            // Omit argv, paths, environment, usernames, addresses and log bodies.
             executable = InvestigationRequest.label((row.name as NSString).lastPathComponent)
             cpuPercent = row.cpuPercent.isFinite && row.cpuPercent >= 0 ? row.cpuPercent : nil
             residentBytes = row.residentBytes >= 0 ? row.residentBytes : nil
@@ -125,7 +123,6 @@ struct InvestigationRequest: Encodable, Sendable {
 }
 
 extension AppModel {
-    /// Account presence is a local prerequisite. The gateway alone authorizes analysis.
     var investigationBlock: String? {
         if !ourosBilling.signedIn { return "Connect your Ouros account in Dashboard → Ouros Account to investigate." }
         return nil
@@ -156,7 +153,6 @@ extension AppModel {
     }
 }
 
-/// Right-click, double-click, VoiceOver action and focused Return/Space share one path.
 private struct InvestigationActions: ViewModifier {
     let request: InvestigationRequest
     let model: AppModel
@@ -182,11 +178,7 @@ extension View {
     }
 }
 
-/// The same server-enforced completion contract used by Ouros Agent. No tools or
-/// shell execution are advertised: this turn analyzes the supplied snapshot only.
 enum InvestigationGatewayPayload {
-    /// Match the existing Ouros Agent refusal contract: unknown 400/422, 429,
-    /// upstream errors and timeouts remain uncertain and must not be replayed.
     static func refusedBeforeDispatch(data: Data, status: Int) -> Bool {
         if [401, 402, 403, 404, 405, 413].contains(status) { return true }
         let object = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]

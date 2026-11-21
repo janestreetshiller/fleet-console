@@ -4,8 +4,6 @@ import SwiftUI
 import FleetCore
 import Darwin
 
-/// Runs the actual window, probes and navigation with no fixture injection,
-/// helper registration, notification prompts or foreground activation.
 @MainActor
 enum LiveVerification {
     static func runIfRequested() -> Bool {

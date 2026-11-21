@@ -1,10 +1,3 @@
-//! MCP stdio server for the fleet-agent surface.
-//!
-//! Forked from the rx MCP procedure: newline-delimited JSON-RPC 2.0 over
-//! stdio, byte-stable `tools/list`, fail-closed `tools/call` with the error
-//! naming the socket, and zero records written for rejected or unavailable
-//! calls. The schema hash is pinned in `tools::SCHEMA_SHA256` and asserted by
-//! the crate's own tests.
 
 use crate::tools::{self, Dispatcher};
 use serde_json::{json, Value};
@@ -22,7 +15,6 @@ impl<'a> Server<'a> {
         Self { dispatcher }
     }
 
-    /// Serve newline-delimited JSON-RPC on the given reader/writer until EOF.
     pub fn serve(&mut self, mut reader: impl BufRead, mut writer: impl Write) -> io::Result<()> {
         let mut line = String::new();
         loop {
@@ -58,7 +50,7 @@ impl<'a> Server<'a> {
                         "serverInfo": { "name": "fleet-agent", "version": env!("CARGO_PKG_VERSION") },
                     }),
                 ),
-                "notifications/initialized" | "initialized" => continue, // notification: no reply
+                "notifications/initialized" | "initialized" => continue,
                 "ping" => result_response(id, json!({})),
                 "tools/list" => {
                     let tools: Value =
@@ -79,9 +71,6 @@ impl<'a> Server<'a> {
                             }),
                         ),
                         Err(error) => {
-                            // Tool errors are *results* in MCP, not protocol
-                            // errors: the host sees isError and the model
-                            // reads the reason.
                             result_response(
                                 id,
                                 json!({
@@ -120,7 +109,6 @@ mod tests {
     use std::io::Cursor;
 
     fn dispatch_with_no_daemon() -> Dispatcher<'static> {
-        // A leaked empty box satisfies the 'static borrow without unsafe.
         let none: &'static mut Option<fleet_proto::Client> =
             Box::leak(Box::new(None::<fleet_proto::Client>));
         Dispatcher { client: none, socket_path: Default::default() }
@@ -143,7 +131,6 @@ mod tests {
         let list: Value = serde_json::from_str(lines[1]).unwrap();
         let tools = list["result"]["tools"].as_array().unwrap();
         assert_eq!(tools.len(), tools::tool_names().len());
-        // Byte-stable: the embedded list matches the pinned payload.
         let payload = tools::tools_list_payload();
         assert!(serde_json::from_str::<Value>(&payload).is_ok());
     }

@@ -1,10 +1,3 @@
-//! `fleet-tui`: the FleetConsole terminal client for macOS and Linux.
-//!
-//! Every value comes from `fleet-ui-core`: the controller connection and the
-//! local telemetry sampler run on background threads there, and
-//! `views::Dashboard::build` derives everything drawn here. Actions are
-//! controller requests with `fleetctl` semantics; nothing in this binary
-//! signals a process.
 
 mod app;
 #[cfg(any(test, feature = "fixtures"))]
@@ -29,10 +22,7 @@ use std::io::IsTerminal;
 use std::time::Duration;
 use theme::{ColorMode, Theme};
 
-/// How long `--once` waits for the controller's first answer and a second
-/// telemetry sample before printing what it has.
 const ONCE_SETTLE: Duration = Duration::from_secs(8);
-/// Size used for `--once` (and captures) when standard output is not a terminal.
 const ONCE_SIZE: (u16, u16) = (120, 40);
 
 fn main() {
@@ -52,9 +42,6 @@ fn main() {
         }
         Ok(Parsed::Run(options)) => run(*options),
     };
-    // Exit without joining the worker threads: an in-flight stop or restart
-    // holds the action thread until its deadline, and the request has
-    // already reached the controller.
     std::process::exit(code);
 }
 
@@ -140,7 +127,6 @@ fn run(options: Options) -> i32 {
             }
         }
     };
-    // The workers end with the process; see `main`.
     std::mem::forget(source);
     code
 }
@@ -166,8 +152,6 @@ fn make_source(
         ..ControllerConfig::default()
     };
     settings.socket_label = display_path(&config.socket);
-    // `--once` samples telemetry every second so its second sample, the
-    // first with CPU figures, arrives quickly.
     let telemetry_interval = if options.once {
         Duration::from_secs(1)
     } else {

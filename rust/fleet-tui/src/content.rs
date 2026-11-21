@@ -1,6 +1,3 @@
-//! What each view lists, inspects and hands to an agent, derived from the
-//! dashboard. Pure functions shared by the full-screen and plain renderers,
-//! so both show the same rows, the same detail facts and the same commands.
 
 use crate::app::View;
 use crate::theme::Tone;
@@ -11,15 +8,12 @@ use fleet_ui_core::views::{
 };
 use fleet_ui_core::{Metric, Phase};
 
-/// Remove terminal control sequences and control characters from text that
-/// came from the controller, an agent or a log. Tabs become spaces.
 pub fn clean(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
             '\u{1b}' => match chars.peek() {
-                // CSI: parameters and intermediates up to a final byte.
                 Some('[') => {
                     chars.next();
                     for n in chars.by_ref() {
@@ -28,7 +22,6 @@ pub fn clean(text: &str) -> String {
                         }
                     }
                 }
-                // OSC, DCS, SOS, PM, APC: up to BEL or ST.
                 Some(']') | Some('P') | Some('X') | Some('^') | Some('_') => {
                     chars.next();
                     while let Some(n) = chars.next() {
@@ -53,9 +46,6 @@ pub fn clean(text: &str) -> String {
     out
 }
 
-/// Bytes from a size `format::bytes` produced (`512 B`, `1.5 KB`, `995 GB`).
-/// The storage view needs relative volume capacities and the view model
-/// carries only the formatted text; `None` when the text is not a size.
 pub fn parse_size(text: &str) -> Option<f64> {
     let (number, unit) = text.trim().split_once(' ')?;
     let value: f64 = number.parse().ok()?;
@@ -65,12 +55,10 @@ pub fn parse_size(text: &str) -> Option<f64> {
     Some(value * 1024f64.powi(power as i32))
 }
 
-/// Percent wording for speech: `34 percent`, `above 50 percent`.
 pub fn speak(text: &str) -> String {
     text.replace('%', " percent")
 }
 
-/// `cpu 34 percent, normal` or `gpu unavailable, not measured on this platform`.
 pub fn spoken_gauge(gauge: &Gauge) -> String {
     match (gauge.metric, gauge.level) {
         (Metric::Unavailable(reason), _) => {
@@ -112,9 +100,6 @@ pub fn phase_tone(phase: Phase) -> Tone {
     }
 }
 
-/// Tree glyphs for each process line from its depth and last-child flag:
-/// `├─ ` and `└─ ` for the line itself, `│  ` for an ancestor with siblings
-/// still to come.
 pub fn tree_prefixes(lines: &[ProcessLine]) -> Vec<String> {
     let mut open: Vec<bool> = Vec::new();
     lines
@@ -149,7 +134,6 @@ pub fn len(view: View, dash: &Dashboard) -> usize {
     }
 }
 
-/// A stable identity for a row, so the selection follows it across refreshes.
 pub fn key(view: View, dash: &Dashboard, index: usize) -> Option<String> {
     Some(match view {
         View::Overview => dash.cluster.tiles.get(index)?.id.clone(),
@@ -173,7 +157,6 @@ pub fn key(view: View, dash: &Dashboard, index: usize) -> Option<String> {
     })
 }
 
-/// The text a filter matches against.
 pub fn search_text(view: View, dash: &Dashboard, index: usize) -> String {
     match view {
         View::Overview => dash
@@ -221,7 +204,6 @@ pub fn search_text(view: View, dash: &Dashboard, index: usize) -> String {
     .to_lowercase()
 }
 
-/// Indices of the rows a filter keeps, in display order.
 pub fn visible(view: View, dash: &Dashboard, filter: &str) -> Vec<usize> {
     let needle = filter.trim().to_lowercase();
     (0..len(view, dash))
@@ -229,7 +211,6 @@ pub fn visible(view: View, dash: &Dashboard, filter: &str) -> Vec<usize> {
         .collect()
 }
 
-/// The managed service a row refers to, for restart, stop, renew and tail.
 pub fn service_for<'a>(view: View, dash: &'a Dashboard, index: usize) -> Option<&'a ServiceRow> {
     match view {
         View::Services => dash.services.get(index),
@@ -259,7 +240,6 @@ pub struct QuestionRef {
     pub reply: Control,
 }
 
-/// The open agent question a row refers to, for approve and deny.
 pub fn question_for(view: View, dash: &Dashboard, index: usize) -> Option<QuestionRef> {
     match view {
         View::Agents => {
@@ -303,7 +283,6 @@ pub fn question_by_id(dash: &Dashboard, message_id: i64) -> Option<QuestionRef> 
     })
 }
 
-/// The evidence a destructive action rests on, shown before it is sent.
 pub fn confirm_prompt(action: &Action, row: &ServiceRow) -> String {
     let verb = match action {
         Action::Stop { .. } => "Stop",
@@ -331,7 +310,6 @@ pub fn control_text(control: &Control) -> String {
     }
 }
 
-/// One fact in a detail pane.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fact {
     pub label: String,
@@ -347,7 +325,6 @@ fn fact(label: &str, text: impl Into<String>, tone: Tone) -> Fact {
     }
 }
 
-/// Title and facts for the selected row.
 pub fn detail(view: View, dash: &Dashboard, index: usize) -> Option<(String, Vec<Fact>)> {
     match view {
         View::Overview => {
@@ -574,9 +551,6 @@ fn attention_facts(r: &AttentionRow) -> Vec<Fact> {
     facts
 }
 
-/// The read-only `fleetctl` commands that describe a target, for handing it
-/// to an agent session. Commands that change controller state are listed
-/// apart and labelled.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Handoff {
     pub target: String,

@@ -2,8 +2,6 @@ import Foundation
 import SwiftUI
 import FleetCore
 
-/// One observable box per service. Rows observe *their own* record, so a snapshot
-/// that changes one service's CPU number re-renders one row, not the whole list.
 @Observable
 final class ServiceRow: Identifiable {
     let id: String
@@ -29,7 +27,6 @@ final class DeviceRow: Identifiable {
 @Observable
 @MainActor
 final class AppModel {
-    // Membership-level state: reassigned only when the *set* changes.
     private(set) var serviceRows: [ServiceRow] = []
     private(set) var deviceRows: [DeviceRow] = []
     private(set) var unmanaged: [UnmanagedProcess] = []
@@ -41,22 +38,14 @@ final class AppModel {
     var connectionError: String?
     var agentRegistered = false
     var lastSnapshotAt: Date?
-    /// Local monotonic receipt time, independent of the daemon's wall clock.
-    /// Cleared on connection transitions so a reconnect cannot reuse old evidence.
     private(set) var lastSnapshotReceivedUptime: TimeInterval?
     var actionError: String?
     var busyServiceIDs: Set<String> = []
 
-    /// `config.json`, watched. Every section toggle, cadence and feature flag
-    /// resolves here, so no view invents its own answer. Built first because the
-    /// probes below take their intervals from it.
     let settings = Settings()
 
     let network: NetworkMonitor
     let actions = NetworkActions()
-    /// Licensing and the trial clock. Declared before the probes that gate on
-    /// it (`system` reads its answer every sample), so property order is also
-    /// the dependency order. See FleetCore/License.swift.
     let license = LicenseManager()
     let ourosBilling: OurosBilling
     let system: SystemMonitor
@@ -64,27 +53,17 @@ final class AppModel {
     let breakdown = StorageBreakdown()
     let processes: ProcessInventory
     let hosts = HostProbe()
-    /// Today's agent spend. Sampled on its own slow cadence rather than the
-    /// snapshot's — see `AgentCostProbe` — and only when the feature is on.
     let agentCost = AgentCostProbe()
 
-    /// Drives lease countdowns and "x ago" labels without touching the data model.
     var clockTick: Int = 0
 
-    /// Which popover section the next opening should land on, set by the
-    /// status item's dropdown and cleared by the popover once it has moved.
-    /// `nil` means no one asked, and the popover falls back to its own rule.
     var requestedSection: FleetSection?
 
-    // Nonisolated so `deinit` can invalidate it; nothing observes this handle.
     @ObservationIgnored nonisolated(unsafe) private var clockTimer: Timer?
     private var didInitialLoad = false
 
     init(billing: OurosBilling? = nil, connectToController: Bool = true) {
         ourosBilling = billing ?? OurosBilling()
-        // Cadences come from config, clamped there. Read once at construction:
-        // a live interval change would mean tearing down and rebuilding the two
-        // timers, and the honest cost of editing a sampling rate is a relaunch.
         let intervals = settings.intervals
         network = NetworkMonitor(interval: intervals.clampedNetworkRefresh)
         system = SystemMonitor { [license] feature in license.isUnlocked(feature) }
@@ -112,13 +91,9 @@ final class AppModel {
         }
     }
 
-    /// The run loop holds the timer even though the closure is weak, so it has to
-    /// be invalidated here or a per-view instance would strand a live tick.
     deinit {
         clockTimer?.invalidate()
     }
-
-    // MARK: - Snapshot application
 
     func apply(_ snapshot: Snapshot) {
         connected = true
@@ -129,7 +104,6 @@ final class AppModel {
         lastSnapshotAt = snapshot.generatedAt
         lastSnapshotReceivedUptime = ProcessInfo.processInfo.systemUptime
 
-        // Services: update in place; only reassign the array when membership changes.
         let incoming = snapshot.services
         var existing = Dictionary(uniqueKeysWithValues: serviceRows.map { ($0.id, $0) })
         var rebuilt: [ServiceRow] = []
@@ -171,17 +145,15 @@ final class AppModel {
             let previouslyKnown = Set(mailbox.map(\.id))
             mailbox = snapshot.messages
             recentMessages = mailbox.filter { !dismissals.contains($0.id) }
-            // Notify once, for messages we have not seen before.
             let fresh = recentMessages.filter { !previouslyKnown.contains($0.id) && $0.seenAt == nil }
             if !didInitialLoad {
-                didInitialLoad = true          // don't replay the backlog on launch
+                didInitialLoad = true
             } else {
                 for message in fresh { Notifier.post(message) }
             }
         }
         if externalServices != snapshot.external { externalServices = snapshot.external }
         if sessions != snapshot.sessions { sessions = snapshot.sessions }
-        // Retain bounded metadata from actual pushes. No transcript, purpose, argv or paths.
         if jobObservations.last.map({ snapshot.generatedAt.timeIntervalSince($0.time) >= 4 }) ?? true {
             let agentEntries = snapshot.sessions.prefix(32).map {
                 "Detected " + InvestigationRequest.label($0.tool) + " · pid \($0.pid)"
@@ -197,29 +169,20 @@ final class AppModel {
         if attention != snapshot.attention { attention = snapshot.attention }
         if recentEvents != snapshot.recentEvents { recentEvents = snapshot.recentEvents }
 
-        // Rides the snapshot tick as a heartbeat only: the probe throttles
-        // itself, so this asks far more often than it scans.
         if settings.features.showAgentSpend { agentCost.refresh() }
     }
-
-    // MARK: - Derived state
 
     var activeServices: [ServiceRow] {
         serviceRows.filter { !$0.record.state.isTerminal }
     }
 
-    /// Actually up, as opposed to merely on the books. An expired lease still has
-    /// a row; it does not have a running process.
     var runningServices: [ServiceRow] {
         serviceRows.filter(\.record.state.isRunning)
     }
 
     private(set) var agentSummaries: [AgentSummary] = []
     private(set) var agentProfiles: [AgentProfile] = []
-    /// The mailbox as the operator sees it: everything the controller holds,
-    /// less what was dismissed here.
     private(set) var recentMessages: [AgentMessage] = []
-    /// The controller's mailbox, unfiltered.
     @ObservationIgnored private var mailbox: [AgentMessage] = []
     @ObservationIgnored private let dismissals = MessageDismissals()
     private(set) var externalServices: [ExternalService] = []
@@ -232,8 +195,6 @@ final class AppModel {
     @ObservationIgnored private var topologySource: Snapshot?
     private(set) var topology: FleetTopology?
 
-    /// Uses the existing app clock, invalidating the graph only at an evidence
-    /// boundary. No additional poller, animation or per-frame graph layout.
     private func expireTopologyEvidence() {
         guard let deadline = topology?.validUntil, Date() > deadline, let source = topologySource else { return }
         topology = FleetTopology(snapshot: source)
@@ -246,26 +207,6 @@ final class AppModel {
     var criticalCount: Int { attention.filter { $0.severity == .critical }.count }
     var warningCount: Int { attention.filter { $0.severity == .warning }.count }
 
-
-    // MARK: - Menu-bar summary
-    //
-    // One item, because the app puts up one — see `MenuBarItemController`, whose
-    // own comment records the collapse from five to two to one.
-    //
-    // This block used to open by explaining "two items, two deliberately
-    // different silhouettes", and to carry a full second set of properties —
-    // `connectionsGlyph`, `connectionsText`, `connectionsTint`,
-    // `connectionsTooltip` — computing a live summary of the network for an item
-    // that no longer existed. Nothing read them. They were the same drift the
-    // design audit's menu-bar check was added to catch in the *documentation*,
-    // one layer down where a script comparing prose against
-    // `MenuBarItemController(identifier:)` could not see them: every fact they
-    // assembled is on the Connections tab of the popover, which is where it is
-    // actually read. Deleted rather than kept as a seam — the popover is the
-    // seam, and a second item would start from it.
-
-    /// CPU, RAM and disk, in that order, as the menu bar draws them. A reading
-    /// that has not been taken yet is a dash, never a confident zero.
     var fleetMeters: [MenuBarMeter] {
         [MenuBarMeter(label: "CPU",
                       value: system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—"),
@@ -275,8 +216,6 @@ final class AppModel {
                       value: system.storage.totalBytes > 0 ? ConsoleFmt.utilPercent(system.storage.usedShare) : "—")]
     }
 
-    /// The one thing worth acting on, after the meters: someone waiting on you,
-    /// then anything wrong. Empty when there is nothing to do.
     var fleetAlert: String {
         if !connected { return "Offline" }
         if awaitingReplyCount > 0 { return "!\(awaitingReplyCount)" }
@@ -284,8 +223,6 @@ final class AppModel {
         return ""
     }
 
-    /// The same precedence as one sentence, for the identity rows in the
-    /// popover header and the dashboard sidebar.
     var fleetStatusLine: String {
         guard connected else { return "Controller offline" }
         if awaitingReplyCount > 0 { return "\(awaitingReplyCount) awaiting your answer" }
@@ -320,27 +257,11 @@ final class AppModel {
         if let soonest = agentProfiles.compactMap(\.nextLeaseExpiry).min() {
             lines.append("next lease expires \(Fmt.relative(soonest))")
         }
-        // One line of network, and only when something is wrong with it.
-        //
-        // The collapse to a single menu-bar item took the network summary off the
-        // menu bar with the Connections item, and nothing replaced it: with the
-        // link down or the tailnet stopped, the one always-visible surface said
-        // "3 running" and explained none of the health checks that were about to
-        // start failing. This is not the second item coming back — it makes no
-        // claim in the glyph and never changes `fleetTint`, because a dropped
-        // Wi-Fi is not a fact about the fleet. It is the sentence that saves you
-        // opening the popover to find out why.
         if let fault = networkFault { lines.append(fault) }
         lines.append("fleetd up \(Fmt.duration(daemon.uptime))")
         return lines.joined(separator: "\n")
     }
 
-    /// The network in one line, or nil when there is nothing to say.
-    ///
-    /// Only the conditions that break something: no route off the machine, and a
-    /// tailnet that is installed but not running — which silently strips every
-    /// `100.x` address the device probes depend on. A working network produces no
-    /// line at all, on the same rule as the VLAN chrome: absent, not "all fine".
     private var networkFault: String? {
         if network.internet.reachable == false { return "no internet — \(network.internet.summary)" }
         if !network.ethernet.connected && !network.wifi.connected {
@@ -357,8 +278,6 @@ final class AppModel {
         return nil
     }
 
-    /// Evidence older than this is rendered as "unknown (stale)" rather than as its
-    /// last-known-good value.
     var staleTolerance: TimeInterval {
         (daemon?.tickIntervalSec ?? 5) * 3
     }
@@ -367,23 +286,6 @@ final class AppModel {
         serviceRows.first { $0.id == id }?.record
     }
 
-    // MARK: - Actions
-
-    /// `surfacesErrors` is the difference between a verb and a poll.
-    ///
-    /// A failed **action** — stop, restart, kill — has to interrupt: you asked
-    /// for something, it did not happen, and you need to know before you assume
-    /// it did. A failed **refresh** must not. `refreshAll()` runs on every
-    /// popover open, so routing its failure to `actionError` meant that with the
-    /// controller down, clicking the menu-bar item raised a modal alert saying
-    /// the socket was missing — every single time, on top of the
-    /// `ControllerDownBanner` and the footer pip that were already saying the
-    /// same thing in the same window. Three copies of one fact, one of them
-    /// blocking, for a condition the user did not cause and cannot dismiss by
-    /// acknowledging it.
-    ///
-    /// A refresh failure is ambient state, and the app already has a place for
-    /// ambient state: `connected` / `connectionError`, which the banner reads.
     private func perform(_ request: RPCRequest, serviceID: String?, timeout: TimeInterval = 30,
                          surfacesErrors: Bool = true,
                          then: (() -> Void)? = nil) {
@@ -391,11 +293,6 @@ final class AppModel {
         DaemonClient.shared.send(request, timeout: timeout) { [weak self] result in
             guard let self else { return }
             if let serviceID { self.busyServiceIDs.remove(serviceID) }
-            // `then` runs on both paths deliberately. It is a *finally*, not a
-            // success handler: its callers use it to clear an in-flight flag,
-            // and a flag cleared only on success leaves a control spinning for
-            // ever the one time the controller does not answer — which is
-            // precisely when you are looking at it.
             defer { then?() }
             switch result {
             case .success(let response):
@@ -426,22 +323,10 @@ final class AppModel {
         perform(RPCRequest(op: .renew, serviceID: record.id, ttlSec: ttl), serviceID: record.id)
     }
 
-    /// Adopts an unmanaged process into the registry.
-    ///
-    /// The third answer on an unmanaged row, between "this is expected, stop
-    /// telling me" (allow-list) and "I will go look at it myself" (Activity
-    /// Monitor): *this one matters, watch it*. It gets an owner, a purpose, a
-    /// lease and a timeline, and the controller still refuses to signal it — so
-    /// unlike End Process this is not a destructive verb and needs no feature
-    /// flag, no uid check and no confirmation.
     func claim(_ process: UnmanagedProcess) {
         claim(unmanagedID: process.id, name: process.command)
     }
 
-    /// The same verb from the process table, where a row is a pid rather than an
-    /// entry in the reconciler's list. The controller accepts a bare pid and
-    /// re-verifies it either way, so this is the same call with a weaker
-    /// identifier — not a second, looser path in.
     func claim(pid: Int32, name: String) {
         claim(unmanagedID: String(pid), name: name)
     }
@@ -455,9 +340,6 @@ final class AppModel {
                 serviceID: nil)
     }
 
-    /// Adds a command to the expected-listener allow-list in config.json. This is
-    /// the explicit, reviewable act the threat model asks for — one click, but it
-    /// leaves a config entry and an event behind, not a hidden dismissal.
     func markExpected(_ command: String) {
         perform(RPCRequest(op: .ignoreCommand, command: command), serviceID: nil)
     }
@@ -483,9 +365,6 @@ final class AppModel {
         perform(RPCRequest(op: .reply, body: text, messageID: message.id), serviceID: nil)
     }
 
-    /// Takes messages off every surface — the Agents tab, the mailbox, Home and
-    /// the menu-bar count. A view decision, not a deletion: the controller keeps
-    /// its history, so `fleetctl inbox` still shows an agent what it said.
     func dismissMessages(_ ids: [Int64]) {
         guard !ids.isEmpty else { return }
         dismissals.insert(ids)
@@ -498,10 +377,6 @@ final class AppModel {
         perform(RPCRequest(op: .markSeen), serviceID: nil, surfacesErrors: false)
     }
 
-    /// True while a re-evidence request is in flight, so the control that
-    /// started it can say so. A refresh that completes in 200 ms and changes
-    /// nothing visible is indistinguishable from a button that does nothing —
-    /// which is exactly what the old one was.
     var isReconciling = false
 
     func reconcileNow() {
@@ -512,18 +387,6 @@ final class AppModel {
         }
     }
 
-    /// The refresh a *person* asked for: re-probe everything this app samples
-    /// itself, and make the controller re-capture the process table and re-run
-    /// the sweep.
-    ///
-    /// Distinct from `refreshAll()`, and the distinction is the bug this fixes.
-    /// `refreshAll` sends `.snapshot`, which the controller answers out of
-    /// memory without sampling anything — correct for the automatic call on
-    /// every popover open, and worthless as a button, because the subscription
-    /// already pushes that same state every supervisor tick. Services, unmanaged
-    /// processes and agent sessions are only rebuilt inside `runReconcile`, so
-    /// `.reconcile` is the only request that can change what the Services and
-    /// Agents tabs are showing.
     func reEvidence() {
         network.refresh()
         system.sample()
@@ -541,8 +404,6 @@ final class AppModel {
         network.refresh()
         system.sample()
         refreshDevices()
-        // A poll, not a verb — see `perform`. The banner reports a down
-        // controller; a modal must not.
         perform(RPCRequest(op: .snapshot), serviceID: nil, surfacesErrors: false)
     }
 
@@ -584,9 +445,6 @@ final class AppModel {
     }
 }
 
-/// Dismissed message IDs, kept in user defaults. Bounded: message IDs only
-/// grow, so the oldest dismissals are the ones the controller has already
-/// rotated out of the snapshot.
 final class MessageDismissals {
     private static let key = "fleetconsole.dismissedMessages"
     private static let limit = 2_000

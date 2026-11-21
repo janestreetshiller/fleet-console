@@ -2,16 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-// MARK: - Model
-
-/// Composes a supervised task and hands it to the controller.
-///
-/// This is the one surface where the app *asks* the controller to launch
-/// something — the controller alone launches and reaps, so this is a request
-/// against the existing `launch` verb, not a new authority. The distinction the
-/// whole product is built on is kept intact: `claim` buys visibility but not
-/// authority, while a task composed here is a *launch*, which the controller is
-/// entitled to supervise and reap.
 @Observable
 @MainActor
 final class TaskComposerModel {
@@ -24,13 +14,10 @@ final class TaskComposerModel {
     var port: String = ""
     var healthURL = ""
 
-    /// Result feedback, surfaced in the window footer.
     var status: String?
     var statusIsError = false
     var isSubmitting = false
 
-    /// Ownership IDs from the local address book and controller profiles.
-    /// Registration does not imply a detected session; operator stays selectable.
     var agentOptions: [String] {
         let names = Set(agentProfiles.map(\.id) + registration.registeredIDs)
         return ["operator"] + names.filter { $0 != "operator" }.sorted()
@@ -86,7 +73,6 @@ final class TaskComposerModel {
         isSubmitting = true
         status = nil
         DaemonClient.shared.launch(request) { [weak self] result in
-            // `submit()` is @MainActor; the completion arrives on the main actor.
             guard let self else { return }
             self.isSubmitting = false
             switch result {
@@ -106,10 +92,6 @@ final class TaskComposerModel {
     }
 }
 
-// MARK: - View
-
-/// A clean composition surface: define a task and assign it to an agent (or a
-/// category), then launch it under the controller.
 struct TaskComposerView: View {
     @Bindable var model: TaskComposerModel
     let dismiss: () -> Void
@@ -237,8 +219,6 @@ struct TaskComposerView: View {
             .foregroundStyle(.secondary)
     }
 }
-
-// MARK: - Window
 
 @MainActor
 final class TaskComposerWindowController: NSObject, NSWindowDelegate {

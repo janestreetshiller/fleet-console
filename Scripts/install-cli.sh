@@ -1,14 +1,4 @@
 #!/bin/bash
-# First-run helper: puts fleetctl on the user's PATH.
-#
-# FleetConsole ships its CLI inside the bundle at
-# FleetConsole.app/Contents/Resources/bin/fleetctl. The app itself never needs
-# this; the terminal does. This script symlinks the bundled binary into
-# /usr/local/bin — falling back to ~/.local/bin when /usr/local/bin is not
-# writable without sudo — so `fleetctl` works from any shell.
-#
-# Run it from the DMG's window or after copying the app to /Applications:
-#   /Applications/FleetConsole.app/Contents/Resources/bin/install-cli
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$BASH_SOURCE[0]")" && pwd)"

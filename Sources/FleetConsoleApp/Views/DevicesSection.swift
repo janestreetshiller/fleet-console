@@ -37,8 +37,6 @@ struct DeviceRowView: View {
 
     private var device: DeviceRecord { row.record }
 
-    /// Names the probe that produced the verdict. "Online" on its own is the claim
-    /// this app will not make.
     private var summary: String {
         let e = device.evidence
         if e.isSelf { return "this machine" }
@@ -88,7 +86,6 @@ struct DeviceRowView: View {
     }
 }
 
-/// Shared by the device row and the device inspector — one probe, one rendering.
 struct ProbeLine: View {
     let title: String
     let state: Bool?

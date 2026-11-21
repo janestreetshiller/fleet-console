@@ -1,15 +1,3 @@
-//! Proves the Rust protocol types and the running Swift controller agree.
-//!
-//! This is the test that makes the port safe to attempt. Every check is a full
-//! round trip across the language boundary — Rust encodes a request, the Swift
-//! daemon decodes and acts on it, Swift encodes a reply, Rust decodes that. A
-//! unit test in either language proves only that it agrees with itself.
-//!
-//! Read-only operations only. `ping`, `snapshot` and `events` observe; nothing
-//! here launches, stops or signals anything, so it is safe to run against the
-//! controller that is supervising real work.
-//!
-//!     cargo run -p fleet-conformance
 
 use fleet_proto::{Client, RpcOp, RpcRequest};
 use std::process::ExitCode;
@@ -29,7 +17,6 @@ fn main() -> ExitCode {
 
     let mut checks = Checks::default();
 
-    // 1. Envelope round trip, and the one struct we model completely.
     match client.send(&RpcRequest::new(RpcOp::Ping)) {
         Ok(response) => {
             checks.assert("ping returns ok", response.ok, String::new());
@@ -57,7 +44,6 @@ fn main() -> ExitCode {
         Err(error) => checks.fail("ping returns ok", &error.to_string()),
     }
 
-    // 2. A large real payload decodes without the envelope losing anything.
     match client.send(&RpcRequest::new(RpcOp::Snapshot)) {
         Ok(response) => {
             checks.assert("snapshot returns ok", response.ok, String::new());
@@ -72,9 +58,6 @@ fn main() -> ExitCode {
                         !keys.is_empty(),
                         format!("{} keys: {}", keys.len(), keys.join(", ")),
                     );
-                    // These are the fields the app reads on every tick. If the
-                    // Rust daemon ever stops emitting one, the GUI goes quietly
-                    // wrong rather than loudly failing — so assert them here.
                     for required in ["services", "devices", "unmanaged", "attention", "daemon"] {
                         checks.assert(
                             &format!("snapshot carries `{required}`"),
@@ -89,7 +72,6 @@ fn main() -> ExitCode {
         Err(error) => checks.fail("snapshot returns ok", &error.to_string()),
     }
 
-    // 3. Optional fields we serialise must be understood, not merely tolerated.
     let mut events = RpcRequest::new(RpcOp::Events);
     events.limit = Some(3);
     match client.send(&events) {
@@ -104,8 +86,6 @@ fn main() -> ExitCode {
         Err(error) => checks.fail("request with optional fields is accepted", &error.to_string()),
     }
 
-    // 4. The daemon must reject what it does not understand, rather than
-    //    succeeding vaguely — otherwise a Rust bug looks like a working call.
     match client.send(&RpcRequest::new(RpcOp::Logs)) {
         Ok(response) => checks.assert(
             "logs without a serviceID is refused",

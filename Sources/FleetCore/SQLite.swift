@@ -3,8 +3,6 @@ import SQLite3
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-/// Minimal sqlite3 wrapper. No external dependencies: the registry must work on a
-/// clean machine with nothing but the OS.
 public final class SQLiteDB {
     private var handle: OpaquePointer?
     private let path: String
@@ -17,10 +15,6 @@ public final class SQLiteDB {
             : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
         var rc = sqlite3_open_v2(path, &db, flags, nil)
         if rc != SQLITE_OK, readOnly {
-            // Reading a WAL database needs a shared-memory file, and a read-only
-            // connection cannot create one. Falling back to a read-write handle (never
-            // CREATE) is the difference between "history is readable when the daemon is
-            // down" and "the one moment you need it, you cannot have it".
             sqlite3_close_v2(db)
             db = nil
             flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX
@@ -35,13 +29,7 @@ public final class SQLiteDB {
         sqlite3_busy_timeout(db, 3000)
         if !readOnly {
             try exec("PRAGMA journal_mode=WAL;")
-            // The 1000-page default lets the WAL grow to ~4 MB before SQLite trims it,
-            // and nothing here ever ran a checkpoint of its own — a 295 KB registry was
-            // observed carrying a 3.3 MB WAL. 256 pages caps it around 1 MB.
             try exec("PRAGMA wal_autocheckpoint=256;")
-            // NORMAL is the durability point WAL was designed for: a process crash
-            // cannot corrupt the file, only lose the last commits — and every writer
-            // here is a controller that re-verifies its state on startup anyway.
             try exec("PRAGMA synchronous=NORMAL;")
             try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: path)
         }
@@ -50,8 +38,6 @@ public final class SQLiteDB {
 
     deinit { if let handle { sqlite3_close_v2(handle) } }
 
-    /// Applies WAL frames back into the database. `truncate` also resets the WAL file
-    /// to zero bytes instead of leaving already-applied frames on disk forever.
     @discardableResult
     public func checkpoint(truncate: Bool = false) -> Bool {
         guard let handle else { return false }
@@ -59,9 +45,6 @@ public final class SQLiteDB {
         return sqlite3_wal_checkpoint_v2(handle, nil, mode, nil, nil) == SQLITE_OK
     }
 
-    /// Explicit, idempotent close. `deinit` is not a shutdown path here: fleetd always
-    /// leaves through exit()/fatalError, so without this the WAL was simply abandoned
-    /// for the next process to inherit.
     public func close() {
         guard let handle else { return }
         checkpoint(truncate: true)

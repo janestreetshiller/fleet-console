@@ -18,7 +18,6 @@ import unittest
 from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent
-# Loading the production helper must not leave __pycache__ in the checkout.
 sys.dont_write_bytecode = True
 
 
@@ -58,7 +57,6 @@ class ScriptFixture(unittest.TestCase):
         scripts.mkdir()
         for name in ("build-app.sh", "assemble-app.sh", "verify-agent-bundle.py", "benchmark.sh", "release-staging.py", "notarize.sh"):
             if (SCRIPTS / name).is_file():
-                # No rewritten guards: the fixture always runs current production bytes.
                 shutil.copyfile(SCRIPTS / name, scripts / name)
         capsule = self.root / ".design-core"
         shutil.copytree(SCRIPTS.parent / ".design-core", capsule,
@@ -98,7 +96,6 @@ class ScriptFixture(unittest.TestCase):
         self.stage.mkdir()
         self.app = self.stage / "FleetConsole.app"
         bash_env = self.root / "mock-boundaries.sh"
-        # Intercept absolute tool names too, including the old /usr/sbin/lsof call.
         bash_env.write_text("\n".join(
             f'{prefix}/{name}() {{ "$FLEET_TEST_ROOT/mock-tools/{name}" "$@"; }}'
             for prefix in ("/usr/bin", "/usr/sbin", "/bin")
@@ -311,8 +308,6 @@ class PackagingTests(ScriptFixture):
         original = self.root / "original-stage"
         hook = self.root / "reservation-hook"
         hook.mkdir()
-        # TEST DATA injection at the actual reservation syscall, after stage fd
-        # open. Production scripts are copied unchanged; no production race hook.
         (hook / "sitecustomize.py").write_text(
             "import os\nfrom pathlib import Path\n"
             "root = Path(os.environ['FLEET_TEST_ROOT'])\n"
@@ -630,7 +625,6 @@ class StagingIdentityTests(ScriptFixture):
 
         def firmlink_test_data(fd):
             info = real_fstat(fd)
-            # TEST DATA ONLY: different path spelling, same device/inode as Applications.
             return protected_info if (info.st_dev, info.st_ino) == (alias_info.st_dev, alias_info.st_ino) else info
 
         before = snapshot(alias)
@@ -645,7 +639,6 @@ class StagingIdentityTests(ScriptFixture):
         data_alias = Path("/System/Volumes/Data/Applications")
         if not system.is_dir() or not data_alias.is_dir() or not os.path.samefile(system, data_alias):
             self.skipTest("Host has no macOS Applications firmlink; portable inode fixture covers it")
-        # check-only production entry point: no real Applications writes, even if it regresses.
         with self.assertRaisesRegex(self.staging.StagingError, "stage outside Applications"):
             self.staging.stage_output(data_alias / "FleetConsole-release-policy-test-data/never-created")
 

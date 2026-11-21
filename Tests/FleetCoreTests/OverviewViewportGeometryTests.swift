@@ -5,8 +5,6 @@ import Testing
 struct OverviewViewportGeometryTests {
     @Test("The plots spend the whole viewport instead of leaving a band under the page")
     func plotsFillTheViewport() {
-        // 652 is the module column the shipping window hands Overview at its
-        // 690pt rendering height, toolbar already excluded.
         let layout = OverviewViewportGeometry(viewport: CGSize(width: 1337, height: 652))
         #expect(layout.plotHeight > OverviewViewportGeometry.minimumPlotHeight)
         #expect(layout.plotHeight < OverviewViewportGeometry.maximumPlotHeight)

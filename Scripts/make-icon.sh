@@ -1,12 +1,4 @@
 #!/bin/bash
-# Draws Resources/AppIcon.icns from Scripts/appicon/Icon.swift and the emblem.
-#
-#   Scripts/make-icon.sh          # regenerate the .icns
-#   Scripts/make-icon.sh --sheet  # also write a contact sheet to build/design
-#
-# The plate is code and the F is Sources/FleetConsoleApp/Brand/fleet-letter.png,
-# the same file the app's mark loads. Every size in the iconset is drawn at its
-# own scale rather than downsampled from 1024. Re-run this after changing either.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

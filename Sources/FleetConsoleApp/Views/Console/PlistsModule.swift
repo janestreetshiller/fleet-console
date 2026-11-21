@@ -1,30 +1,6 @@
 import SwiftUI
 import Foundation
 
-// Module: Launch Services — launchd agents, daemons, and their plists.
-//
-// Three scopes, each from a well-known directory that launchd reads at login
-// or boot:
-//
-//   ~/Library/LaunchAgents        — current user, user-session scope
-//   /Library/LaunchAgents         — all users, user-session scope
-//   /Library/LaunchDaemons        — system scope (root) — loaded at boot
-//
-// This module is read-only throughout. It never loads, unloads, or modifies
-// a plist — visibility with no escalation. The design principle is the same
-// one the services module follows: a process launched by someone else gets
-// "Reveal in Finder" and nothing else. The same applies to launchd jobs.
-//
-// What it surfaces:
-//   - Label, run-at-load flag, program (or program arguments), keepalive
-//     flag, and whether the job appears loaded per `launchctl list`.
-//   - The raw plist keys, all of them, shown in the inspector so nothing is
-//     hidden by a field mapping that hasn't been written yet.
-//   - The state from launchctl: loaded / not loaded / error reading.
-
-// MARK: - Model
-
-/// A single plist key/value pair, used in the inspector.
 struct PlistKeyValue: Identifiable, Hashable, Equatable, Sendable {
     var id: String { key }
     var key: String
@@ -102,7 +78,7 @@ struct LaunchEntry: Identifiable, Hashable, Equatable, Sendable {
     var workingDirectory: String?
     var standardOutPath: String?
     var standardErrorPath: String?
-    var allKeys: [PlistKeyValue]     // All plist keys, sorted, values as strings
+    var allKeys: [PlistKeyValue]
     var loadState: LoadState = .unknown
 
     var commandLabel: String {
@@ -110,8 +86,6 @@ struct LaunchEntry: Identifiable, Hashable, Equatable, Sendable {
         return programArguments.first ?? label
     }
 }
-
-// MARK: - Scanner
 
 @MainActor
 @Observable
@@ -131,7 +105,6 @@ final class PlistScanner {
                 let found = readPlists(scope: scope)
                 loaded.append(contentsOf: found)
             }
-            // Enrich with launchctl state.
             loaded = await withLoadStates(loaded)
             entries = loaded.sorted { $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending }
             isScanning = false
@@ -172,7 +145,6 @@ final class PlistScanner {
         let stdout = dict["StandardOutPath"] as? String
         let stderr = dict["StandardErrorPath"] as? String
 
-        // Flatten all keys to string pairs for the inspector.
         let allKeys = dict.sorted { $0.key < $1.key }.map { (key, value) -> PlistKeyValue in
             PlistKeyValue(key: key, value: flattenValue(value))
         }
@@ -207,15 +179,11 @@ final class PlistScanner {
     }
 
     private func withLoadStates(_ entries: [LaunchEntry]) async -> [LaunchEntry] {
-        // `launchctl list` returns every loaded job with its PID and status.
-        // The output format: PID | Status | Label, tab-separated, where `-`
-        // means no PID (not running but loaded).
         let listResult = await runLaunchctl(["list"])
         guard listResult.exit == 0 else { return entries }
 
-        // Parse into a dictionary: label → (pid, status)
         var loaded: [String: Int?] = [:]
-        for line in listResult.stdout.split(separator: "\n").dropFirst() {  // skip header
+        for line in listResult.stdout.split(separator: "\n").dropFirst() {
             let fields = line.split(separator: "\t", maxSplits: 2)
             guard fields.count == 3 else { continue }
             let pidStr = String(fields[0])
@@ -270,8 +238,6 @@ final class PlistScanner {
 }
 
 extension LaunchEntry.Scope: CaseIterable {}
-
-// MARK: - Module view
 
 struct PlistsModule: View {
     @Bindable var console: ConsoleModel
@@ -339,10 +305,6 @@ struct PlistsModule: View {
             }
         }
         .listStyle(.inset)
-        // The table sits on the page like every other surface: without
-        // this it paints AppKit's own table background over the field and
-        // the module reads as a panel dropped on top of the window rather
-        // than as part of it.
         .scrollContentBackground(.hidden)
         .safeAreaInset(edge: .top) {
             ModuleControlBar(trailing: {
@@ -369,8 +331,6 @@ struct PlistsModule: View {
     }
 
 }
-
-// MARK: - Row
 
 private struct LaunchEntryRow: View {
     let entry: LaunchEntry

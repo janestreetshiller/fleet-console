@@ -1,12 +1,3 @@
-//! Where the window's data comes from: the live controller and telemetry
-//! threads in `fleet-ui-core`, or, in fixture builds only, a fixed synthetic
-//! scenario with no threads at all.
-//!
-//! The window never waits on a socket or a process scan. It asks for a
-//! `Fingerprint` (two atomic loads and a clock comparison) and rebuilds the
-//! `Dashboard` only when the fingerprint changed: a new controller read, a
-//! new telemetry sample, an action queued or finished, or a phase change such
-//! as a live feed aging into stale.
 
 use crate::cli::Options;
 use fleet_ui_core::controller::{display_path, ActionPayload, Wake};
@@ -17,16 +8,11 @@ use fleet_ui_core::views::{Dashboard, Inputs};
 use fleet_ui_core::{Action, Controller, ControllerConfig};
 use std::time::{Duration, SystemTime};
 
-/// Everything the window renders, built at one instant.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Built {
     pub dashboard: Dashboard,
-    /// (mount, total bytes, used bytes) per volume, in the order of
-    /// `dashboard.storage.volumes`, for the proportional volume map.
     pub volumes: Vec<(String, u64, u64)>,
-    /// The newest log text read through the controller, by service id.
     pub logs: Option<(String, LogChunk)>,
-    /// Set in fixture mode, so every window says the data is synthetic.
     pub fixture: Option<&'static str>,
 }
 
@@ -36,8 +22,6 @@ pub struct Fingerprint {
     telemetry: u64,
     controller_phase: Phase,
     telemetry_phase: Phase,
-    /// Age of the last controller read while it is not live, so the "last
-    /// read 40s ago" text advances; `None` while live.
     age_step: Option<u64>,
 }
 
@@ -75,7 +59,6 @@ pub fn controller_config(options: &Options) -> ControllerConfig {
 }
 
 impl Feeds {
-    /// Start the controller poller and the telemetry sampler, or the fixture.
     pub fn start(options: &Options, wake: Wake) -> Self {
         #[cfg(feature = "fixtures")]
         if let Some(scenario) = options.fixture {
@@ -96,7 +79,6 @@ impl Feeds {
         }))
     }
 
-    /// Fixture data never changes, so the window has nothing to watch.
     pub fn is_static(&self) -> bool {
         !matches!(self, Self::Live(_))
     }
@@ -196,8 +178,6 @@ impl Feeds {
     }
 }
 
-/// One step per second for the first minute, then per minute, matching the
-/// resolution of `format::duration`.
 fn age_step(seconds: u64) -> u64 {
     if seconds < 60 {
         seconds
@@ -217,8 +197,6 @@ fn volume_bytes(sample: Option<&fleet_ui_core::HostSample>) -> Vec<(String, u64,
         .unwrap_or_default()
 }
 
-/// The fixture dashboard, built exactly as the live one is. Test code builds
-/// it too, through `fleet_ui_core::fixtures`.
 #[cfg(feature = "fixtures")]
 pub fn fixture_built(scenario: fleet_ui_core::fixtures::Scenario, now: SystemTime) -> Built {
     use fleet_ui_core::fixtures;
@@ -245,7 +223,6 @@ pub fn fixture_built(scenario: fleet_ui_core::fixtures::Scenario, now: SystemTim
     }
 }
 
-/// How long the window waits between staleness checks when nothing wakes it.
 pub const STALENESS_CHECK: Duration = Duration::from_secs(1);
 
 #[cfg(test)]
@@ -277,7 +254,6 @@ mod tests {
             }),
         );
         assert!(!feeds.is_static());
-        // The poller reads once at start; wait for it.
         let deadline = std::time::Instant::now() + Duration::from_secs(5);
         while feeds.fingerprint(feeds.now()).controller_phase == Phase::Loading
             && std::time::Instant::now() < deadline

@@ -1,7 +1,4 @@
 #!/bin/bash
-# Internal build-app.sh worker; release-staging.py pins cwd to the reserved bundle.
-# Never cd or use a staging pathname: ALL destinations remain relative to that cwd,
-# including the outer signature and verification target (.).
 set -euo pipefail
 ROOT="$1"
 BIN="$2"
@@ -17,8 +14,6 @@ mkdir -p "$APP/Contents/MacOS" \
 cp "$BIN/FleetConsoleApp" "$APP/Contents/MacOS/FleetConsole"
 cp "$BIN/fleetd"          "$APP/Contents/Resources/bin/fleetd"
 cp "$BIN/fleetctl"        "$APP/Contents/Resources/bin/fleetctl"
-# The resident operations agent ships beside the controller and CLI. Build it
-# from the Rust workspace (release profile to match a release bundle).
 if [ "$CONFIG" = "release" ]; then
     RUST_PROFILE="release"; RUST_OUTPUT="release"
 else
@@ -28,8 +23,6 @@ fi
 cp "$ROOT/rust/target/$RUST_OUTPUT/fleet-agent" "$APP/Contents/Resources/bin/fleet-agent"
 cp "$ROOT/Resources/com.fleetconsole.fleetd.plist" "$APP/Contents/Library/LaunchAgents/"
 
-# Keep debug symbols in SwiftPM's build outputs, not the shipping release bundle.
-# Strip the copied executables before signing; never mutate signed code later.
 if [ "$CONFIG" = "release" ]; then
     for BINARY in "$APP/Contents/MacOS/FleetConsole" \
                   "$APP/Contents/Resources/bin/fleetd" \
@@ -39,8 +32,6 @@ if [ "$CONFIG" = "release" ]; then
     done
 fi
 
-# SwiftTerm's Metal shaders live in a SwiftPM resource bundle. Preserve any
-# framework-style outputs as well as the statically linked build's resources.
 shopt -s nullglob
 for RESOURCE_BUNDLE in "$BIN"/*.bundle; do
     cp -R "$RESOURCE_BUNDLE" "$APP/Contents/Resources/"
@@ -50,7 +41,6 @@ for FRAMEWORK in "$BIN"/*.framework "$BIN"/*.dylib; do
 done
 shopt -u nullglob
 
-# Authored code is MIT; SwiftTerm retains its upstream copyright notices.
 cp "$ROOT/LICENSE" "$APP/Contents/Resources/licenses/FleetConsole-LICENSE.txt"
 SWIFTTERM_LICENSE="${FLEETCONSOLE_DEPENDENCY_CHECKOUTS:-$ROOT/.build/checkouts}/SwiftTerm/LICENSE"
 if [ ! -f "$SWIFTTERM_LICENSE" ]; then
@@ -59,14 +49,12 @@ if [ ! -f "$SWIFTTERM_LICENSE" ]; then
 fi
 cp "$SWIFTTERM_LICENSE" "$APP/Contents/Resources/licenses/SwiftTerm-LICENSE.txt"
 
-# Generate a missing icon so a fresh clone is not silently unbranded.
 if [ ! -f "$ROOT/Resources/AppIcon.icns" ]; then
     echo "▸ no AppIcon.icns — drawing one…"
     "$ROOT/Scripts/make-icon.sh" >/dev/null
 fi
 cp "$ROOT/Resources/AppIcon.icns" "$APP/Contents/Resources/AppIcon.icns"
 
-# Ship the Files panel's configuration separately from ~/.config/yazi.
 cp -R "$ROOT/Resources/yazi" "$APP/Contents/Resources/yazi"
 
 cat > "$APP/Contents/Info.plist" <<'PLIST'
@@ -102,8 +90,6 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </plist>
 PLIST
 
-# Stamp the exact source before signing. Source archives without Git remain
-# explicitly unrecorded; the installed updater accepts only its clean commit.
 SOURCE_REVISION="$(git -C "$ROOT" rev-parse --verify HEAD 2>/dev/null || true)"
 SOURCE_DIRTY=1
 if [ -n "$SOURCE_REVISION" ] && [ -z "$(git -C "$ROOT" status --porcelain --untracked-files=normal)" ]; then
@@ -129,12 +115,8 @@ with open(path, "wb") as stream:
     plistlib.dump(info, stream, sort_keys=False)
 SOURCE_PLIST
 
-# Reject inference runtimes, model weights and additional resident launch jobs
-# before any code is signed. The bundled fleet-agent is a small client only.
 python3 "$ROOT/Scripts/verify-agent-bundle.py" "$APP"
 
-# Explicit ad-hoc signing avoids keychain lookup and timestamps. Developer ID
-# retains hardened runtime/timestamps; nested code is signed inside out.
 IDENTITY="${FLEETCONSOLE_IDENTITY:-}"
 if [ -z "$IDENTITY" ]; then
     IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"

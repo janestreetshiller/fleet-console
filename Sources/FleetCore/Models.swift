@@ -1,26 +1,9 @@
 import Foundation
 
-// A service as the controller knows it: what it is, what evidence there is that
-// it is alive, and what it is allowed to consume.
-//
-// One of seven files split from a 1,158-line Models.swift along its own MARKs.
-// Nothing changed but which file each type sits in.
-// MARK: - Evidence
-//
-// The central honesty rule of FleetConsole: "reachable", "process exists",
-// "port is listening" and "application health check passed" are four different
-// facts. They are recorded separately, timestamped separately, and never
-// collapsed into a single boolean anywhere in the codebase or the UI.
-
 public struct Evidence: Codable, Sendable, Hashable {
-    /// kill(pid, 0) succeeded *and* the process start time still matches the
-    /// value recorded at launch (PID-reuse guard).
     public var processExists: Bool?
-    /// Ports observed in LISTEN state for this service's process group.
     public var listeningPorts: [Int]
-    /// Whether a port scan actually ran (distinguishes "no ports" from "not checked").
     public var portScanRan: Bool
-    /// Whether a configured application health check ran, and its result.
     public var healthCheckRan: Bool
     public var healthPassed: Bool?
     public var healthDetail: String?
@@ -45,29 +28,24 @@ public struct Evidence: Codable, Sendable, Hashable {
         self.checkedAt = checkedAt
     }
 
-    /// Evidence older than this many seconds must be rendered as "unknown (stale)".
     public func isStale(now: Date = Date(), tolerance: TimeInterval) -> Bool {
         guard let checkedAt else { return true }
         return now.timeIntervalSince(checkedAt) > tolerance
     }
 }
 
-// MARK: - Health
-
 public enum HealthKind: String, Codable, Sendable, CaseIterable {
-    case none       // no check configured — service can never be reported "healthy"
-    case tcp        // TCP connect to host:port
-    case http       // HTTP GET, expect a status code
+    case none
+    case tcp
+    case http
 }
 
 public struct HealthSpec: Codable, Sendable, Hashable {
     public var kind: HealthKind
-    /// http: full URL. tcp: "host:port".
     public var target: String?
     public var intervalSec: Double
     public var timeoutSec: Double
     public var expectStatus: Int
-    /// Consecutive failures before the service is called unhealthy.
     public var failureThreshold: Int
 
     public init(kind: HealthKind = .none, target: String? = nil, intervalSec: Double = 15,
@@ -81,15 +59,10 @@ public struct HealthSpec: Codable, Sendable, Hashable {
     }
 }
 
-// MARK: - Budgets
-
 public struct ResourceBudget: Codable, Sendable, Hashable {
-    /// Hard ceiling on wall-clock runtime, independent of lease renewals.
     public var maxRuntimeSec: Double?
     public var cpuWarnPct: Double?
     public var memWarnMB: Double?
-    /// Ports this service is allowed to listen on. Empty = declared ports only are expected,
-    /// but nothing is enforced. A listener outside this set raises `portViolation`.
     public var allowedPorts: [Int]
 
     public init(maxRuntimeSec: Double? = nil, cpuWarnPct: Double? = nil,
@@ -101,35 +74,23 @@ public struct ResourceBudget: Codable, Sendable, Hashable {
     }
 }
 
-// MARK: - Service state
-
 public enum ServiceState: String, Codable, Sendable, CaseIterable {
     case starting
-    case running        // process alive, no health check configured — "unverified"
-    case healthy        // health check ran and passed
-    case degraded       // alive + passing, but a budget threshold is breached
-    case unhealthy      // health check ran and failed past its threshold
-    case paused         // SIGSTOP — still resident, holding its ports, doing nothing
-    case expiring       // lease nearly up
-    case expired        // lease/max-runtime exceeded, reap pending
+    case running
+    case healthy
+    case degraded
+    case unhealthy
+    case paused
+    case expiring
+    case expired
     case stopping
     case stopped
-    case crashed        // exited without being asked to
+    case crashed
 
     public var isTerminal: Bool {
         self == .stopped || self == .crashed
     }
 
-    /// Whether the process is meant to be up *right now*.
-    ///
-    /// Narrower than `!isTerminal`, and the difference is the whole point.
-    /// `isTerminal` answers "is this record finished" — an expired lease is not,
-    /// because an expired claim is reported and left alone rather than reaped, and
-    /// it still belongs in `fleetctl list`. But it is not running either: the CLI
-    /// renders `.expired` as **GONE**, and a header that counted it said "1 service
-    /// running" about the same record. Two surfaces disagreeing about one service
-    /// is worse than either answer alone, so the count that says "running" uses
-    /// this and the list that says "what is on the books" keeps `isTerminal`.
     public var isRunning: Bool {
         switch self {
         case .starting, .running, .healthy, .degraded, .unhealthy, .paused, .expiring:
@@ -146,15 +107,12 @@ public enum ServiceState: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// A paused process still holds its ports and memory — it is stopped in the
-    /// scheduler sense only, which is a different thing from being stopped.
     public var isPaused: Bool { self == .paused }
 }
 
 public struct ResourceSample: Codable, Sendable, Hashable {
     public var cpuPct: Double?
     public var memMB: Double?
-    /// Number of processes in the service's process group.
     public var processCount: Int
     public var sampledAt: Date?
 
@@ -166,7 +124,6 @@ public struct ResourceSample: Codable, Sendable, Hashable {
     }
 }
 
-/// The record the controller returns to an agent on launch, and the row the UI renders.
 public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
     public var id: String
     public var friendlyName: String
@@ -175,12 +132,10 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
 
     public var command: [String]
     public var cwd: String
-    /// Only the *keys* of any extra environment are stored — never the values (T6).
     public var envKeys: [String]
 
     public var pid: Int32?
     public var pgid: Int32?
-    /// `ps -o lstart` of the pid at launch. Used to detect PID reuse before signalling.
     public var startSignature: String?
 
     public var declaredPorts: [Int]
@@ -203,22 +158,11 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
     public var stdoutPath: String
     public var stderrPath: String
     public var updatedAt: Date
-    /// Recent CPU% and resident MB samples, newest last, for the row sparklines.
-    /// Capped so a long-lived service cannot grow its own record without bound.
     public var cpuHistory: [Double] = []
     public var memHistory: [Double] = []
     public var pausedAt: Date?
-    /// Set when the controller reaped this service because its lease or max
-    /// runtime ran out — i.e. the owning agent walked away and left it running.
-    /// Recorded on the row itself so an agent's leak count survives without
-    /// re-reading the event log.
     public var reapedForExpiry = false
-    /// Cumulative failed health checks over this service's life.
     public var healthFailureCount = 0
-    /// True when this record was **claimed** from a process that was already
-    /// running, rather than launched by the controller. The distinction is not
-    /// cosmetic: the controller signals only what it started, so a claimed record
-    /// is supervised and reported on but never stopped, reaped or restarted by it.
     public var claimed = false
     public var claimedAt: Date?
 
@@ -280,19 +224,6 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
         self.updatedAt = updatedAt
     }
 
-    /// Decoded field by field, with a default for everything that has one.
-    ///
-    /// The registry stores each record as a JSON blob, so the *only* schema
-    /// migration this app has is what this initialiser tolerates. The synthesised
-    /// decoder does not fall back to a property's default value — a missing key is
-    /// a hard `keyNotFound` — so every field added after v1 (`cpuHistory`,
-    /// `reapedForExpiry`, `healthFailureCount`, `claimed`, …) made every record
-    /// written before it undecodable. The read path swallows that with `try?`, so
-    /// the failure mode was not an error: it was terminal records quietly
-    /// disappearing from the history on the first upgrade — the "stale records"
-    /// row of the threat model, caused by us.
-    ///
-    /// Only the fields with no honest default are required.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
@@ -337,38 +268,19 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
     public var projectFolderName: String { (cwd as NSString).lastPathComponent }
 
     public var leaseRemaining: TimeInterval { leaseExpiresAt.timeIntervalSinceNow }
-    /// Wall time since `startedAt`, frozen at the moment the record went terminal.
-    ///
-    /// It ran off `Date()` unconditionally, so a service that crashed on Tuesday was
-    /// still accruing uptime on Friday: the inspector drew the crashed `indexer`
-    /// with no pid, "0 in group", every Activity figure an em dash — and
-    /// "Uptime 3h 26m" underneath, which is a claim about a process that does not
-    /// exist. `updatedAt` is stamped on every terminal transition, so it is when the
-    /// record stopped.
-    ///
-    /// Only `isTerminal` freezes. An expired lease or a paused process has not
-    /// stopped running — expired means the lease is up, and a claimed record that
-    /// expires is reported and left alone — so those keep counting.
     public var uptime: TimeInterval {
         let end = state.isTerminal ? updatedAt : Date()
         return max(0, end.timeIntervalSince(startedAt))
     }
 
-    /// Ports we *see* listening, falling back to what was declared (clearly labelled in UI).
     public var effectivePorts: [Int] {
         evidence.listeningPorts.isEmpty ? declaredPorts : evidence.listeningPorts
     }
 
-    /// True when the state was derived from a health check that actually ran.
     public var isVerified: Bool { evidence.healthCheckRan && evidence.healthPassed == true }
 
-    /// Whether the *controller* may signal this record. False for anything it did
-    /// not start, which is the one rule claiming does not buy its way out of: a
-    /// claimed process gets an owner, a purpose, a lease and a timeline, and it
-    /// still gets stopped by you rather than by the reaper.
     public var isSignallableByController: Bool { !claimed }
 
-    /// Why a controller verb is refused on this record, or nil when it is allowed.
     public var signalRefusal: String? {
         guard claimed else { return nil }
         return "\(friendlyName) was claimed, not launched — the controller does not "

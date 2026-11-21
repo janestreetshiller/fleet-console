@@ -1,5 +1,3 @@
-//! Command-line options. Flag names match the terminal client's (`fleet-tui`)
-//! so both clients start the same way.
 
 use crate::palette::DarkTheme;
 use crate::state::View;
@@ -11,15 +9,10 @@ pub struct Options {
     pub socket: Option<PathBuf>,
     pub read_only: bool,
     pub remote_controller: bool,
-    /// Controller poll and telemetry sample interval, 1 to 60 seconds.
     pub poll: Duration,
-    /// Open the compact quick view instead of the full window.
     pub quick: bool,
-    /// The full window's first view.
     pub view: View,
-    /// The dark palette: fog glass, or the terminal phosphor green.
     pub theme: DarkTheme,
-    /// Size of the first window, in points.
     pub window_size: Option<(f32, f32)>,
     #[cfg(feature = "fixtures")]
     pub fixture: Option<fleet_ui_core::fixtures::Scenario>,
@@ -45,9 +38,7 @@ impl Default for Options {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command {
     Run(Box<Options>),
-    /// Static identity JSON; reads nothing.
     Identity,
-    /// One controller read and one telemetry sample, reported as JSON.
     Verify(Box<Options>),
     Help,
     Version,
@@ -110,7 +101,6 @@ pub fn parse<'a>(args: impl IntoIterator<Item = &'a str>) -> Result<Command, Str
     let mut verify = false;
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
-        // `--flag=value` is accepted as well as `--flag value`.
         let (flag, inline) = match arg.split_once('=') {
             Some((f, v)) if f.starts_with("--") => (f, Some(v)),
             _ => (arg, None),

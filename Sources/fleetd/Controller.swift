@@ -2,16 +2,6 @@ import Foundation
 import Darwin
 import FleetCore
 
-/// The controller. Owns every managed process, the registry, the reconciliation
-/// sweep and the local RPC surface.
-///
-/// Concurrency model: one serial queue owns all mutable state and the SQLite
-/// handle. Anything that can block for a meaningful time (subprocess capture,
-/// health checks, socket writes to subscribers) happens off that queue and posts
-/// its result back onto it.
-///
-/// That paragraph is the justification for `@unchecked Sendable`: the serial queue
-/// is what makes every stored property safe to touch from the other two.
 final class Controller: @unchecked Sendable {
     static let version = "1.1.0"
 
@@ -33,13 +23,10 @@ final class Controller: @unchecked Sendable {
     var subscribers: [ObjectIdentifier: SocketConnection] = [:]
     var daemon: DaemonInfo
 
-    /// Broadcast coalescing state, owned by `queue`: one write in flight, one pending.
     private var broadcastInFlight = false
     private var broadcastPending = false
 
-    /// Services we asked to stop, with the deadline after which SIGTERM becomes SIGKILL.
     private var pendingStops: [String: Date] = [:]
-    /// Services with an in-flight health check, so ticks cannot pile them up.
     private var healthInFlight: Set<String> = []
     private var lastHealthCheckAt: [String: Date] = [:]
     private var lastReconcileAt: Date?
@@ -66,8 +53,6 @@ final class Controller: @unchecked Sendable {
                                  socketPath: FleetPaths.socket.path)
     }
 
-    // MARK: - Lifecycle
-
     func start() throws {
         try queue.sync {
             try recoverFromRestart()
@@ -83,8 +68,6 @@ final class Controller: @unchecked Sendable {
 
         let server = UnixSocketServer(path: FleetPaths.socket.path)
         server.onRejectedPeer = { [weak self] uid in
-            // The log is unconditional; only the registry write needs `self`, and
-            // it binds once rather than loading the weak reference twice.
             FleetLog.warn("rejected connection from uid \(uid)")
             guard let self else { return }
             self.queue.async {
@@ -98,46 +81,24 @@ final class Controller: @unchecked Sendable {
 
         startTicking()
 
-        // Blocking accept loop; each connection is handled on its own thread.
         server.run { [weak self] conn in
             self?.handleConnection(conn)
         }
     }
 
     func shutdown() {
-        // Ticks and the accept loop stop first: they would otherwise keep writing to a
-        // registry we are about to close.
         tickTimer?.cancel()
         server?.stop()
         queue.sync {
             _ = try? registry.append(.daemonStopping, service: nil,
                                  detail: "controller stopping; \(services.values.filter { !$0.state.isTerminal }.count) managed services left running")
-            // The process leaves through exit() immediately after this, so `deinit` will
-            // not run: this is the only point where the WAL gets checkpointed and the
-            // database file is released cleanly.
             registry.close()
         }
-        // The stop event is on the timeline, so the marker has nothing left to
-        // explain. Clearing it here keeps the clean path from leaving a file
-        // that would otherwise be consumed by the next startup for no reason.
         StopMarker.clear()
         FleetLog.info("controller stopped")
     }
 
-    /// A controller that dies through fatalError, SIGKILL or a panic writes nothing at
-    /// all, so an abnormal exit is only visible as the *absence* of a `daemonStopping`
-    /// after the previous `daemonStarted`. Recorded here, before this generation's own
-    /// start event, so the crash lands on the timeline where it actually happened.
-    ///
-    /// The absence of a stop event is not on its own evidence of a crash, which is what
-    /// this used to treat it as. A generation that was signalled and then killed before
-    /// it could finish shutting down also leaves no stop event, and that is a deliberate
-    /// restart — the overwhelmingly common case here, since `Scripts/build-app.sh`
-    /// bootouts the agent on every build. `StopMarker` is written by the signal handler
-    /// before any lock is taken, so it survives the kill and separates the two.
     private func recordPreviousGenerationCrash() throws {
-        // Consumed unconditionally: one signal explains at most one exit, and a
-        // marker left behind by a clean stop must not excuse a later crash.
         let signalled = StopMarker.consume()
 
         let lifecycle = (try? registry.events(kinds: [.daemonStarted, .daemonStopping, .daemonCrashed],
@@ -160,8 +121,6 @@ final class Controller: @unchecked Sendable {
         FleetLog.warn("previous controller generation exited abnormally (started \(Fmt.relative(last.ts)))")
     }
 
-    /// Crash-consistent startup: every non-terminal record is re-verified against
-    /// live processes before we serve a single snapshot (threat model T3).
     private func recoverFromRestart() throws {
         let table = ProcessTable.capture()
         for var record in try registry.services() {
@@ -199,8 +158,6 @@ final class Controller: @unchecked Sendable {
         tickTimer = timer
     }
 
-    /// SIGCHLD gives us real exit codes. Without it, children would linger as zombies
-    /// and "crashed vs stopped" would be a guess.
     private func installSIGCHLDHandler() {
         signal(SIGCHLD, SIG_DFL)
         let source = DispatchSource.makeSignalSource(signal: SIGCHLD, queue: workQueue)
@@ -218,7 +175,7 @@ final class Controller: @unchecked Sendable {
             if (status & 0x7f) == 0 {
                 exitCode = (status >> 8) & 0xff
             } else {
-                exitCode = -(status & 0x7f)   // negative = terminated by that signal
+                exitCode = -(status & 0x7f)
             }
             queue.async { [weak self] in
                 self?.noteChildExit(pid: pid, exitCode: exitCode)
@@ -245,10 +202,7 @@ final class Controller: @unchecked Sendable {
         broadcastSnapshot()
     }
 
-    // MARK: - Supervisor tick
-
     private func tick() {
-        // Subprocess capture happens off the state queue.
         let table = ProcessTable.capture()
         let dueForReconcile = queue.sync { () -> Bool in
             guard let last = lastReconcileAt else { return true }
@@ -261,10 +215,6 @@ final class Controller: @unchecked Sendable {
 
         queue.sync {
             self.daemon.lastTickAt = Date()
-            // A `ps` that did not run tells us nothing about liveness. Judging services
-            // against an empty table would declare every one of them crashed, so the
-            // tick reports itself and stops — evidence simply goes stale, which the
-            // attention rules already surface honestly.
             guard !table.processProbeFailed else {
                 FleetLog.warn("skipping evaluation: ps probe failed; no liveness verdict this tick")
                 return
@@ -282,12 +232,6 @@ final class Controller: @unchecked Sendable {
     private func evaluateAll(table: ProcessTable) {
         let now = Date()
         for var record in services.values where !record.state.isTerminal {
-            // Evidence captured before a service started says nothing about it.
-            // Capturing the process table takes a few hundred milliseconds and
-            // happens *before* this queue is entered, so a service launched inside
-            // that window used to be judged against a snapshot that predates it,
-            // declared "crashed" in the same second, and then survive as an orphan
-            // holding its port — precisely the leak this controller exists to stop.
             guard table.capturedAt.timeIntervalSince(record.startedAt) > 0.25 else { continue }
 
             let alive = isAlive(record, in: table)
@@ -295,8 +239,6 @@ final class Controller: @unchecked Sendable {
             record.evidence.processExists = alive
 
             if !alive {
-                // SIGCHLD usually gets here first; this is the backstop for a process
-                // that was never our direct child or whose signal we missed.
                 let requested = pendingStops[record.id] != nil || record.state == .stopping
                 record.state = requested ? .stopped : .crashed
                 record.evidence.listeningPorts = []
@@ -311,9 +253,6 @@ final class Controller: @unchecked Sendable {
                 continue
             }
 
-            // A stop is in flight: refresh the evidence but never re-derive the
-            // state, or a healthy-but-dying service would flip back to "healthy"
-            // between SIGTERM and exit.
             if record.state == .stopping {
                 if let pgid = record.pgid {
                     record.evidence.listeningPorts = table.listeningPorts(inGroup: pgid)
@@ -330,8 +269,6 @@ final class Controller: @unchecked Sendable {
             record.evidence.portScanRan = true
             record.resources = table.resourceUsage(inGroup: pgid)
 
-            // Rolling history for the sparklines. Capped so a service that runs for
-            // a week cannot grow its own record without bound.
             record.cpuHistory.append(record.resources.cpuPct ?? 0)
             record.memHistory.append(record.resources.memMB ?? 0)
             if record.cpuHistory.count > ServiceRecord.historyLimit {
@@ -341,9 +278,6 @@ final class Controller: @unchecked Sendable {
                 record.memHistory.removeFirst(record.memHistory.count - ServiceRecord.historyLimit)
             }
 
-            // A paused process is deliberately doing nothing: it keeps its ports and
-            // its memory, so liveness and resources still update, but no health check
-            // is run against it and no lease decision is re-derived from silence.
             if record.state == .paused {
                 record.updatedAt = now
                 services[record.id] = record
@@ -372,14 +306,6 @@ final class Controller: @unchecked Sendable {
             }
             record.budgetBreaches = breaches
 
-            // Lease and hard runtime ceiling — the two independent leak defences (T1).
-            //
-            // Already-expired records are not re-evaluated. For a launched service
-            // that guard is invisible, because the stop below takes it out of this
-            // loop within a tick. For a *claimed* one it is what stops the loop:
-            // the record stays expired and the process stays alive by design, so
-            // without it every tick would append another `leaseExpired` event for
-            // as long as the process ran.
             let uptime = now.timeIntervalSince(record.startedAt)
             var reap: String?
             if record.state != .expired {
@@ -397,15 +323,10 @@ final class Controller: @unchecked Sendable {
 
             if let reap {
                 record.state = .expired
-                record.reapedForExpiry = true   // this agent left something running
+                record.reapedForExpiry = true
                 record.updatedAt = now
                 services[record.id] = record
                 try? registry.upsert(record)
-                // A claimed record expires on the screen and nowhere else. The
-                // state, the event and the attention row all still fire — what
-                // does not fire is the signal, because the controller did not
-                // start this process and does not own the consequences of ending
-                // it. Stopping it is yours to do, where you started it.
                 guard record.isSignallableByController else {
                     FleetLog.info("claimed record \(record.friendlyName) (\(record.shortID)) expired: \(reap)")
                     continue
@@ -415,10 +336,6 @@ final class Controller: @unchecked Sendable {
                 continue
             }
 
-            // An expired record keeps that state. Nothing below can improve it, and
-            // re-deriving would walk a claimed one back to `expiring` — which
-            // re-arms the block above and reinstates the per-tick event storm the
-            // guard there exists to prevent.
             guard record.state != .expired else {
                 record.updatedAt = now
                 services[record.id] = record
@@ -445,9 +362,6 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    /// The honesty rule, encoded: "healthy" requires a check that ran and passed.
-    /// Without a configured check the best available state is `running` — the UI
-    /// renders that as "Running (unverified)".
     private func derivedState(for record: ServiceRecord) -> ServiceState {
         if record.health.kind == .none {
             return record.budgetBreaches.isEmpty ? .running : .degraded
@@ -464,7 +378,6 @@ final class Controller: @unchecked Sendable {
     private func isAlive(_ record: ServiceRecord, in table: ProcessTable) -> Bool {
         guard let pid = record.pid else { return false }
         if let proc = table.process(pid) {
-            // PID-reuse guard: same pid, different start time means a *different* process.
             if let signature = record.startSignature, proc.startSignature != signature {
                 return false
             }
@@ -476,8 +389,6 @@ final class Controller: @unchecked Sendable {
         return false
     }
 
-    /// A service whose group died but whose port is still held did not clean up
-    /// properly; that is a leak and it must not disappear silently (T1 residual risk).
     private func checkForEscapedPorts(_ record: ServiceRecord, table: ProcessTable) {
         let survivors = table.listeners.filter { record.declaredPorts.contains($0.port) }
         guard !survivors.isEmpty else { return }
@@ -487,8 +398,6 @@ final class Controller: @unchecked Sendable {
         _ = try? registry.append(.reapIncomplete, service: record, detail: detail)
         FleetLog.warn("reap incomplete for \(record.friendlyName): \(detail)")
     }
-
-    // MARK: - Health checks
 
     private func scheduleDueHealthChecks() {
         let due: [ServiceRecord] = queue.sync {
@@ -535,8 +444,6 @@ final class Controller: @unchecked Sendable {
         services[id] = record
         try? registry.upsert(record)
 
-        // Only transitions are recorded, plus the moment a failure crosses its
-        // threshold — an event log full of identical lines is not a timeline.
         if previous != outcome.passed {
             _ = try? registry.append(outcome.passed ? .healthPassed : .healthFailed, service: record,
                                  detail: outcome.detail + String(format: " (%.0f ms)", outcome.latencyMs))
@@ -547,14 +454,7 @@ final class Controller: @unchecked Sendable {
         broadcastSnapshot()
     }
 
-    // MARK: - Reconciliation
-
     func runReconcile(table: ProcessTable) {
-        // A failed `ps`/`lsof` is not an empty machine. Sweeping on one would delete
-        // every unmanaged row (losing `firstSeen`) and then re-emit the whole set as new
-        // `becameUnmanaged` events on the next good sweep — 447 of 867 events in the live
-        // registry were duplicates produced exactly this way. Keep the prior state and
-        // do not mark the sweep as done, so the next tick retries.
         guard !table.probeFailed else {
             FleetLog.warn("skipping reconcile: process probe failed"
                           + (table.processProbeFailed ? " (ps)" : "")
@@ -563,16 +463,11 @@ final class Controller: @unchecked Sendable {
             return
         }
         let inputs = Reconciler.Inputs(table: table, config: config, services: Array(services.values))
-        // Declared local tools are resolved first; whatever they own is then
-        // excluded from the unmanaged sweep.
         let tools = Reconciler.externalServices(inputs)
         externalList = tools.services
         let found = Reconciler.scan(inputs, claimedPIDs: tools.claimedPIDs)
-        // The coding agents you are actually running, detected rather than registered.
         sessionList = SessionScanner.scan(table: table)
         let known = Set(unmanagedList.map(\.id))
-        // A failed write must not become a reset either: `found` carries a fresh
-        // `firstSeen` for everything, so falling back to it would age-reset the list.
         guard let merged = try? registry.syncUnmanaged(found) else {
             FleetLog.warn("skipping reconcile: could not persist the unmanaged set; keeping the previous one")
             return
@@ -604,8 +499,6 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    // MARK: - Mutating operations
-
     func launch(_ request: LaunchRequest) throws -> ServiceRecord {
         var request = request
         request.leaseTTLSec = min(max(request.leaseTTLSec, 60), config.maxLeaseSec)
@@ -629,7 +522,7 @@ final class Controller: @unchecked Sendable {
                                    purpose: request.purpose,
                                    command: validated.argv,
                                    cwd: validated.cwd,
-                                   envKeys: request.env.keys.sorted(),   // keys only, never values (T6)
+                                   envKeys: request.env.keys.sorted(),
                                    pid: spawned.pid,
                                    pgid: spawned.pgid,
                                    startSignature: spawned.startSignature,
@@ -657,29 +550,12 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    /// Adopt an already-running process into the registry.
-    ///
-    /// The counterpart to `launch`, and deliberately not a weaker version of it.
-    /// A launched service is one the controller started, so it owns the
-    /// consequences of stopping it. A claimed one was already there when we
-    /// arrived: it gets an owner, a purpose, a lease and a timeline, and the
-    /// controller still refuses to signal it — see `isSignallableByController`,
-    /// which every signal path in this file consults. Claiming buys
-    /// **visibility**, not authority, which is why it is safe to offer for a
-    /// process whose lifecycle somebody else owns.
-    ///
-    /// The target is re-verified here rather than trusted from the sweep that
-    /// found it: an `UnmanagedProcess.id` is `pid:hash(startSignature)`, so a pid
-    /// recycled between the sweep and the click is caught by the same comparison
-    /// that guards every signal (threat model T2).
     func claim(unmanagedID: String, friendlyName: String?, owner: String?,
                        purpose: String?, ttl: Double?, table: ProcessTable) throws -> ServiceRecord {
         guard !table.processProbeFailed else {
             throw FleetError.rejected("the process probe failed; nothing can be verified this moment")
         }
 
-        // Either an id from the unmanaged list, or a bare pid for the case where
-        // you are looking at Activity Monitor rather than at this app.
         let known = unmanagedList.first { $0.id == unmanagedID || String($0.pid) == unmanagedID }
         guard let pid = known?.pid ?? Int32(unmanagedID) else {
             throw FleetError.notFound("no unmanaged process matching '\(unmanagedID)'")
@@ -693,8 +569,6 @@ final class Controller: @unchecked Sendable {
         guard proc.pgid != getpgrp() else {
             throw FleetError.rejected("refusing to claim the controller's own process group")
         }
-        // The id carries the signature the process was seen with. A mismatch means
-        // the number was recycled and this is a different process wearing it.
         if let recorded = known?.id.split(separator: ":").last.map(String.init),
            recorded != Reconciler.stableHash(proc.startSignature) {
             throw FleetError.rejected("pid \(pid) is not the process that was seen at "
@@ -722,15 +596,10 @@ final class Controller: @unchecked Sendable {
                                    pgid: proc.pgid,
                                    startSignature: proc.startSignature,
                                    declaredPorts: ports,
-                                   // Its uptime is its own, not the moment we noticed
-                                   // it — a claimed record that resets the clock would
-                                   // hide exactly how long a leak has been running.
                                    startedAt: Reconciler.parseStartTime(proc.startSignature)
                                        ?? known?.firstSeen ?? Date(),
                                    leaseExpiresAt: Date().addingTimeInterval(leaseTTL),
                                    leaseTTLSec: leaseTTL,
-                                   // No health check: nobody declared one, and the
-                                   // best state this can reach is Running (unverified).
                                    state: .running,
                                    evidence: Evidence(processExists: true,
                                                       listeningPorts: ports,
@@ -750,18 +619,10 @@ final class Controller: @unchecked Sendable {
                                 + "and will not signal it.")
         FleetLog.info("claimed \(record.friendlyName) (\(record.shortID)) pid \(proc.pid) for \(record.ownerAgent)")
 
-        // The sweep's own list is stale the moment this returns — the row the user
-        // clicked is now a service. Drop it here rather than leaving the process
-        // listed as both until the next reconcile.
         unmanagedList.removeAll { $0.pid == pid }
         return record
     }
 
-    /// The one rule claiming does not buy its way out of, in one place.
-    ///
-    /// Every controller-initiated signal goes through here or through
-    /// `verifiedTarget`, so a claimed record cannot be stopped, restarted, paused,
-    /// resumed, killed or reaped by us — only reported on.
     func requireSignallable(_ record: ServiceRecord) throws {
         if let refusal = record.signalRefusal {
             throw FleetError.rejected(refusal)
@@ -791,15 +652,8 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    /// Verify-then-signal. Nothing is ever signalled without re-proving the target
-    /// is still the process we started (threat model T2).
     func beginStop(_ record: ServiceRecord, reason: String, requestedBy: String) {
         var record = record
-        // Defence in depth. The two callers that can be reached from outside —
-        // the stop RPC and `restart` — refuse a claimed record with a message
-        // first, because a verb that silently does nothing is worse than one that
-        // says no. This is the invariant underneath them, so a third caller added
-        // later cannot signal a process the controller did not start.
         guard record.isSignallableByController else {
             _ = try? registry.append(.rejectedLaunch, service: record,
                                  detail: "\(requestedBy) asked to stop a claimed record: \(reason). "
@@ -874,19 +728,10 @@ final class Controller: @unchecked Sendable {
         try? registry.upsert(record)
     }
 
-    /// Deliberately *not* run on the state queue: waiting for a process group to
-    /// die must never stall the supervisor or the RPC surface.
-    ///
-    /// Restart re-executes the argv recorded at launch — it is not a general
-    /// "run a command" entry point, which is why the UI can expose it safely.
     func restart(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
         let (previous, grace) = try queue.sync { () -> (ServiceRecord, Double) in
             let resolved = try resolveID(idOrPrefix)
             guard let record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
-            // Restart is stop-then-relaunch, and a claimed record fails at both
-            // halves: we may not stop it, and its argv came off `ps` rather than
-            // from a caller who declared it, so re-running it would be the app
-            // inventing a service — the thing the README says it never does.
             try requireSignallable(record)
             if !record.state.isTerminal {
                 beginStop(record, reason: reason, requestedBy: "restart")
@@ -933,12 +778,7 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    /// Shared precondition for every signal we send: the pid must still exist and
-    /// its start time must match what we recorded, or we are looking at a different
-    /// process that merely inherited the number (threat model T2).
     private func verifiedTarget(_ record: ServiceRecord) throws -> (pid: Int32, pgid: Int32) {
-        // Before "is this still the right process", the prior question: is it ours
-        // to signal at all. Pause, resume and kill all resolve their target here.
         try requireSignallable(record)
         guard let pid = record.pid, let pgid = record.pgid, pgid > 1 else {
             throw FleetError.rejected("\(record.friendlyName) has no live process group")
@@ -1001,7 +841,6 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    /// No grace period, by explicit request. Same verification as every other signal.
     func forceKill(_ idOrPrefix: String, reason: String) throws -> ServiceRecord {
         let resolved = try resolveID(idOrPrefix)
         guard var record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
@@ -1011,7 +850,6 @@ final class Controller: @unchecked Sendable {
         let target = try verifiedTarget(record)
 
         try registry.append(.stopRequested, service: record, detail: "force kill: \(reason)")
-        // A stopped process cannot die; wake it first or SIGKILL just queues.
         if record.state == .paused { killpg(target.pgid, SIGCONT) }
         killpg(target.pgid, SIGKILL)
         pendingStops[resolved] = Date()
@@ -1038,10 +876,6 @@ final class Controller: @unchecked Sendable {
         guard let record = services[serviceID] else { throw FleetError.notFound(id) }
         let path = stream == "err" ? record.stderrPath : record.stdoutPath
         guard let handle = FileHandle(forReadingAtPath: path) else {
-            // "No log file yet" is true for a service that has just started and
-            // false for a claimed one, which will never have a log file here: its
-            // descriptors were wired up by whoever started it, long before we
-            // adopted it. Saying "yet" would promise output that is never coming.
             return LogChunk(serviceID: serviceID, stream: stream, path: path, bytes: 0,
                             text: record.claimed
                                 ? "(claimed, not launched — its output goes wherever it was started, "
@@ -1060,11 +894,8 @@ final class Controller: @unchecked Sendable {
                         truncated: offset > 0)
     }
 
-    // MARK: - Snapshot
-
     func makeSnapshot() -> Snapshot {
         let all = services.values.sorted { $0.startedAt > $1.startedAt }
-        // Read once and share: the attention rules need the same history the UI shows.
         let recent = (try? registry.events(limit: 60)) ?? []
         return Snapshot(generatedAt: Date(),
                         daemon: daemon,
@@ -1078,8 +909,6 @@ final class Controller: @unchecked Sendable {
                         sessions: sessionList)
     }
 
-    /// A crash loop in the controller itself is only news while it is recent, and one
-    /// abnormal exit is not yet a pattern — two inside this window is.
     private static let daemonCrashWindow: TimeInterval = 6 * 3600
     private static let daemonCrashThreshold = 2
 
@@ -1087,9 +916,6 @@ final class Controller: @unchecked Sendable {
         var items: [AttentionItem] = []
         let staleTolerance = config.supervisorTickSec * config.staleTickFactor
 
-        // The controller restarting leaves no service row behind, so without this item a
-        // crash loop is invisible in a UI built entirely out of services: 136 starts
-        // against 43 clean stops was only discoverable by reading the database by hand.
         let cutoff = Date().addingTimeInterval(-Self.daemonCrashWindow)
         let daemonCrashes = recentEvents.filter { $0.kind == .daemonCrashed && $0.ts >= cutoff }
         if daemonCrashes.count >= Self.daemonCrashThreshold, let oldest = daemonCrashes.last {
@@ -1109,9 +935,6 @@ final class Controller: @unchecked Sendable {
                                                 ?? "failed \(record.consecutiveHealthFailures)× in a row",
                                            serviceID: record.id, since: record.updatedAt))
             case .expired:
-                // Both halves of this detail are false for a claimed record, and
-                // the second one dangerously so: "controller is reaping it" would
-                // have you stop watching a process nobody is going to stop.
                 items.append(AttentionItem(id: "expired-\(record.id)", severity: .critical,
                                            title: "\(record.friendlyName): lease expired",
                                            detail: record.isSignallableByController
@@ -1142,9 +965,6 @@ final class Controller: @unchecked Sendable {
             }
         }
 
-        // Only the most recent crash per name, and only while it is still news.
-        // Five identical "crashed" rows from five restart attempts is noise that
-        // buries the one line that matters.
         var crashesSeen = Set<String>()
         for record in all.filter({ $0.state == .crashed }).sorted(by: { $0.updatedAt > $1.updatedAt }) {
             guard Date().timeIntervalSince(record.updatedAt) < config.crashAttentionSec else { continue }
@@ -1157,11 +977,6 @@ final class Controller: @unchecked Sendable {
                                        serviceID: record.id, since: record.updatedAt))
         }
 
-        // Unmanaged processes are a *state*, not an incident. Only two kinds are
-        // worth interrupting for: something that leaked out of our own control, and
-        // something that has just appeared. A listener that has been up for hours is
-        // part of the furniture — it stays visible in the Services list and in the
-        // dashboard, but it does not sit in "Needs attention" forever nagging.
         for process in unmanagedList {
             let ports = process.ports.isEmpty ? "" : " on \(Fmt.ports(process.ports))"
             if process.formerServiceID != nil {
@@ -1190,21 +1005,12 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    /// Always hops onto the state queue asynchronously: callers may or may not
-    /// already be running on it, and `queue.sync` from within the queue deadlocks.
     func broadcastSnapshot() {
         queue.async { [weak self] in self?.broadcastLocked() }
     }
 
-    /// Must be called on `queue`.
     private func broadcastLocked() {
         guard !subscribers.isEmpty else { return }
-        // Coalesce. Ticks, health transitions and device probes all broadcast, and every
-        // queued closure pins a whole Snapshot (all services, 60 events, 60 messages,
-        // devices, sessions). Behind a subscriber that is not draining, those used to
-        // pile up on `broadcastQueue` without bound. At most one write is in flight and
-        // at most one is pending, and the pending one is built fresh when its turn comes
-        // — a newer snapshot always supersedes an older one.
         guard !broadcastInFlight else {
             broadcastPending = true
             return
@@ -1213,22 +1019,15 @@ final class Controller: @unchecked Sendable {
         dispatchBroadcast(makeSnapshot())
     }
 
-    /// Must be called on `queue`, with `broadcastInFlight` already set.
     private func dispatchBroadcast(_ snapshot: Snapshot) {
         let targets = Array(subscribers.values)
         broadcastQueue.async { [weak self] in
-            // Bind once. Five separate `self?` loads meant a controller torn down
-            // mid-broadcast could drop a subscriber and then fail to clear
-            // `broadcastInFlight`, wedging every later broadcast.
             guard let self else { return }
             if let data = try? Codec.encode(RPCResponse(ok: true, snapshot: snapshot)) {
                 for conn in targets {
                     do {
                         try conn.writeLine(data)
                     } catch {
-                        // The write can now time out as well as fail outright; either way
-                        // this subscriber is not keeping up and is dropped rather than
-                        // allowed to stall every other one.
                         FleetLog.debug("dropping subscriber: \(error.localizedDescription)")
                         conn.close()
                         self.queue.async { self.subscribers.removeValue(forKey: ObjectIdentifier(conn)) }
@@ -1250,8 +1049,5 @@ final class Controller: @unchecked Sendable {
 }
 
 private extension String {
-    /// An empty string is not a name, an owner or a purpose. Collapsing it to nil
-    /// here is what lets `claim` fall through to its defaults with `??` instead of
-    /// filing a record whose `friendlyName` is "".
     var nilIfEmpty: String? { isEmpty ? nil : self }
 }

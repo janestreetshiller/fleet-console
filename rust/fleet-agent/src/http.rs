@@ -1,5 +1,3 @@
-//! Bounded HTTP to an existing loopback endpoint. No redirects, proxy, DNS,
-//! model startup, retry or unbounded allocation; every IO shares one deadline.
 use crate::guard::{MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -139,7 +137,6 @@ impl Http {
         serde_json::from_slice(&raw).map_err(|e| format!("model reply is not JSON: {e}"))
     }
 }
-/// Serializes through a cap rather than allocating arbitrarily large JSON first.
 pub struct LimitedBytes {
     pub bytes: Vec<u8>,
     maximum: usize,

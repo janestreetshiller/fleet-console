@@ -81,8 +81,6 @@ struct ServiceLabelsViewTests {
         }
     }
 
-    // SwiftUI AccessibilityNode uses the informal NSObject AX contract, not
-    // NSAccessibilityProtocol conformance. The driver must traverse both.
     @MainActor private func element(_ id: String, in root: Any) -> NSObject? {
         guard let accessible = root as? NSObject else { return nil }
         if value("accessibilityIdentifier", from: accessible) as? String == id { return accessible }

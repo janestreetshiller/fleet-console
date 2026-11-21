@@ -1,7 +1,5 @@
-// swift-tools-version: 6.0
 import PackageDescription
 
-// Public snapshot: the desktop UI and SwiftTerm are not part of this package.
 let package = Package(
     name: "FleetConsoleCore",
     platforms: [.macOS(.v14)],

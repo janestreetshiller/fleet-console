@@ -1,6 +1,3 @@
-//! Where the dashboard's inputs come from: the controller and telemetry
-//! workers from `fleet-ui-core`, or, in fixture builds, synthetic feeds with no
-//! threads and no socket.
 
 use fleet_ui_core::controller::{Action, ActionOutcome, ControllerConfig};
 #[cfg(any(test, feature = "fixtures"))]
@@ -10,8 +7,6 @@ use fleet_ui_core::{Controller, TelemetryWorker};
 use std::cell::RefCell;
 use std::time::{Duration, SystemTime};
 
-/// The tail pane shows the end of a log; this bounds each read and the copy
-/// the controller's outcome history keeps of it.
 pub const TAIL_BYTES: i64 = 16 * 1024;
 
 pub struct Settings {
@@ -24,8 +19,6 @@ pub enum Source {
     Live {
         controller: Controller,
         telemetry: TelemetryWorker,
-        /// Pending and finished actions without log reads, recomputed only
-        /// when the controller generation changes.
         actions: RefCell<ActionCache>,
     },
     #[cfg(any(test, feature = "fixtures"))]
@@ -65,7 +58,6 @@ impl Source {
         }
     }
 
-    /// Changes whenever anything the dashboard reads changes.
     pub fn generation(&self) -> (u64, u64) {
         match self {
             Self::Live {
@@ -78,7 +70,6 @@ impl Source {
         }
     }
 
-    /// Feeds as they stand, for deciding when to wake for a stale transition.
     pub fn freshness(&self) -> Vec<(Option<SystemTime>, Duration, bool)> {
         match self {
             Self::Live {
@@ -181,7 +172,6 @@ impl Source {
         }
     }
 
-    /// Queue an action with `fleetctl` semantics. Fixture mode refuses.
     pub fn submit(&self, action: Action) -> Result<u64, String> {
         match self {
             Self::Live { controller, .. } => controller.submit(action),

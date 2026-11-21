@@ -54,7 +54,6 @@ class FixtureHandler(BaseHTTPRequestHandler):
             self.send_error(400, "Unexpected TEST DATA request")
             return
         self.server.observed_requests.append({"method": "POST", "path": self.path})
-        # Preserve a visible preparing state before the deterministic reply.
         time.sleep(1)
         body = json.dumps({"choices": [{"message": {"role": "assistant", "content": REPLY}}]}).encode()
         self.send_response(200)
@@ -98,8 +97,6 @@ def main():
     platform_dir = Path(tool_output("xcrun", "--sdk", "macosx", "--show-sdk-platform-path"))
     if not helper.is_file() or not bundle.is_file() or not agent.is_file():
         raise RuntimeError("Native runner, test bundle or actual agent is missing after the build")
-    # SwiftPM normally supplies these when launching the helper. Invoke it
-    # directly to add --verify-live, enabling the observational Overview test.
     native_env = dict(os.environ,
         DYLD_FRAMEWORK_PATH=str(platform_dir / "Developer/Library/Frameworks"),
         DYLD_LIBRARY_PATH=str(platform_dir / "Developer/usr/lib") + ":" + str(swift_bin.parent / "lib/swift/macosx"),
@@ -119,8 +116,6 @@ def main():
     native_env["FLEET_TERMINAL_LLM_URL"] = f"http://127.0.0.1:{server.server_port}"
     try:
         logs = []
-        # Suites share process-wide AppKit state; .serialized only serializes
-        # cases within one suite. Isolate the native suites from each other.
         selections = [(suite, suite) for suite in
                       ("TerminalOutputTests", "TerminalAgentSessionTests", "OverviewViewportTests")]
         selections.append(("TerminationNotification", "TerminalAgentSessionTests/quitWaitsForCleanup"))

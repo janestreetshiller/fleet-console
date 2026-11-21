@@ -1,6 +1,3 @@
-//! One-shot renderings: a frame drawn into ratatui's `TestBackend` and written
-//! as text, with ANSI styling when the output is a color terminal. Used by
-//! `--once` and by fixture captures.
 
 use crate::app::App;
 use crate::theme::Theme;
@@ -31,8 +28,6 @@ fn sgr_color(color: Color, foreground: bool) -> Option<String> {
         Color::Rgb(r, g, b) => Some(format!("{base};2;{r};{g};{b}")),
         Color::Indexed(i) => Some(format!("{base};5;{i}")),
         other => {
-            // Named colors are not produced by the theme; map them through
-            // their 256-color index for completeness.
             let index = match other {
                 Color::Black => 0,
                 Color::Red => 1,
@@ -78,8 +73,6 @@ fn sgr(style: Style) -> String {
     format!("\u{1b}[{}m", codes.join(";"))
 }
 
-/// The buffer as lines of text. Wide characters occupy their cells once;
-/// trailing spaces are trimmed when no styling is written.
 pub fn text(buffer: &Buffer, ansi: bool) -> String {
     let area = buffer.area;
     let mut out = String::new();

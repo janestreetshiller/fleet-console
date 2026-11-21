@@ -146,7 +146,7 @@ struct AwarenessGraphTests {
                                          topology: nil, now: now)
         let processes = graph.nodes.filter { $0.kind == .process }
         #expect(graph.nodes.count <= 120)
-        #expect(processes.count <= 21) // one verified root, twelve descendants, eight context rows
+        #expect(processes.count <= 21)
         #expect(graph.nodes.contains { $0.pid == 9000 })
         #expect(graph.nodes.contains { $0.pid == 9001 })
         #expect(graph.omittedProcesses == rows.count - processes.count)

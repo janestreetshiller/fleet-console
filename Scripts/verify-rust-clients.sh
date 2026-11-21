@@ -1,11 +1,4 @@
 #!/bin/bash
-# Local verification for the Rust clients on macOS or Linux. No controller is
-# started, no network is used beyond Cargo's cache, nothing is installed.
-# Usage: Scripts/verify-rust-clients.sh [--skip-gpui]
-#   --skip-gpui  for a host without GPUI's system libraries (the terminal client
-#                and the core are still checked).
-# CARGO_TARGET_DIR is respected. The pinned toolchain comes from
-# rust-toolchain.toml.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SKIP_GPUI=0
@@ -33,9 +26,6 @@ cargo clippy "${MANIFEST[@]}" "${PACKAGES[@]}" --all-targets -- -D warnings
 echo "== release builds without fixtures"
 cargo build "${MANIFEST[@]}" "${CLIENTS[@]}" --release
 
-# Fixture snapshots report this controller version. A default release binary
-# that contains it has synthetic data compiled in. The marker is assembled so
-# this script itself does not contain it verbatim.
 MARKER="synthetic-fixture-""4c1e"
 BINARIES=("$TARGET/release/fleet-tui")
 [ "$SKIP_GPUI" -eq 0 ] && BINARIES+=("$TARGET/release/fleet-gpui")
@@ -52,7 +42,6 @@ cargo build "${MANIFEST[@]}" "${CLIENTS[@]}" --release --features fixtures
 for binary in "${BINARIES[@]}"; do
     grep -q -a "$MARKER" "$binary" || { echo "FAIL: marker check is not detecting fixtures" >&2; exit 1; }
 done
-# Leave default binaries in place for anyone running them after this script.
 cargo build "${MANIFEST[@]}" "${CLIENTS[@]}" --release
 
 echo "== source identity scan (same rules as Scripts/test-source-privacy.py)"

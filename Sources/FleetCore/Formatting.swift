@@ -1,9 +1,5 @@
 import Foundation
 
-// Formatting shared by the CLI and the UI, so a duration or a byte count reads
-// the same in `fleetctl list` as it does in the window.
-// MARK: - Formatting helpers shared by CLI and UI
-
 public enum Fmt {
     public static func duration(_ seconds: TimeInterval, compact: Bool = true) -> String {
         let s = Int(abs(seconds.rounded()))
@@ -26,12 +22,6 @@ public enum Fmt {
         ports.isEmpty ? "—" : ports.sorted().map { ":\($0)" }.joined(separator: " ")
     }
 
-    /// The same list, capped, for rows where the ports are one accessory among
-    /// several. Every accessory in a row is `fixedSize`, so a three-port service
-    /// claims its full width unconditionally and the row takes it out of the only
-    /// compressible thing left — the title. The Services popover drew a claimed,
-    /// expired service as an icon, "Claimed", "Expired" and ":8080 :8081 :8082"
-    /// with no name at all. The full list is still in the row's detail.
     public static func ports(_ ports: [Int], limit: Int) -> String {
         guard !ports.isEmpty else { return "—" }
         let sorted = ports.sorted()
@@ -46,10 +36,6 @@ public enum Fmt {
         return String(format: "%.0f MB", mb)
     }
 
-    /// A spend figure. Two decimals, because that is what a bill has — but a
-    /// real amount below a cent reads as `<$0.01` rather than `$0.00`, for the
-    /// same reason an unknown is never rendered as zero: a turn that cost
-    /// something must not display as having been free.
     public static func money(_ usd: Double) -> String {
         if usd > 0, usd < 0.005 { return "<$0.01" }
         return String(format: "$%.2f", usd)

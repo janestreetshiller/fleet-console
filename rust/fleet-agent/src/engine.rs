@@ -1,11 +1,3 @@
-//! The agent loop, forked from rx's engine pattern: system instructions built
-//! once per session, a model client that emits tool calls, dispatch through
-//! the typed tool surface, and per-turn usage accounting that feeds the meter.
-//!
-//! The model client speaks the OpenAI-compatible chat API that llama-server
-//! exposes at 127.0.0.1 (the `RX_LOCAL_LLM_URL` convention), so the resident
-//! agent runs on the same local inference the machine already serves — no
-//! cloud call, no key, matching the console's locality doctrine.
 
 use crate::guard;
 use crate::meter::TurnUsage;
@@ -16,9 +8,6 @@ use std::time::Instant;
 pub const DEFAULT_MODEL: &str = "local";
 pub const MAX_TOOL_ITERATIONS: usize = 8;
 
-/// System prompt for the resident console agent. Byte-stable for a given
-/// toolset: no timestamps, no host state, so the provider's prompt cache (and
-/// our own determinism guarantees) survive across turns.
 pub fn system_instructions() -> String {
     let names = tools::READ_ONLY_TOOLS.join(", ");
     format!(
@@ -64,12 +53,6 @@ impl EngineConfig {
     }
 }
 
-/// One model round trip. Kept as a trait so tests can drive the loop without
-/// a live llama-server, while the real run goes over HTTP.
-///
-/// Returns the *full* response object, not just the choice: usage accounting
-/// lives at the top level in the OpenAI shape, and dropping it would meter a
-/// real turn as a free one.
 pub trait ModelClient {
     fn chat(&mut self, messages: &[Value]) -> Result<Value, String>;
     fn name(&self) -> String;
@@ -78,7 +61,6 @@ pub trait ModelClient {
     }
 }
 
-/// OpenAI-compatible client against the local llama-server.
 pub struct HttpModelClient {
     config: EngineConfig,
     agent: crate::http::Http,
@@ -122,12 +104,6 @@ impl ModelClient for HttpModelClient {
     }
 }
 
-/// The llama-server tool schema form (OpenAI function-calling shape), derived
-/// from the same definitions the MCP surface serves so the two clients can
-/// never disagree about what exists. The wire shapes differ — MCP lists
-/// `inputSchema` at the top level, the chat API nests under `function` —
-/// but the names, descriptions and parameter schemas are the single source
-/// in `TOOLS`.
 pub fn tool_schemas() -> Value {
     let list = tools::tools_list_payload();
     let parsed: Value = serde_json::from_str(&list).expect("static payload parses");
@@ -153,7 +129,6 @@ pub fn tool_schemas() -> Value {
     json!(functions)
 }
 
-/// A scripted client for tests; never used by the executable inference path.
 pub struct ScriptedClient {
     pub replies: Vec<Value>,
     pub calls: std::cell::RefCell<Vec<Value>>,
@@ -170,8 +145,6 @@ impl ScriptedClient {
 
 impl ModelClient for ScriptedClient {
     fn chat(&mut self, _messages: &[Value]) -> Result<Value, String> {
-        // Pop the next scripted reply; an exhausted script is an error so a
-        // test can never silently loop on the final reply.
         if self.replies.is_empty() {
             return Err("scripted client exhausted".into());
         }
@@ -185,7 +158,6 @@ impl ModelClient for ScriptedClient {
     }
 }
 
-/// Result of one agent turn.
 pub struct TurnResult {
     pub reply: String,
     pub tool_calls_made: Vec<String>,
@@ -199,8 +171,6 @@ impl TurnResult {
     }
 }
 
-/// Run one operator turn: model -> (tool call -> result)* -> final answer.
-/// Every iteration is bounded; usage is accumulated across the whole turn.
 pub fn run_turn(
     client: &mut dyn ModelClient,
     dispatcher: &mut Dispatcher<'_>,
@@ -218,8 +188,6 @@ pub fn run_turn(
     )
 }
 
-/// The real loop takes an absolute deadline so transports and tool RPCs share
-/// one budget; tests can exercise deadline edges without waiting 45 seconds.
 pub fn run_turn_until(
     client: &mut dyn ModelClient,
     dispatcher: &mut Dispatcher<'_>,
@@ -350,7 +318,6 @@ pub fn run_turn_until(
     })
 }
 
-/// Convenience for the CLI's one-shot path: fresh history, one turn.
 pub fn ask_once(
     client: &mut dyn ModelClient,
     dispatcher: &mut Dispatcher<'_>,
@@ -369,8 +336,6 @@ fn check_prompt(history: &[Value]) -> Result<(), String> {
             guard::MAX_HISTORY_BYTES
         )
     })?;
-    // Bound the complete textual prompt separately from JSON overhead. A byte
-    // bound is predictable without a tokenizer and stays below a modest context.
     let content_bytes: usize = history
         .iter()
         .map(|m| {
@@ -393,7 +358,6 @@ fn check_prompt(history: &[Value]) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    /// A scripted reply carrying a tool call, in the OpenAI shape.
     fn tool_call_reply(name: &str, args: &str) -> Value {
         json!({
             "choices": [{
@@ -430,9 +394,6 @@ mod tests {
 
     #[test]
     fn loop_dispatches_then_answers_and_meters_both_round_trips() {
-        // A turn that calls fleet_ps (unknown tool's read-only cousin — the
-        // dispatch fails closed with the socket error, which the model then
-        // answers from) and finishes.
         let mut scripted = ScriptedClient::new(vec![
             tool_call_reply("fleet_ps", "{}"),
             final_reply("the console is unreachable"),
@@ -451,7 +412,6 @@ mod tests {
         let result = ask_once(&mut scripted, &mut dispatcher, "list services", &config).unwrap();
         assert_eq!(result.tool_calls_made, vec!["fleet_ps"]);
         assert!(result.reply.contains("unreachable") || !result.reply.is_empty());
-        // Both round trips metered: 100+120 input, 10+30 output.
         assert_eq!(result.usage.input_tokens, 220);
         assert_eq!(result.usage.output_tokens, 40);
         assert_eq!(result.iterations, 2);

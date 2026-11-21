@@ -2,19 +2,6 @@ import Foundation
 import Observation
 import FleetCore
 
-// The designated fixer: one agent outside the app that FleetConsole hands its
-// problems to.
-//
-// The app observes and the controller supervises; neither edits your code or
-// your configuration. When something needs a fix, the app extracts what it knows
-// — the problem, the service's record, its recent events, where its logs are —
-// into a report file, and starts the agent you designated on that report in the
-// dashboard's own terminal, in the service's working directory. You watch it,
-// answer it, stop it. External fixers act through `fleetctl` and report through
-// its mailbox. The bundled fleet-agent reads the complete saved request and returns
-// a read-only proposal for the operator to review.
-
-/// The agents FleetConsole knows how to start on a report.
 enum FixAgentKind: String, CaseIterable, Identifiable, Sendable {
     case claude
     case codex
@@ -30,11 +17,8 @@ enum FixAgentKind: String, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// The executable name and the agent's mailbox ID.
     var executable: String { rawValue }
 
-    /// The command line typed into the terminal. The bundled agent produces a
-    /// read-only proposal; external agents retain their interactive workflow.
     func commandLine(prompt: String, executableURL: URL? = nil, promptFileURL: URL? = nil) -> String {
         let binary = executableURL?.path.shellQuoted ?? executable
         switch self {
@@ -46,8 +30,6 @@ enum FixAgentKind: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-/// Bundled fleet-agent has the app's proposal policy. An older copy on
-/// PATH must not replace it; external fixers keep their existing resolution.
 enum FixAgentBinary {
     static func resolve(_ name: String) -> URL? {
         resolve(name, resourceURL: Bundle.main.resourceURL, searchPathResolve: ToolBinary.resolve)
@@ -63,7 +45,6 @@ enum FixAgentBinary {
     }
 }
 
-/// Which fixer is designated, and which are installed. One per Mac.
 @Observable
 @MainActor
 final class FixAgentSettings {
@@ -76,7 +57,6 @@ final class FixAgentSettings {
     @ObservationIgnored private var isReloading = false
     @ObservationIgnored private var isInitializing = true
 
-    /// The installed fixers, in `FixAgentKind` order.
     private(set) var installed: [FixAgentKind] = []
 
     var designated: FixAgentKind? {
@@ -96,8 +76,6 @@ final class FixAgentSettings {
         reload()
     }
 
-    /// External fixers can be selected by availability. Fleet Agent always
-    /// requires an explicit designation, and an explicit None stays disabled.
     func reload() {
         installed = FixAgentKind.allCases.filter { resolve($0.executable) != nil }
         if designated == nil, defaults.string(forKey: Self.key) == Self.none { return }
@@ -111,8 +89,6 @@ final class FixAgentSettings {
     func executableURL(for kind: FixAgentKind) -> URL? { resolve(kind.executable) }
 }
 
-/// What the fixer is handed: the problems, and everything the app knows about
-/// the services they concern, as one Markdown file.
 enum FixReport {
     static let maximumPromptBytes = 32 * 1024
 
@@ -173,7 +149,6 @@ enum FixReport {
         return lines.map(singleLine).joined(separator: "\n") + "\n"
     }
 
-    /// Values cannot inject new Markdown sections or terminal/directional controls.
     private static func singleLine(_ text: String) -> String {
         text.unicodeScalars.map { scalar in
             if scalar == "\n" { return "\\n" }
@@ -186,29 +161,22 @@ enum FixReport {
         }.joined()
     }
 
-    /// Writes the report where the fixer can read it and returns its location.
     static func write(_ markdown: String, now: Date = Date()) throws -> URL {
         let url = location(now: now)
         try write(markdown, to: url)
         return url
     }
 
-    /// Choose the location before writing so the complete first turn can be
-    /// validated before any report is saved or command is dispatched.
     static func location(now: Date = Date()) -> URL {
         let directory = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/FleetConsole/fix-reports", isDirectory: true)
         let stamp = ISO8601DateFormatter().string(from: now).replacingOccurrences(of: ":", with: "-")
-        // The shell can read after a second handoff is queued. Each request
-        // must retain its own contents even when both arrive in the same second.
         return directory.appendingPathComponent("fix-\(stamp)-\(UUID().uuidString).md")
     }
 
     static func write(_ markdown: String, to url: URL) throws {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
-        // A unique owner-only file from its first byte; do not follow a symlink or
-        // overwrite another queued request. Dispatch happens only after the write closes.
         let descriptor = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
         guard descriptor >= 0 else { throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
@@ -222,7 +190,6 @@ enum FixReport {
         }
     }
 
-    /// The first turn: read the report, fix through the controller, report back.
     static func prompt(reportPath: String, agentID: String, fleetctl: String) -> String {
         "FleetConsole found problems on this Mac and wrote them up at \(reportPath). "
             + "Read it, diagnose each problem and compare solutions for operator review. "
@@ -236,8 +203,6 @@ enum FixReport {
             + "\(fleetctl) notify --agent \(agentID) --message \"…\" (add --ask for a question)."
     }
 
-    /// fleet-agent has read-only observation tools and cannot open a report
-    /// file. Give it the findings directly and ask only for a proposal.
     static func proposalPrompt(markdown: String) -> String {
         "FleetConsole found the problems below on this Mac. "
             + "Investigate with read-only tools and propose fixes for the operator to review. "
@@ -251,9 +216,6 @@ enum FixReport {
 }
 
 extension AppModel {
-    /// Hands `items` to the designated fixer: writes the report, then opens the
-    /// dashboard's terminal in the service's directory and starts the agent.
-    /// Returns a sentence to show when it could not.
     @discardableResult
     func sendToFixer(_ items: [AttentionItem], openDashboard: () -> Void,
                      settings: FixAgentSettings = .shared,
@@ -279,14 +241,10 @@ extension AppModel {
             let prompt = fixer == .fleetAgent
                 ? FixReport.proposalPrompt(markdown: markdown)
                 : FixReport.prompt(reportPath: report.path, agentID: fixer.executable, fleetctl: fleetctl.shellQuoted)
-            // Reject the complete request before writing or dispatching;
-            // external fixers retain their report-file workflow.
             guard fixer != .fleetAgent || prompt.utf8.count <= FixReport.maximumPromptBytes else {
                 self.actionError = "The fix request exceeds 32 KiB. Send fewer problems at once; no findings were truncated."
                 return
             }
-            // Keep the exact proposal prompt in the saved report instead of
-            // echoing all findings and instructions into the shell command.
             do { try writeReport(fixer == .fleetAgent ? prompt : markdown, report) } catch {
                 self.actionError = "The fix report could not be written."
                 return
@@ -313,7 +271,6 @@ extension AppModel {
 }
 
 extension String {
-    /// POSIX single-quoting: safe to type into any login shell.
     var shellQuoted: String { "'" + replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
     fileprivate func ifEmpty(_ fallback: String) -> String { isEmpty ? fallback : self }

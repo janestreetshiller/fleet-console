@@ -44,8 +44,6 @@ final class RPCRequestPolicyTests: XCTestCase {
     }
 
     func testObservationalSendRejectsDeviceRefreshBeforeConnecting() {
-        // An empty socket path never targets the installed daemon. The policy
-        // must reject the request before attempting any connection.
         XCTAssertThrowsError(try UnixSocketClient.send(
             RPCRequest(op: .refreshDevices), path: "", policy: .observational
         )) { error in

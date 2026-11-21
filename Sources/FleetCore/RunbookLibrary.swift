@@ -1,22 +1,5 @@
 import Foundation
 
-// The runbooks that ship with the app.
-//
-// Three, and no more until these three have been run against real machines. A
-// format proves nothing until something real is written in it, and the fastest
-// way to end up with a format that fits nothing is to design a fourth situation
-// before the first three have been used.
-//
-// They are declared here rather than loaded from JSON so the compiler checks
-// them and the test suite validates them on every run. The type is `Codable`
-// throughout, so exporting these as documents — and loading somebody else's —
-// is a transport change, not a format change.
-//
-// **The briefing is the product.** The model is interchangeable; what makes it
-// useful about a port conflict at 3am is a paragraph from someone who has
-// debugged one. Each briefing below is written to be read by a model that knows
-// how computers work and nothing whatsoever about this machine.
-
 public enum RunbookLibrary {
 
     public static let all: [Runbook] = [portConflict, leakedDaemon, diskFilling]
@@ -24,8 +7,6 @@ public enum RunbookLibrary {
     public static func runbook(id: String) -> Runbook? {
         all.first { $0.id == id }
     }
-
-    // MARK: - Port conflict
 
     public static let portConflict = Runbook(
         id: "port-conflict",
@@ -92,8 +73,6 @@ public enum RunbookLibrary {
         ],
         stopWhen: [.targetUnmanaged, .tooManyTargets, .evidenceUnavailable, .approvalDenied])
 
-    // MARK: - Leaked daemon
-
     public static let leakedDaemon = Runbook(
         id: "leaked-daemon",
         revision: 1,
@@ -147,8 +126,6 @@ public enum RunbookLibrary {
                 approval: .operatorApproval)
         ],
         stopWhen: [.targetUnmanaged, .tooManyTargets, .approvalDenied, .stepFailed])
-
-    // MARK: - Disk filling
 
     public static let diskFilling = Runbook(
         id: "disk-filling",

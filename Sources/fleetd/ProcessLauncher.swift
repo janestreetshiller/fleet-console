@@ -2,8 +2,6 @@ import Foundation
 import Darwin
 import FleetCore
 
-/// Spawns managed processes. The only place in FleetConsole that creates a process,
-/// and it is reachable only through a validated `LaunchRequest` over the local socket.
 enum ProcessLauncher {
 
     struct Spawned {
@@ -14,8 +12,6 @@ enum ProcessLauncher {
         var stderrPath: String
     }
 
-    /// Validates a launch request. Every rejection here is recorded as an event so
-    /// "the agent tried to do something odd" is visible after the fact (T5).
     static func validate(_ request: LaunchRequest, config: FleetConfig) throws -> (argv: [String], cwd: String) {
         guard !request.command.isEmpty else {
             throw FleetError.rejected("command is empty")
@@ -56,8 +52,6 @@ enum ProcessLauncher {
         }
         if request.health.kind == .http, let target = request.health.target,
            let url = URL(string: target), let host = url.host {
-            // Health checks are local-only by policy: the controller must not be usable
-            // as a generic outbound HTTP client.
             let allowed = ["127.0.0.1", "localhost", "::1", "0.0.0.0"]
             guard allowed.contains(host) else {
                 throw FleetError.rejected("http health checks must target localhost, got \(host)")
@@ -77,8 +71,6 @@ enum ProcessLauncher {
         return Shell.which(command)
     }
 
-    /// Spawns in its own process group so children (npm → node, poetry → uvicorn…)
-    /// can be reaped as a unit. stdout/stderr go to 0600 files under ~/Library/Logs.
     static func spawn(id: String, argv: [String], cwd: String,
                       extraEnv: [String: String]) throws -> Spawned {
         try FleetPaths.ensureDirectories()
@@ -109,13 +101,8 @@ enum ProcessLauncher {
         var attrs: posix_spawnattr_t?
         posix_spawnattr_init(&attrs)
         defer { posix_spawnattr_destroy(&attrs) }
-        // New process group, id == child pid. This is what makes group-kill safe.
         posix_spawnattr_setpgroup(&attrs, 0)
 
-        // The daemon sets SIGTERM/SIGINT/SIGHUP/SIGPIPE to SIG_IGN so it can handle
-        // them through dispatch sources. An *ignored* disposition survives exec, so
-        // without this reset every managed process would inherit immunity to SIGTERM
-        // and could only ever be SIGKILLed — no graceful shutdown, ever.
         var defaultSignals = sigset_t()
         sigfillset(&defaultSignals)
         posix_spawnattr_setsigdefault(&attrs, &defaultSignals)
@@ -147,14 +134,12 @@ enum ProcessLauncher {
         }
 
         return Spawned(pid: pid,
-                       pgid: pid,   // guaranteed by POSIX_SPAWN_SETPGROUP with pgroup 0
+                       pgid: pid,
                        startSignature: startSignature(of: pid),
                        stdoutPath: outPath,
                        stderrPath: errPath)
     }
 
-    /// `ps -o lstart` for one pid. Captured at launch and re-checked before any
-    /// signal, so a recycled PID can never be killed in place of ours (T2).
     static func startSignature(of pid: Int32) -> String? {
         let result = Shell.run("/bin/ps", ["-o", "lstart=", "-p", "\(pid)"], timeout: 3)
         let trimmed = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)

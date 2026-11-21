@@ -11,8 +11,6 @@ public struct MetricSample: Identifiable, Equatable, Sendable {
     }
 }
 
-/// Actual observation times survive delayed ticks and manual refreshes.
-/// No averaging: a single observation at a peak remains in the plotted series.
 public struct MetricHistory: Sendable {
     public private(set) var samples: [MetricSample] = []
     public let retention: TimeInterval

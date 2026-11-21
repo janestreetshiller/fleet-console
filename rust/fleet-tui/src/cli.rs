@@ -1,5 +1,3 @@
-//! Command-line options. The flag names match the GPUI client's so the two
-//! can be started the same way.
 
 use crate::app::View;
 use std::path::PathBuf;
@@ -15,7 +13,6 @@ pub struct Options {
     pub mouse: bool,
     pub plain: bool,
     pub once: bool,
-    /// The view to open on, or every view with `--once`.
     pub view: StartView,
     #[cfg(feature = "fixtures")]
     pub fixture: Option<fleet_ui_core::fixtures::Scenario>,
@@ -28,7 +25,6 @@ pub struct Options {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StartView {
     One(View),
-    /// Every view in order; only meaningful with `--once`.
     All,
 }
 
@@ -123,7 +119,6 @@ pub fn parse<'a>(args: impl IntoIterator<Item = &'a str>) -> Result<Parsed, Stri
     let mut options = Options::default();
     let mut args = args.into_iter();
     while let Some(arg) = args.next() {
-        // `--flag=value` is accepted as well as `--flag value`.
         let (flag, inline) = match arg.split_once('=') {
             Some((f, v)) if f.starts_with("--") => (f, Some(v)),
             _ => (arg, None),

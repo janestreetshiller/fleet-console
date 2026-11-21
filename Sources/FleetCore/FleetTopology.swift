@@ -1,7 +1,5 @@
 import Foundation
 
-/// A projection of controller evidence, shared by the desktop and CLI. Edges
-/// express recorded ownership or observations, never inferred dependencies.
 public struct FleetTopology: Codable, Sendable, Equatable {
     public struct Node: Codable, Sendable, Identifiable, Equatable {
         public enum Kind: String, Codable, Sendable { case owner, service, process, listener, session }
@@ -26,7 +24,6 @@ public struct FleetTopology: Codable, Sendable, Equatable {
     public var schemaVersion = 1
     public var generatedAt: Date
     public var isStale: Bool
-    /// Next evidence expiry; clients can update once at this boundary.
     public var validUntil: Date?
     public var nodes: [Node]
     public var edges: [Edge]
@@ -93,8 +90,6 @@ public struct FleetTopology: Codable, Sendable, Equatable {
                 }
             }
         }
-        // Session detection has its own source. Never join tool names, paths or
-        // bare PIDs to service owners. Exact owner filtering omits this lane.
         if owner == nil {
             let scannedAt = snapshot.daemon.lastReconcileAt
             let sessionsFresh = !isStale && scannedAt.map { now.timeIntervalSince($0) <= tolerance } == true

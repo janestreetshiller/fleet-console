@@ -1,8 +1,4 @@
 #!/bin/bash
-# Idle cost of one running process: CPU time used and resident memory over a
-# window, sampled once a minute. Reads only; it does not start, signal or stop
-# the process. Works on macOS (ps) and Linux (/proc).
-# Usage: Scripts/measure-idle.sh <pid> [seconds=600]
 set -euo pipefail
 PID="${1:?usage: measure-idle.sh <pid> [seconds]}"
 WINDOW="${2:-600}"
@@ -11,14 +7,11 @@ STEP=60
 
 cpu_seconds() {
     if [ -r "/proc/$PID/stat" ]; then
-        # utime and stime are fields 14 and 15, in clock ticks; the command
-        # name in field 2 may contain spaces, so count from the closing paren.
         local ticks hz
         ticks=$(sed 's/.*) //' "/proc/$PID/stat" | awk '{print $12 + $13}')
         hz=$(getconf CLK_TCK)
         awk -v t="$ticks" -v h="$hz" 'BEGIN { printf "%.2f", t / h }'
     else
-        # macOS: [[dd-]hh:]mm:ss.cc
         ps -o time= -p "$PID" | awk '{
             t = $1; d = 0
             if (index(t, "-")) { split(t, dd, "-"); d = dd[1]; t = dd[2] }

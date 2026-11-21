@@ -1,7 +1,5 @@
 import Foundation
 
-/// Read-only view of `tailscale status --json`. Never issues control commands —
-/// FleetConsole observes the tailnet, it does not reconfigure it.
 public struct TailscaleStatus: Sendable {
     public struct Node: Sendable, Hashable {
         public var id: String
@@ -18,7 +16,6 @@ public struct TailscaleStatus: Sendable {
         public var rxBytes: Int64
         public var txBytes: Int64
 
-        /// Synthetic example: "demo-node.example.ts.net." → "demo-node"
         public var shortName: String {
             dnsName.split(separator: ".").first.map(String.init) ?? hostName
         }
@@ -37,7 +34,6 @@ public struct TailscaleStatus: Sendable {
 
     public var isRunning: Bool { backendState == "Running" }
 
-    /// The peer currently being used as this machine's exit node, if any.
     public var activeExitNode: Node? {
         if let peer = peers.first(where: { $0.isExitNode }) { return peer }
         if let id = exitNodeID { return peers.first { $0.id == id } }
@@ -54,7 +50,6 @@ public struct TailscaleStatus: Sendable {
         }
     }
 
-    /// Includes self, so a device configured with this machine's own name resolves.
     public func node(matching identifier: String) -> Node? {
         if let selfNode {
             let needle = identifier.lowercased()
@@ -149,14 +144,9 @@ public enum TailscaleClient {
                              txBytes: (dict["TxBytes"] as? NSNumber)?.int64Value ?? 0)
     }
 
-    // `Date.ISO8601FormatStyle` rather than `ISO8601DateFormatter`: a Sendable
-    // value with its options fixed at construction, so there is no shared mutable
-    // formatter to guard. Same two shapes: RFC 3339 with and without fractions.
     private static let isoFractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
     private static let iso = Date.ISO8601FormatStyle()
 
-    /// `0001-01-01…` is Go's zero `time.Time` — what tailscale sends for "never
-    /// seen". Syntactically a date, so it is rejected by name before parsing.
     static func parseDate(_ string: String?) -> Date? {
         guard let string, !string.isEmpty, !string.hasPrefix("0001-01-01") else { return nil }
         return (try? isoFractional.parse(string)) ?? (try? iso.parse(string))

@@ -1,15 +1,12 @@
 import Foundation
 import IOKit.ps
 
-/// Internal-battery state, not a UPS or a peripheral battery. Hosts without an
-/// internal battery leave charge and remaining time unavailable rather than 0.
 public struct PowerSample: Sendable, Equatable {
     public let probeSucceeded: Bool
     public let hasBattery: Bool
     public let chargeFraction: Double?
     public let isCharging: Bool
     public let isPluggedIn: Bool
-    /// Minutes until full when charging, until empty when on battery; otherwise nil.
     public let minutesRemaining: Int?
 
     public init(hasBattery: Bool = false, chargeFraction: Double? = nil,
@@ -24,8 +21,6 @@ public struct PowerSample: Sendable, Equatable {
     }
 }
 
-/// Decodes the IOPS descriptions used by the live sampler, not a synthetic DTO.
-/// A nil collection represents a failed read.
 public enum PowerSourceDecoder {
     public static func sample(descriptions: [[String: Any]]?) -> PowerSample {
         guard let descriptions else { return PowerSample() }
@@ -48,7 +43,6 @@ public enum PowerSourceDecoder {
             } else if state == kIOPSBatteryPowerValue {
                 minutes = (description[kIOPSTimeToEmptyKey] as? NSNumber)?.intValue
             }
-            // -1 means "still calculating" in the IOPS contract.
             if let value = minutes, value < 0 { minutes = nil }
             return PowerSample(hasBattery: true, chargeFraction: charge,
                                isCharging: charging, isPluggedIn: pluggedIn,
@@ -58,9 +52,7 @@ public enum PowerSourceDecoder {
     }
 }
 
-/// Physical-interface throughput. Nil is an absent interval, not an idle link.
 public struct NetworkTrafficSample: Sendable, Equatable {
-    /// A successful counter read can still lack an active link or a rate interval.
     public let probeSucceeded: Bool
     public let downloadBytesPerSec: Double?
     public let uploadBytesPerSec: Double?
@@ -78,8 +70,6 @@ public struct NetworkTrafficSample: Sendable, Equatable {
     }
 }
 
-/// Cumulative bytes from one link. Keep integers until after subtraction so a
-/// small delta is not lost when a long-lived interface has very large counters.
 public struct NetworkInterfaceCounters: Sendable, Equatable {
     public let receivedBytes: UInt64
     public let sentBytes: UInt64
@@ -90,9 +80,7 @@ public struct NetworkInterfaceCounters: Sendable, Equatable {
     }
 }
 
-/// Pure rate math; the caller owns sampling, the baseline and a monotonic clock.
 public enum NetworkTrafficRates {
-    /// Five missed 2-second ticks are a gap, not a useful current average.
     public static let maximumInterval: TimeInterval = 10
 
     public static func sample(current: [String: NetworkInterfaceCounters],

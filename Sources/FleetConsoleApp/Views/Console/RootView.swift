@@ -2,8 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-// A native navigation sidebar, content column, optional trailing inspector and
-// optional tool panel. Keep toolbar/search on the split view for AppKit bridging.
 private struct ConsoleChrome<Bar: ToolbarContent>: ViewModifier {
     @Bindable var console: ConsoleModel
     let prompt: String
@@ -22,16 +20,6 @@ struct ConsoleRootView: View {
     @Bindable var console: ConsoleModel
     let tools: ChromeTools
 
-    /// The window's content width, measured behind the tool field so the panel's
-    /// clamp has something stable to divide up.
-    ///
-    /// Seeded with the composed width rather than zero. The side columns are a
-    /// function of this, so a zero first frame meant `Scale.minor(-34)/2`
-    /// clamping to the floor: both columns opened at 233 and the sidebar elided
-    /// the device names it is sized to show, then corrected on the next layout
-    /// pass. The window cannot be *narrower* than its own minimum and cannot be
-    /// wider than the composed size, so the composed size is the only honest
-    /// starting guess.
     @State private var contentWidth: CGFloat = DashboardWindowGeometry.defaultContentSize.width
 
     var body: some View {
@@ -41,26 +29,11 @@ struct ConsoleRootView: View {
             ChromeToolField(model: model, console: console, tools: tools,
                             outerWidth: contentWidth)
         }
-        // One easing for both sides. `showsInspector` is the value that changes
-        // when the inspector is toggled *or* when width takes it away, so both
-        // routes animate identically instead of one sliding and one snapping.
         .animation(ConsoleAnimation.column, value: showsInspector)
-        // Keyed on the *cause*, not on the measurement.
-        //
-        // This was `value: sideColumnWidth`, and that width is a pure function
-        // of `contentWidth`, which is measured live from the window. So the one
-        // gesture it fired on constantly was the one it should never have fired
-        // on: dragging an edge handed a 0.34s spring a new target every frame,
-        // each restarting before the last had settled, and the columns swam
-        // after the pointer instead of tracking it. Revealing a tool panel is
-        // the only *discrete* thing that changes this width, so it is what the
-        // animation watches now — the slide is unchanged, the drag is direct.
         .animation(ConsoleAnimation.column, value: tools.revealed)
         .environment(\.isLiveResizing, console.isLiveResizing)
         .opaqueLiquidGlassScene()
         .background {
-            // Measured on the full frame — the inset's own width is derived from
-            // this, so reading it from inside the inset would be circular.
             GeometryReader { geometry in
                 Color.clear
                     .onAppear { contentWidth = geometry.size.width }
@@ -78,11 +51,6 @@ struct ConsoleRootView: View {
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.toggleSidebar)) { _ in
             console.toggleSidebar()
         }
-        // showHome and selectModule are deliberately absent: they are observed in
-        // ConsoleWindowController, which exists before this view does. A sender
-        // opens the window and posts in the same turn, and the status item's
-        // dropdown does that with no window up at all, so a subscription
-        // installed on appearance is a subscription installed too late.
         .onReceive(NotificationCenter.default.publisher(for: ConsoleCommand.toggleInspector)) { _ in
             let reveal = !showsInspector
             if inspectorBlockedByWidth && reveal { tools.dismiss() }
@@ -99,11 +67,6 @@ struct ConsoleRootView: View {
             console.open(.processes)
             console.selectedPID = pid
         }
-        // Live data deletes rows; selections pointing at ghosts clear themselves.
-        // Deferred one runloop tick: these fire while SwiftUI is still pushing
-        // new rows through the table's NSTableView delegate, and clearing a
-        // selection bound to that table re-enters the delegate mid-pass (the
-        // "reentrant operation" warning macOS will assert on).
         .onChange(of: showsInspector, initial: true) { _, visible in
             console.inspectorVisible = visible
         }
@@ -117,12 +80,8 @@ struct ConsoleRootView: View {
             if target != .none { console.inspectorRevealed = true }
         }
         .onChange(of: console.selectedDeviceID) {
-            // Remote nodes have one module — their own detail. Switching back
-            // to This Mac restores the last module implicitly via state.
             if console.isLocalDeviceSelected { model.refreshAll() }
         }
-        // A revealed panel follows the selection: opening Files on a service and
-        // then picking a different one should land in the new working directory.
         .onChange(of: toolContext) { _, context in tools.update(context: context) }
         .onAppear {
             tools.update(context: toolContext)
@@ -130,38 +89,17 @@ struct ConsoleRootView: View {
         }
     }
 
-    // MARK: - The split view
-    //
-    // Held separately so the toolbar and the search field stay attached to the
-    // `NavigationSplitView` itself — they bridge onto the window's NSToolbar
-    // from here, and moving them out to the `HStack` is not the same thing.
-
-    /// The width below which column three and a tool panel stop both fitting.
-    /// Derived and asserted in `ConsoleLayout` — see `ConsoleLayoutTests`, which
-    /// proves the arrangement lands exactly on the module column's floor here.
-    /// This was previously summed inline from four tokens and a bare `360`, and
-    /// the bare 360 was the only statement anywhere of what a module column
-    /// needs.
     private static let inspectorAndPanelFloor = ConsoleLayout.inspectorAndPanelFloor
 
-    /// Column three yields only when it has to: at the composed 1560 everything
-    /// stands at once, and only a window dragged toward its floor *with a tool
-    /// open* makes the inspector give way — because the module column going
-    /// under `ConsoleLayout.moduleColumnMin` turns its tables into horizontal
-    /// scrollbars.
     private var showsInspector: Bool {
         guard console.inspectorRevealed else { return false }
         return tools.revealed == nil || contentWidth >= Self.inspectorAndPanelFloor
     }
 
-    /// Whether width — rather than the button — is what is hiding column three.
-    /// The toggle reports this in its tooltip instead of silently doing nothing,
-    /// so a button that cannot take effect says why.
     private var inspectorBlockedByWidth: Bool {
         tools.revealed != nil && contentWidth < Self.inspectorAndPanelFloor
     }
 
-    /// The inspector uses the available content width after any tool panel.
     private var sideColumnWidth: CGFloat {
         let panel = tools.revealed == nil ? 0 : ConsoleToolMetrics.panelIdeal
         let split = max(0, contentWidth - panel)
@@ -182,11 +120,6 @@ struct ConsoleRootView: View {
                                 toolbar: toolbarContent))
     }
 
-    /// Column three, mirrored onto the sidebar's geometry and easing.
-    ///
-    /// Clipped to its frame so the panel slides out of the window edge instead
-    /// of being drawn outside it during the transition, and given a leading
-    /// hairline because it no longer gets the split view's own column separator.
     @ViewBuilder
     private var inspectorColumn: some View {
         if showsInspector {
@@ -201,8 +134,6 @@ struct ConsoleRootView: View {
                 .clipped()
         }
     }
-
-    // MARK: - Content column
 
     @ViewBuilder
     private var contentColumn: some View {
@@ -224,27 +155,7 @@ struct ConsoleRootView: View {
         }
     }
 
-    /// Kept under ~130pt at 13pt, because the toolbar search field does not get a
-    /// width — it gets whatever the toolbar has left, which on a narrower window
-    /// is around 150pt of text area. The previous prompts ran 168–207pt and five
-    /// of the eight clipped mid-word ("Filter what needs attent"). A hint that is
-    /// cut off is worse than a short one: it reads as a rendering fault.
-    ///
-    /// They are also not elided. The first fix for the clipping was to shorten
-    /// each prompt and end it in "…", which is the wrong punctuation twice over:
-    /// macOS reserves a trailing ellipsis for a control that opens something
-    /// needing more input, and putting one in a placeholder says the *hint* was
-    /// abbreviated — so a field that fit perfectly still looked truncated. These
-    /// are whole phrases that fit, naming the noun being searched, because the
-    /// field's own magnifying glass already supplies the verb.
     private var searchPrompt: String { console.searchPrompt }
-
-    // MARK: - Tool context
-    //
-    // What a chrome tool should open against. A selected service has a recorded
-    // cwd — that is the whole reason `--cwd` is mandatory for agents — and
-    // anything else falls back to home, never to a directory guessed from a
-    // process's argv.
 
     private var toolContext: ToolContext {
         guard console.isLocalDeviceSelected else {
@@ -257,14 +168,6 @@ struct ConsoleRootView: View {
         }
         return ToolContext(subject: console.atHome ? "Home" : console.module.rawValue)
     }
-
-    // MARK: - Toolbar
-    //
-    // The ribbon. Its structure and wording are fixed: the same module
-    // segments in the same order, the same device label when a remote node is
-    // selected, the same refresh verb. The only thing the tool rail changes
-    // about it is that its text now truncates with a tail ellipsis instead of
-    // being allowed to grow into space that is no longer there.
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
@@ -324,22 +227,11 @@ struct ConsoleRootView: View {
         model.deviceRows.first { $0.id == console.selectedDeviceID }?.record.name ?? "Device"
     }
 
-    // MARK: - Search focus (⌘K)
-    //
-    // `.searchFocused` is macOS 15; this app targets 14. The toolbar search
-    // field is a real NSSearchField once SwiftUI bridges the toolbar onto the
-    // AppKit window, so focusing it is a first-responder call away — found
-    // recursively rather than by toolbar-item index, which SwiftUI does not
-    // promise to keep stable.
-
     static func focusToolbarSearchField() {
-        // A beat after the menu command: the window may have been ordered in
-        // by the same click, and the field must exist before it can take focus.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
             guard let window = NSApp.keyWindow ?? NSApp.windows.first(where: { $0.isVisible }) else {
                 return
             }
-            // Native toolbar controls live beside the content view in its frame.
             if let field = findSearchField(in: window.contentView?.superview) {
                 window.makeFirstResponder(field)
             }
@@ -356,8 +248,6 @@ struct ConsoleRootView: View {
     }
 }
 
-/// Overview's complete control surface in one native-toolbar row. The module
-/// itself starts immediately with the charts; it never draws a second ribbon.
 struct OverviewToolbarControls: View {
     @Bindable var console: ConsoleModel
 

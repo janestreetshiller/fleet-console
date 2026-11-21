@@ -1,8 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Services owns service identity and evidence. Owners remain in each row; the
-// agent roster has its own destination, and unmanaged processes stay disclosed.
 struct ServicesModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
@@ -93,8 +91,6 @@ struct ServicesModule: View {
     }
 }
 
-// MARK: - Rows
-
 private struct ManagedServiceRow: View {
     let row: ServiceRow
     let model: AppModel
@@ -152,7 +148,6 @@ private struct ManagedServiceRow: View {
         .padding(.vertical, 3)
         .help("\(labels.displayName(for: record)) · recorded as \(record.friendlyName) · \(record.state.label)\(isStale ? " · stale" : "")")
         .contextMenu {
-            // A claimed record still keeps lease renewal, never signal controls.
             if record.isSignallableByController {
                 Button("Stop…") { onAction(DestructiveAction(kind: .stop, service: record)) }
                 Button("Restart…") { onAction(DestructiveAction(kind: .restart, service: record)) }

@@ -45,8 +45,6 @@ public struct DeviceLinkRequest: Sendable {
     }
 }
 
-/// Change only the devices array. Preserve unrelated and future config keys.
-/// The existing reloadConfig RPC activates the change on the controller.
 public enum DeviceLinkStore {
     @discardableResult
     public static func link(_ request: DeviceLinkRequest, at url: URL) throws -> String {
@@ -78,7 +76,6 @@ public enum DeviceLinkStore {
     private static func write(_ devices: [FleetConfig.DeviceConfig], root: [String: Any],
                               original: Data, at url: URL) throws {
         var root = root
-        // Preserve unknown fields on existing device records too.
         let previous = root["devices"] as? [[String: Any]] ?? []
         root["devices"] = try devices.map { device -> [String: Any] in
             if let original = previous.first(where: { $0["id"] as? String == device.id }) { return original }

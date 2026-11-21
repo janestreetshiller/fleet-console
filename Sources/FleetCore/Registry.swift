@@ -1,26 +1,14 @@
 import Foundation
 
-/// The registry: managed services, an append-only event history, the unmanaged
-/// cache and device state. Service/device rows keep indexed scalar columns for
-/// queries plus a JSON payload for the full record, so the schema can evolve
-/// without migrations for every new field.
-///
-/// The `events` table is protected by triggers that make UPDATE and DELETE fail —
-/// history cannot be rewritten, including by a future bug in FleetConsole (T3).
 public final class Registry {
     private let db: SQLiteDB
 
-    /// `readOnly` is for readers that must work while the daemon is down (`fleetctl
-    /// events --offline`): no schema work, no writes, nothing that could disturb a
-    /// controller that comes back up while the reader is still open.
     public init(path: String = FleetPaths.database.path, readOnly: Bool = false) throws {
         if !readOnly { try FleetPaths.ensureDirectories() }
         self.db = try SQLiteDB(path: path, readOnly: readOnly)
         if !readOnly { try migrate() }
     }
 
-    /// Forwarded so whoever owns the daemon lifecycle can bound the WAL and release
-    /// the file explicitly — `deinit` never runs when the process leaves via exit().
     @discardableResult
     public func checkpoint(truncate: Bool = true) -> Bool {
         db.checkpoint(truncate: truncate)
@@ -104,8 +92,6 @@ public final class Registry {
         """)
     }
 
-    // MARK: - Services
-
     public func upsert(_ service: ServiceRecord) throws {
         let json = String(data: try Codec.encode(service), encoding: .utf8) ?? "{}"
         try db.run("""
@@ -140,7 +126,6 @@ public final class Registry {
         return found
     }
 
-    /// Resolves a full id or a unique short-id prefix (what the CLI prints).
     public func resolve(idOrPrefix: String) throws -> ServiceRecord? {
         if let exact = try service(id: idOrPrefix) { return exact }
         var matches: [ServiceRecord] = []
@@ -154,9 +139,6 @@ public final class Registry {
         if matches.count > 1 {
             throw FleetError.rejected("id prefix '\(idOrPrefix)' is ambiguous (\(matches.count) matches)")
         }
-        // Fall back to friendly name. Running services win; if none is running we
-        // return the most recent terminal record, because "why did it crash" is
-        // exactly when you reach for `fleetctl logs <name>`.
         let named = try services().filter { $0.friendlyName == idOrPrefix }
         let live = named.filter { !$0.state.isTerminal }
         if live.count == 1 { return live[0] }
@@ -180,18 +162,12 @@ public final class Registry {
         return result
     }
 
-    /// Terminal records older than `age` are pruned so the services table does not
-    /// grow forever. The event history is never pruned — it is the audit trail.
     public func pruneTerminated(olderThan age: TimeInterval) throws {
         let cutoff = Date().addingTimeInterval(-age).timeIntervalSince1970
         try db.run("DELETE FROM services WHERE state IN ('stopped','crashed') AND updated_at < ?;",
                    [.double(cutoff)])
-        // Bulk deletes are the single largest WAL producer in this file, so this is
-        // where the WAL is actually reclaimed rather than left to grow.
         db.checkpoint(truncate: true)
     }
-
-    // MARK: - Events (append-only)
 
     @discardableResult
     public func append(_ event: ServiceEvent) throws -> Int64 {
@@ -231,8 +207,6 @@ public final class Registry {
         return result
     }
 
-    /// Most recent events restricted to a set of kinds. The daemon uses this to tell a
-    /// clean shutdown from a generation that died without writing one.
     public func events(kinds: [EventKind], limit: Int = 20) throws -> [ServiceEvent] {
         guard !kinds.isEmpty else { return [] }
         let placeholders = Array(repeating: "?", count: kinds.count).joined(separator: ",")
@@ -248,8 +222,6 @@ public final class Registry {
         return result
     }
 
-    /// Column order is fixed by the two SELECTs above; kept in one place so they
-    /// cannot drift apart.
     private static func decodeEvent(_ row: SQLiteDB.Row) -> ServiceEvent? {
         guard let kindRaw = row.text(4), let kind = EventKind(rawValue: kindRaw) else { return nil }
         var evidence: Evidence?
@@ -265,15 +237,6 @@ public final class Registry {
                             evidence: evidence)
     }
 
-    // MARK: - Unmanaged
-
-    /// Merges this sweep's unmanaged set into the table, preserving `firstSeen` for keys
-    /// we have seen before so "how long has this been leaking" survives restarts.
-    ///
-    /// Upsert plus a targeted delete, never DELETE-all-and-reinsert: with the latter a
-    /// single sweep that saw nothing (a `ps`/`lsof` failure upstream used to look
-    /// exactly like an empty machine) wiped every row, lost every `first_seen`, and the
-    /// next good sweep re-emitted the whole list as brand-new `becameUnmanaged` events.
     public func syncUnmanaged(_ found: [UnmanagedProcess]) throws -> [UnmanagedProcess] {
         var existing: [String: Date] = [:]
         try db.query("SELECT key, first_seen FROM unmanaged;") { row in
@@ -299,7 +262,6 @@ public final class Registry {
                             .text(json)])
                 merged.append(proc)
             }
-            // Only keys this sweep genuinely did not see are dropped.
             for key in existing.keys where !foundKeys.contains(key) {
                 try db.run("DELETE FROM unmanaged WHERE key = ?;", [.text(key)])
             }
@@ -317,8 +279,6 @@ public final class Registry {
         }
         return result
     }
-
-    // MARK: - Messages
 
     public func post(_ message: AgentMessage) throws -> AgentMessage {
         let id = try db.run("""
@@ -369,8 +329,6 @@ public final class Registry {
         return result
     }
 
-    /// A reply is written exactly once: answering twice would silently rewrite
-    /// what the agent already read.
     public func reply(to id: Int64, with text: String) throws -> AgentMessage {
         var existing: AgentMessage?
         try db.query("SELECT reply FROM messages WHERE id = ?;", [.int(id)]) { row in
@@ -396,8 +354,6 @@ public final class Registry {
                        [.double(now), .int(id)])
         }
     }
-
-    // MARK: - Devices
 
     public func upsert(_ device: DeviceRecord) throws {
         let json = String(data: try Codec.encode(device), encoding: .utf8) ?? "{}"

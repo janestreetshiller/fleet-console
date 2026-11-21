@@ -1,4 +1,3 @@
-//! Linux specifics.
 
 use super::{run_bounded, Capability, StatusArea, Support, Volume};
 use crate::observe::{Metric, Reason};
@@ -97,8 +96,6 @@ pub(super) fn is_physical_interface(name: &str) -> bool {
     !VIRTUAL_PREFIXES.iter().any(|p| name.starts_with(p))
 }
 
-/// amdgpu exposes `gpu_busy_percent`; take the busiest card. Other drivers do
-/// not publish a comparable counter in sysfs, so they stay unavailable.
 pub(super) fn gpu_busy_percent() -> Metric {
     gpu_busy_percent_in(Path::new("/sys/class/drm"))
 }

@@ -1,6 +1,5 @@
 import Foundation
 
-/// Verification distinguishes unsupported hardware from a failed live probe.
 public enum TelemetryReadiness {
     public static func power(probeSucceeded: Bool, hasBattery: Bool, charge: Double?) -> Bool {
         guard probeSucceeded else { return false }

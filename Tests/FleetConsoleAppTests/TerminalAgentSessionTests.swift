@@ -102,7 +102,6 @@ struct TerminalAgentSessionTests {
         let agent = try #require(panel.selectedAgent)
         let pid = agent.pty.host.terminal.process.shellPid
         defer {
-            // Bound a failing regression too; never signal an unrelated/recycled PID.
             var child = siginfo_t()
             if waitid(P_PID, id_t(pid), &child, WEXITED | WNOHANG | WNOWAIT) == 0, getpgid(pid) == pid {
                 kill(-pid, SIGKILL)
@@ -110,9 +109,6 @@ struct TerminalAgentSessionTests {
             panel.windowClosed()
         }
         try await waitUntil { FileManager.default.fileExists(atPath: ready.path) }
-        // SwiftTerm 2 asks the child to terminate and keeps tracking it through
-        // its own waiter; a child that ignores the request stays live and owns
-        // nothing of the pty. Exercise the request, then stop it for real.
         agent.pty.host.terminal.process.terminate()
         #expect(kill(pid, 0) == 0, "A termination request is not proof of process exit")
         panel.stopSelectedAgent()
@@ -200,7 +196,6 @@ struct TerminalAgentSessionTests {
         #expect(panel.selection == .shell)
         #expect(panel.agents.map(\.id) == [second.id])
 
-        // Closing the owned window terminates its shell. Same-directory reopen must recover.
         window.close()
         panel.windowReopened()
         try await waitUntil { shellHost.terminal.process.shellPid != shellPID }
@@ -298,7 +293,6 @@ struct TerminalAgentSessionTests {
         tools.propose(size: size)
         tools.flushGeometry()
         #expect(agent.pty.launch == nil)
-        // Production invokes this on the newly measured header's layoutRevision.
         tools.invalidateGeometry()
         tools.flushGeometry()
         #expect(agent.pty.launch != nil)
@@ -327,9 +321,6 @@ struct TerminalAgentSessionTests {
         if alreadyStopping { session.terminate() }
         let start = ContinuousClock.now
         if ProcessInfo.processInfo.environment["FLEET_TEST_TERMINATION_NOTIFICATION"] == "1" {
-            // The acceptance harness selects only this case in its own process:
-            // posting a process-wide quit notification during other PTY tests
-            // would correctly stop their children too.
             try #require(ProcessInfo.processInfo.arguments.contains("TerminalAgentSessionTests/quitWaitsForCleanup"))
             NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: NSApp)
             #expect(kill(pid, 0) != 0, "The actual quit observer must join escalation before returning")
@@ -388,7 +379,6 @@ struct TerminalAgentSessionTests {
         #expect(agent.pty.phase == .stopping)
         #expect(!panel.closeSelectedAgent())
         try await waitUntil { agent.pty.phase == .exited(nil) }
-        // A dead grandchild can briefly remain a zombie until launchd reaps it.
         try await waitUntil { kill(childPID, 0) != 0 }
         #expect(panel.closeSelectedAgent())
         panel.windowClosed()
@@ -467,7 +457,6 @@ struct TerminalAgentSessionTests {
         try await waitUntil { if case .exited = agent.pty.phase { return true }; return false }
         #expect(agent.status == "Exited 0 · review output")
         #expect(text(agent.pty.host).contains("No changes executed."))
-        // Keyboard focus lands on the actual emulator, not a hidden shell.
         panel.select(.agent(agent.id))
         #expect(window.firstResponder === agent.pty.host.terminal)
         let name = "agent-session-\(Int(width))-\(dark ? "dark" : "light")"
@@ -535,8 +524,6 @@ struct TerminalAgentSessionTests {
     }
 
     @MainActor private func waitUntil(_ predicate: () -> Bool) async throws {
-        // Other native suites share AppKit's main actor and can hold it for
-        // several seconds while capturing/OCRing views during a full test run.
         let deadline = Date().addingTimeInterval(20)
         while !predicate() {
             guard Date() < deadline else { throw NSError(domain: "TerminalAgentSessionTests.timeout", code: 1) }

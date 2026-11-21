@@ -1,41 +1,36 @@
 import Foundation
 
-/// Newline-delimited JSON over a 0600 Unix domain socket. There is no network
-/// listener anywhere in FleetConsole (threat model T5).
 public enum RPCOp: String, Codable, Sendable {
     case ping
     case snapshot
-    case subscribe      // server pushes a Snapshot per state change / tick
+    case subscribe
     case launch
     case renew
     case stop
     case restart
     case events
     case logs
-    case claim          // adopt an already-running unmanaged process into the registry
-    case reconcile      // force an immediate reconciliation sweep
+    case claim
+    case reconcile
     case refreshDevices
     case reloadConfig
-    case ignoreCommand  // add a command to the expected-listener allow-list
-    case prune          // drop terminal service records (never events)
-    case pause          // SIGSTOP the process group
-    case resume         // SIGCONT the process group
-    case kill           // SIGKILL immediately, no grace period
-    case postMessage    // an agent says something to the operator
-    case messages       // read the mailbox
-    case reply          // the operator answers a message
-    case markSeen       // mark messages as seen so notifications fire once
+    case ignoreCommand
+    case prune
+    case pause
+    case resume
+    case kill
+    case postMessage
+    case messages
+    case reply
+    case markSeen
 }
 
-/// A request from an agent to run something. This is the *only* way a process
-/// enters the registry.
 public struct LaunchRequest: Codable, Sendable {
     public var friendlyName: String
     public var ownerAgent: String
     public var purpose: String
     public var command: [String]
     public var cwd: String
-    /// Extra environment. Values are used for the spawn but never persisted (T6).
     public var env: [String: String]
     public var declaredPorts: [Int]
     public var leaseTTLSec: Double
@@ -65,21 +60,13 @@ public struct RPCRequest: Codable, Sendable {
     public var serviceID: String?
     public var ttlSec: Double?
     public var limit: Int?
-    public var stream: String?      // "out" | "err"
+    public var stream: String?
     public var maxBytes: Int?
-    /// Free-text reason recorded in the event log for mutating operations.
     public var reason: String?
-    /// Executable name for `ignoreCommand`.
     public var command: String?
-    /// `UnmanagedProcess.id` (or a bare pid) for `claim`.
     public var unmanagedID: String?
-    /// Human name to file a claimed process under. Defaults to its executable.
     public var friendlyName: String?
-    /// Why a claimed process is allowed to exist. Recorded on the record, not just
-    /// in the event log, which is what separates it from `reason`.
     public var purpose: String?
-    /// The owning agent, for `postMessage`, `messages` — and for `claim`, where it
-    /// is who is answering for the process from now on.
     public var agent: String?
     public var body: String?
     public var kind: MessageKind?

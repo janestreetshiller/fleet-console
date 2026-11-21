@@ -2,21 +2,9 @@ import Foundation
 import AppKit
 import FleetCore
 
-// The verbs on the network surface.
-//
-// Everything here is read-only or clipboard-only. FleetConsole does not
-// reconfigure a network, the same way it does not signal a process it did not
-// start — `ping` and `traceroute` observe a path, they do not change one.
-//
-// Both diagnostics run off the main actor with a hard timeout, because a
-// traceroute to an unreachable gateway takes as long as its own patience and a
-// menu that hangs while it waits is not a menu.
-
 @Observable
 @MainActor
 final class NetworkActions {
-    /// The most recent diagnostic, so the row can show a result in place instead
-    /// of opening a window or a modal for four lines of text.
     struct Outcome: Identifiable, Equatable {
         let id = UUID()
         var title: String
@@ -30,10 +18,6 @@ final class NetworkActions {
 
     var isRunning: Bool { running != nil }
 
-    // MARK: - Clipboard
-
-    /// One place, so "Copy" means the same thing on every row and the
-    /// confirmation feedback cannot drift between them.
     @discardableResult
     func copy(_ value: String, label: String) -> Bool {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -44,18 +28,11 @@ final class NetworkActions {
         return true
     }
 
-    // MARK: - Diagnostics
-
-    /// Four probes, two-second deadline each, hard-capped by `Shell.run`. Enough
-    /// to tell "the gateway answers" from "it does not"; not a latency study.
     func pingGateway(_ address: String) {
         run(title: "ping \(address)", tool: "/sbin/ping",
             arguments: ["-c", "4", "-t", "6", address], timeout: 12)
     }
 
-    /// `-n` skips reverse DNS on every hop, which is most of what makes an
-    /// interactive traceroute feel stuck. `-w 1 -q 1 -m 12` keeps the worst case
-    /// bounded: twelve hops, one probe each, one second of patience.
     func traceroute(_ address: String) {
         run(title: "traceroute \(address)", tool: "/usr/sbin/traceroute",
             arguments: ["-n", "-w", "1", "-q", "1", "-m", "12", address], timeout: 25)
@@ -64,8 +41,6 @@ final class NetworkActions {
     func clearOutcome() { lastOutcome = nil }
 
     #if FLEET_SURFACE_RENDERER
-    /// Seeds an outcome so the surface sheet can capture the diagnostic panel.
-    /// Compiled only into the renderer, never into the signed bundle.
     func previewOutcome(title: String, output: String) {
         lastOutcome = Outcome(title: title, output: output, succeeded: true)
     }
@@ -88,28 +63,6 @@ final class NetworkActions {
     }
 }
 
-// MARK: - Support bundle
-
-/// A copyable snapshot of the network picture, sanitised.
-///
-/// The bundle is a serialisation of the model the screen already renders — the
-/// probe structs are `Codable` precisely so this is an encoding rather than a
-/// second implementation that can drift from what you were looking at.
-///
-/// **What is masked and why.** A support bundle is a thing you paste into a chat
-/// with someone you are asking for help, so the threat it has to survive is
-/// ordinary carelessness rather than an attacker. Two rules:
-///
-///   * **Addresses.** Private addresses (RFC 1918, link-local, CGNAT/Tailscale)
-///     are kept, because they describe your topology and are the entire reason
-///     to send the thing. Anything else is a public address that identifies where
-///     you are, and is replaced with its family — `‹public IPv4›`.
-///   * **Names and secrets.** The Wi-Fi SSID is a location fingerprint and is
-///     masked. Nothing in this bundle reads a key, a token or a password from
-///     anywhere: there is no field for one, and the assembler below cannot reach
-///     the config file, the keychain or the registry. The one credential-shaped
-///     thing the app knows about — a VLAN source's controller token — is not
-///     part of `NetworkSegment` for exactly this reason.
 enum SupportBundle {
 
     struct Payload: Codable {
@@ -139,7 +92,6 @@ enum SupportBundle {
         }
     }
 
-    /// Builds the payload from live model values and returns it as pretty JSON.
     static func json(routing: RoutingStatus,
                      wifi: WiFiStatus,
                      vpn: VPNStatus,
@@ -153,8 +105,6 @@ enum SupportBundle {
             wifi: .init(interface: wifi.interface,
                         poweredOn: wifi.poweredOn,
                         connected: wifi.connected,
-                        // Associated-or-not is the diagnostic fact; *which*
-                        // network is a location fingerprint.
                         ssid: wifi.ssid == nil ? nil : "‹ssid›",
                         rssiDbm: wifi.rssi,
                         channel: wifi.channel,
@@ -184,15 +134,10 @@ enum SupportBundle {
             masked.gateway = route.gateway.map(mask)
             return masked
         }
-        // Resolvers are the exception worth keeping legible: "which DNS am I
-        // using" is usually the question, and a public resolver like 1.1.1.1 is
-        // not your address — it is a well-known service. Masking it would remove
-        // the answer and protect nothing.
         copy.interfaces = routing.interfaces.map { interface in
             var copy = interface
             copy.ipv4 = interface.ipv4.map(mask)
             copy.ipv6 = interface.ipv6.map(mask)
-            // A MAC is a stable hardware identifier and never diagnostic here.
             copy.macAddress = interface.macAddress == nil ? nil : "‹mac›"
             copy.subnet = interface.subnet.map {
                 Subnet(network: mask($0.network), prefixLength: $0.prefixLength)

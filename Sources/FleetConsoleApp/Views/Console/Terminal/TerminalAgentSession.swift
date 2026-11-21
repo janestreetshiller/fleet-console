@@ -2,8 +2,6 @@ import Foundation
 import Observation
 import FleetCore
 
-/// Explicit app handoff, not a guess based on a process title or terminal output.
-/// Only these launches get agent controls; an arbitrary command in Shell remains a shell command.
 struct TerminalAgentRequest: Sendable {
     let kind: FixAgentKind
     let executable: URL
@@ -54,8 +52,6 @@ final class TerminalAgentSession: Identifiable {
                 if stopRequested { return pty.launch == nil ? "Cancelled before launch" : "Stopped by operator · review work" }
                 return "Ended · outcome unverified"
             }
-            // SwiftTerm 2 reports the normalized exit status: the exit code,
-            // or nil for a signal-ended or unwaitable child.
             return "Exited \(status) · review output"
         }
     }

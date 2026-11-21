@@ -1,19 +1,9 @@
-//! Layout and drawing math, free of GPUI types so it can be tested.
-//!
-//! Dial coordinates are screen coordinates in points: x to the right, y down,
-//! relative to the dial's own box. Angles follow the mathematical convention
-//! (counterclockwise from the positive x axis) and are converted when a point
-//! is produced.
 
 pub type Pt = (f32, f32);
 
-/// The dial sweeps 240 degrees, from lower left (0%) over the top to lower
-/// right (100%), like the Mac popover's gauges.
 pub const DIAL_START_DEG: f32 = 210.0;
 pub const DIAL_SWEEP_DEG: f32 = 240.0;
-/// The red zone marks the top of the scale: the critical band above 90%.
 pub const RED_ZONE: (f32, f32) = (0.9, 1.0);
-/// Tick marks every 10%, longer at 0, 50 and 100.
 pub const TICKS: usize = 11;
 
 pub fn dial_angle(fraction: f32) -> f32 {
@@ -25,9 +15,6 @@ pub fn dial_point(center: Pt, radius: f32, fraction: f32) -> Pt {
     (center.0 + radius * a.cos(), center.1 - radius * a.sin())
 }
 
-/// Center and radius of the largest dial that fits a `width` by `height`
-/// box with `inset` points kept clear on every side. The 240 degree sweep
-/// reaches 1.0 radius above the center and 0.5 below it.
 pub fn dial_layout(width: f32, height: f32, inset: f32) -> (Pt, f32) {
     let radius = ((width - 2.0 * inset) / 2.0)
         .min((height - 2.0 * inset) / 1.5)
@@ -36,8 +23,6 @@ pub fn dial_layout(width: f32, height: f32, inset: f32) -> (Pt, f32) {
     (center, radius)
 }
 
-/// Points along the dial arc from one fraction to another, no more than
-/// `step_deg` apart, for drawing the arc as a polyline.
 pub fn arc_points(center: Pt, radius: f32, from: f32, to: f32, step_deg: f32) -> Vec<Pt> {
     let (from, to) = (from.clamp(0.0, 1.0), to.clamp(0.0, 1.0));
     if to <= from {
@@ -50,7 +35,6 @@ pub fn arc_points(center: Pt, radius: f32, from: f32, to: f32, step_deg: f32) ->
         .collect()
 }
 
-/// Tick marks as (outer, inner, major) segments.
 pub fn ticks(center: Pt, outer: f32, length: f32, major_length: f32) -> Vec<(Pt, Pt, bool)> {
     (0..TICKS)
         .map(|i| {
@@ -66,13 +50,10 @@ pub fn ticks(center: Pt, outer: f32, length: f32, major_length: f32) -> Vec<(Pt,
         .collect()
 }
 
-/// The needle from the hub to its tip. Callers draw no needle at all when the
-/// value is unavailable; there is no resting position that could be read as 0%.
 pub fn needle(center: Pt, length: f32, fraction: f32) -> (Pt, Pt) {
     (center, dial_point(center, length, fraction))
 }
 
-/// How many cluster tiles fit per row and how wide each is.
 pub fn tile_columns(available: f32, min_tile: f32, gap: f32) -> (usize, f32) {
     let available = available.max(min_tile);
     let columns = (((available + gap) / (min_tile + gap)).floor() as usize).max(1);
@@ -80,16 +61,11 @@ pub fn tile_columns(available: f32, min_tile: f32, gap: f32) -> (usize, f32) {
     (columns, width)
 }
 
-/// Divide `cells` blocks among volumes in proportion to their total bytes,
-/// then split each volume's blocks into used and free in proportion to its
-/// used bytes. Every volume with bytes gets at least one block while there
-/// are enough blocks. Returns `(used, free)` per volume.
 pub fn volume_cells(volumes: &[(u64, u64)], cells: usize) -> Vec<(usize, usize)> {
     let total: u128 = volumes.iter().map(|(t, _)| u128::from(*t)).sum();
     if total == 0 || cells == 0 {
         return vec![(0, 0); volumes.len()];
     }
-    // Largest remainder allocation.
     let mut alloc: Vec<usize> = Vec::with_capacity(volumes.len());
     let mut remainders: Vec<(u128, usize)> = Vec::with_capacity(volumes.len());
     for (i, (t, _)) in volumes.iter().enumerate() {
@@ -106,8 +82,6 @@ pub fn volume_cells(volumes: &[(u64, u64)], cells: usize) -> Vec<(usize, usize)>
         alloc[*i] += 1;
         left -= 1;
     }
-    // A volume with bytes but no block would vanish from the map; take one
-    // block from the largest allocation for it.
     let nonzero = volumes.iter().filter(|(t, _)| *t > 0).count();
     if cells >= nonzero {
         for i in 0..volumes.len() {
@@ -134,10 +108,6 @@ pub fn volume_cells(volumes: &[(u64, u64)], cells: usize) -> Vec<(usize, usize)>
         .collect()
 }
 
-/// Tree-drawing prefixes for process lines given as (depth, last_child).
-/// Roots (depth 0) get no prefix; each deeper line gets one column per
-/// ancestor level, continuing the ancestor's vertical line while that
-/// ancestor has later siblings.
 pub fn tree_prefixes(lines: &[(usize, bool)]) -> Vec<String> {
     let mut open: Vec<bool> = Vec::new();
     lines
@@ -164,8 +134,6 @@ pub fn tree_prefixes(lines: &[(usize, bool)]) -> Vec<String> {
         .collect()
 }
 
-/// Heights (0 to 1) for the last `count` history samples, right-aligned.
-/// `None` stays `None`: an interval without a measurement is a gap.
 pub fn spark_heights(history: &[Option<f64>], count: usize) -> Vec<Option<f32>> {
     let skip = history.len().saturating_sub(count);
     let mut out: Vec<Option<f32>> = vec![None; count.saturating_sub(history.len())];
@@ -196,7 +164,6 @@ mod tests {
         assert!(close(half.0, 100.0) && close(half.1, 50.0), "50% is straight up: {half:?}");
         assert!(full.0 > c.0 && full.1 > c.1, "100% is lower right: {full:?}");
         assert!(close(zero.1, full.1), "the sweep is symmetric");
-        // Out-of-range fractions clamp to the ends of the scale.
         assert_eq!(dial_point(c, 50.0, 1.7), full);
         assert_eq!(dial_point(c, 50.0, -1.0), zero);
     }
@@ -206,7 +173,6 @@ mod tests {
         let c = (0.0, 0.0);
         let start = dial_point(c, 10.0, RED_ZONE.0);
         let end = dial_point(c, 10.0, RED_ZONE.1);
-        // Right of center and descending toward the 100% end.
         assert!(start.0 > 0.0 && end.0 > 0.0, "red zone is on the high end");
         assert!(end.1 > start.1, "red zone ends at the bottom right");
         let arc = arc_points(c, 10.0, RED_ZONE.0, RED_ZONE.1, 2.0);
@@ -276,13 +242,13 @@ mod tests {
     #[test]
     fn tree_prefixes_continue_open_branches() {
         let lines = [
-            (0, false), // fleetd
-            (1, false), // api-gateway
-            (2, false), // node
-            (2, true),  // node
-            (1, true),  // render-studio
-            (2, true),  // child
-            (0, false), // other root
+            (0, false),
+            (1, false),
+            (2, false),
+            (2, true),
+            (1, true),
+            (2, true),
+            (0, false),
         ];
         let p = tree_prefixes(&lines);
         assert_eq!(p[0], "");

@@ -1,13 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Module: Events — the append-only log, filterable.
-//
-// The registry's event table rejects UPDATE and DELETE; this view honours that
-// by being a pure projection. Timestamps are HH:mm:ss in mono digits because
-// this is where ordering disputes get settled, and bad events carry their
-// tone through shape (octagon/triangle) as well as colour.
-
 struct EventsModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
@@ -55,10 +48,6 @@ struct EventsModule: View {
             }
         }
         .listStyle(.inset)
-        // The table sits on the page like every other surface: without
-        // this it paints AppKit's own table background over the field and
-        // the module reads as a panel dropped on top of the window rather
-        // than as part of it.
         .scrollContentBackground(.hidden)
     }
 

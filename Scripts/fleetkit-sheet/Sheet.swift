@@ -3,11 +3,6 @@ import CoreImage
 import SwiftUI
 import FleetCore
 
-// A contact sheet of the real FleetKit primitives. The design files are
-// symlinked into this target, not copied, so what renders here is what ships.
-
-// MARK: - Sheet content
-
 struct Row<Content: View>: View {
     let name: String
     @ViewBuilder var content: Content
@@ -117,16 +112,10 @@ struct Sheet: View {
                             .plate()
                     }
                 }
-                // The whole substrate, at a size where all three layers are
-                // separable: the field's wash, the 13/65 ruling over it, the
-                // grain over that. Anything that turns into a flat rectangle in
-                // the desaturated pair has lost a layer.
                 Row(name: "substrate") {
                     Color.clear
                         .frame(width: 233, height: 89)
                         .sketchSubstrate(seed: 0.11, grainSeed: 11)
-                        // The substrate ignores the safe area, which is right on
-                        // a window and wrong in a swatch on a contact sheet.
                         .clipShape(Rectangle())
                 }
             }
@@ -148,8 +137,6 @@ struct Sheet: View {
                         EntityIcon(symbol: "cylinder.split.1x2", tone: .neutral, size: ConsoleMetrics.iconInspector, badge: .unknown)
                     }
                 }
-                // The alignment proof: badged and unbadged rows must start on the
-                // same vertical. A hairline behind both makes any drift visible.
                 Row(name: "left edge") {
                     ZStack(alignment: .leading) {
                         Rectangle().fill(ConsoleColor.hairlineStrong).frame(width: 1)
@@ -161,9 +148,6 @@ struct Sheet: View {
                 }
             }
 
-            // A faithful stand-in for DeviceNodeRow: same EntityIcon call, same
-            // trailing pip and latency badge, same detail line that states the
-            // path and not the health. This is the row the sidebar is made of.
             Group_(title: "Fleet sidebar node — health must survive desaturation") {
                 ForEach(Array(zip(["studio", "mini", "nas", "laptop"],
                                   [DeviceHealth.reachable, .partial, .unreachable, .unknown])), id: \.0) { name, health in
@@ -229,15 +213,6 @@ struct Sheet: View {
                         ForEach(tones, id: \.0) { name, tone in Tag(text: name, tone: tone) }
                     }
                 }
-                // Regression case. A chip in a row accessory competes with a title
-                // that holds layoutPriority(1); squeeze the row and the loser is
-                // the chip. Unconstrained it compresses by *wrapping*, one
-                // character per line, which is what turned "Unmanaged" into a
-                // four-line orange block in the popover.
-                // The real UnmanagedRowView, at the real popover width, with the
-                // real strings. The long subtitle is the whole mechanism: its
-                // VStack holds layoutPriority(1), so it claims the width first
-                // and the accessory gets whatever is left.
                 Row(name: "unmanaged row") {
                     FleetRowLabel(icon: "curlybraces",
                                   tone: .warn,
@@ -308,12 +283,6 @@ struct Sheet: View {
     }
 }
 
-// MARK: - Render
-
-/// Strips hue, keeping luminance. `accessibilityDifferentiateWithoutColor` is a
-/// read-only environment value, so it cannot be injected into a render — but the
-/// question that flag exists to answer is "does this still read without hue",
-/// and desaturating the finished pixels answers it directly and more honestly.
 func desaturated(_ rep: NSBitmapImageRep) -> NSBitmapImageRep? {
     guard let ci = CIImage(bitmapImageRep: rep),
           let f = CIFilter(name: "CIColorControls") else { return nil }

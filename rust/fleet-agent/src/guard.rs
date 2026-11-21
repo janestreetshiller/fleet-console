@@ -1,5 +1,3 @@
-//! Admission to inference is explicit, serialized and fail-closed. This module
-//! never starts, loads, restarts or reconfigures a model server.
 
 use std::fs::{File, OpenOptions};
 use std::os::fd::AsRawFd;
@@ -22,8 +20,6 @@ extern "C" {
     fn flock(fd: std::os::raw::c_int, operation: std::os::raw::c_int) -> std::os::raw::c_int;
 }
 
-/// OS advisory locks are released on exit/crash; the persistent lock file is
-/// never removed, avoiding two live processes locking different inodes.
 #[derive(Debug)]
 pub struct InferenceLease {
     _file: File,
@@ -43,7 +39,6 @@ impl InferenceLease {
             .mode(0o600)
             .open(path)
             .map_err(|e| format!("inference lock: {e}"))?;
-        // LOCK_EX | LOCK_NB has the same values on Darwin and Linux.
         if unsafe { flock(file.as_raw_fd(), 2 | 4) } != 0 {
             let error = std::io::Error::last_os_error();
             return Err(format!(
@@ -142,9 +137,6 @@ pub fn sample_memory() -> Result<MemorySnapshot, String> {
         4 => Pressure::Critical,
         other => return Err(format!("unknown kernel pressure level {other}")),
     };
-    // The revision-1 prefix is stable in Apple's SDK vm_statistics.h. Asking
-    // for this prefix works on the minimum supported macOS without relying on
-    // newer tagged-memory fields appended by current SDKs.
     #[repr(C)]
     #[derive(Default)]
     struct VmStatisticsV1 {

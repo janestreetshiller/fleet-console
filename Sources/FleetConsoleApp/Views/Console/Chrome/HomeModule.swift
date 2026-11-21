@@ -1,23 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// The landing surface: what needs attention first, and where to go next.
-//
-// Five equally-weighted modules answered "where is everything" but never "what
-// should I look at" — every screen was one click away and none of them was the
-// first one. Home is the answer to the second question, and it does not invent
-// one: the controller already decides what needs a decision in
-// `computeAttention`, including the crash loop in the controller itself, which
-// has no service row anywhere and was previously only findable by reading the
-// database by hand. Those items are this view's spine.
-//
-// The modules are not deleted, or demoted, or merged. They keep ⌘1…⌘n and their
-// indices; home is a sixth destination with its own shortcut, and every priority
-// row hands off *into* a module with the row already selected.
-//
-// It lives under Chrome/ only because the file-ownership split during this work
-// put new files here; it belongs beside the other modules in Views/Console/.
-
 struct HomeModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
@@ -54,8 +37,6 @@ struct HomeModule: View {
         .actionErrorAlert(model: model)
     }
 
-    // MARK: - Priority
-
     @ViewBuilder
     private var priorityCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -76,9 +57,6 @@ struct HomeModule: View {
             }
 
             if !model.connected {
-                // The last snapshot describes what *was* true. Presenting it as
-                // current would be exactly the stale claim this app refuses to
-                // make, so the list is withheld rather than greyed out.
                 PriorityNotice(
                     symbol: "bolt.horizontal.circle",
                     tone: .bad,
@@ -87,10 +65,6 @@ struct HomeModule: View {
                         ?? "Nothing here can be trusted as current until fleetd is back.")
             } else {
                 if model.awaitingReplyCount > 0 {
-                    // Kept apart from the attention list on purpose: the daemon
-                    // deliberately never files agent chatter as an incident, and
-                    // a question waiting for an answer is a decision only you
-                    // can make, not a fault to diagnose.
                     ForEach(model.awaitingReplies) { message in
                         PriorityRow(symbol: "questionmark.bubble",
                                     tone: .warn,
@@ -134,28 +108,16 @@ struct HomeModule: View {
         .elevatedCard()
     }
 
-    /// The window is already open, so the hand-off needs no dashboard to open.
     private func send(_ items: [AttentionItem]) {
         if let problem = model.sendToFixer(items, openDashboard: {}) { model.actionError = problem }
     }
 
-    // MARK: - Drill-down
-
     private var modulesCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                // "Modules", not "Go deeper". The list under it is exactly
-                // `ConsoleModule.allCases` — the same six names the toolbar
-                // picker and the View menu use — so calling it anything else
-                // makes the user map an invented phrase onto a vocabulary the
-                // rest of the window already taught them. A section label names
-                // its contents; it is not an instruction to the reader.
                 Text("Explore")
                     .font(ConsoleFont.cardTitle)
                 Spacer()
-                // Derived, not written out: the list under this label is
-                // `ConsoleModule.allCases`, and a hard-coded "⌘1…⌘5" went stale
-                // the moment a sixth module was added.
                 Text("⌘1…⌘\(ConsoleModule.allCases.count)")
                     .font(ConsoleFont.mono(.caption))
                     .foregroundStyle(SurfaceInk.secondary)
@@ -170,8 +132,6 @@ struct HomeModule: View {
         .elevatedCard()
     }
 
-    /// The live one-liner under each module name — enough to tell you whether
-    /// going there is worth it. Every value is one the module itself shows.
     private func detail(for module: ConsoleModule) -> String {
         let system = model.system
         switch module {
@@ -185,17 +145,10 @@ struct HomeModule: View {
             guard let captured = model.processes.capturedAt else { return "reading the table…" }
             return "\(count) processes · sampled \(ConsoleFmt.timestamp(captured))"
         case .storage:
-            // Capacity comes from the volume, not from the throughput
-            // differencing that `sampled` describes — so it is gated on having a
-            // total, and says nothing when it does not have one.
             guard system.storage.totalBytes > 0 else { return "measuring…" }
             return "\(ConsoleFmt.bytes(system.storage.availableBytes)) free of "
                 + "\(ConsoleFmt.bytes(system.storage.totalBytes))"
         case .services:
-            // "active", not "managed", because this row is the Services module's
-            // own summary and that module's header says active. They are the same
-            // number from the same set, and a stopped service is still managed —
-            // so "managed" was both the wrong word and the wrong count for it.
             var parts = ["\(model.activeServices.count) active"]
             if !model.unmanaged.isEmpty { parts.append("\(model.unmanaged.count) unmanaged") }
             if !model.agentProfiles.isEmpty { parts.append("\(model.agentProfiles.count) agents") }
@@ -209,11 +162,6 @@ struct HomeModule: View {
     }
 }
 
-// MARK: - Rows
-
-/// One priority line. Clicking it is navigation, not selection — home hands you
-/// to the surface that can act on the thing, which is why there is no selected
-/// state here to disagree with the module's own.
 private struct PriorityRow: View {
     let symbol: String
     let tone: StatusTone
@@ -258,8 +206,6 @@ private struct PriorityRow: View {
     }
 }
 
-/// A statement rather than a row: nothing to click, because the answer is that
-/// there is nothing to go to.
 private struct PriorityNotice: View {
     let symbol: String
     let tone: StatusTone
@@ -286,8 +232,6 @@ private struct PriorityNotice: View {
     }
 }
 
-/// A module, its live summary, and its shortcut. The badge is the contract:
-/// the index shown here is the same one `MainMenu` binds.
 private struct ModuleLink: View {
     let module: ConsoleModule
     let detail: String

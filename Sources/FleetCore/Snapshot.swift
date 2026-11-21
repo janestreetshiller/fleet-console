@@ -1,11 +1,5 @@
 import Foundation
 
-// One consistent view of everything, and what the client derives from it. The
-// daemon pushes a `Snapshot` on every state change and the UI never polls, so this
-// is the whole contract between them. `AttentionItem` is derived client-side, so
-// the CLI and the app cannot disagree about what needs looking at.
-// MARK: - Attention
-
 public enum AttentionSeverity: String, Codable, Sendable {
     case critical, warning
 }
@@ -30,8 +24,6 @@ public struct AttentionItem: Codable, Sendable, Identifiable, Hashable {
         self.since = since
     }
 }
-
-// MARK: - Snapshot
 
 public struct DaemonInfo: Codable, Sendable, Hashable {
     public var version: String
@@ -85,23 +77,16 @@ public struct Snapshot: Codable, Sendable {
         self.recentEvents = recentEvents
     }
 
-    /// On the books: everything not finished, including an expired lease that is
-    /// being reported rather than reaped. This is what a list shows.
     public var activeServices: [ServiceRecord] { services.filter { !$0.state.isTerminal } }
 
-    /// Actually up. This is what a count worded "running" shows.
     public var runningServices: [ServiceRecord] { services.filter(\.state.isRunning) }
 }
 
 extension Snapshot {
-    /// Derived on the client so both the CLI and the app show the same thing
-    /// without adding another server round trip.
     public var agentSummaries: [AgentSummary] {
         let live = services.filter { !$0.state.isTerminal }
         let byAgent = Dictionary(grouping: live, by: \.ownerAgent)
         let messagesByAgent = Dictionary(grouping: messages, by: \.agent)
-        // An agent with no services but an unanswered question still needs to
-        // appear — that is precisely the case you must not miss.
         let names = Set(byAgent.keys).union(messagesByAgent.keys)
 
         return names.map { agent in
@@ -110,9 +95,6 @@ extension Snapshot {
             var summary = AgentSummary(
                 id: agent,
                 owned: records.count,
-                // `records` is everything not finished, which is right for ports and
-                // for attention: an expired record still holds its ports. It is
-                // wrong for a number labelled "running" — see ServiceState.isRunning.
                 running: records.filter(\.state.isRunning).count,
                 needingAttention: records.filter { $0.state.needsAttention }.count,
                 ports: Array(Set(records.flatMap(\.effectivePorts))).sorted(),
@@ -133,9 +115,6 @@ extension Snapshot {
 
     public var awaitingReplyCount: Int { messages.filter(\.isAwaitingReply).count }
 
-    /// The full picture for one agent, including everything it has *done* — not
-    /// just what it happens to be running this second. An idle agent still has a
-    /// history worth showing; "0 services" on its own says nothing.
     public var agentProfiles: [AgentProfile] {
         let byAgent = Dictionary(grouping: services, by: \.ownerAgent)
         let messagesByAgent = Dictionary(grouping: messages, by: \.agent)

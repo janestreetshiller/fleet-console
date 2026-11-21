@@ -1,7 +1,5 @@
 import Darwin
 
-/// Physical enN link counters from IFMIB's genuine 64-bit if_data64 fields.
-/// getifaddrs exposes 32-bit if_data counters, even on a 64-bit host.
 public enum NativeNetworkCounters {
     public static func read() -> [String: NetworkInterfaceCounters]? {
         guard let first = if_nameindex() else { return nil }
@@ -16,8 +14,6 @@ public enum NativeNetworkCounters {
         return read(interfaces: interfaces, readStatistics: statistics)
     }
 
-    /// The same adapter used by live reads, with only the kernel query injected.
-    /// Native ifmibdata fixtures exercise extraction without truncating counters.
     static func read(interfaces: [(name: String, index: UInt32)],
                      readStatistics: (UInt32) -> ifmibdata?) -> [String: NetworkInterfaceCounters]? {
         var counters: [String: NetworkInterfaceCounters] = [:]

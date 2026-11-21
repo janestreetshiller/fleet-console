@@ -1,9 +1,6 @@
 import Foundation
 import Darwin
 
-/// One TCP reachability implementation, shared by the daemon's health checks and
-/// the app's connection probes so the two can never disagree about what
-/// "reachable" means.
 public enum TCPProbe {
     public struct Result: Sendable {
         public var ok: Bool
@@ -11,8 +8,6 @@ public enum TCPProbe {
         public var latencyMs: Double
     }
 
-    /// Non-blocking connect + select, so the timeout is real rather than whatever
-    /// the kernel's default happens to be.
     public static func connect(host: String, port: Int, timeout: TimeInterval = 3) -> Result {
         let start = Date()
         var hints = addrinfo(ai_flags: 0, ai_family: AF_UNSPEC, ai_socktype: SOCK_STREAM,
@@ -78,24 +73,17 @@ public enum TCPProbe {
     }
 }
 
-// fd_set manipulation is not exposed to Swift; these are the standard shims.
-// Darwin's fd_set is 1024 bits held as 32 Int32 words.
 let fdSetWords = 32
 
 func fdZero(_ set: inout fd_set) {
     _ = withUnsafeMutableBytes(of: &set.fds_bits) { $0.initializeMemory(as: UInt8.self, repeating: 0) }
 }
 
-/// Returns false when the descriptor is outside the fixed 1024-bit map, which
-/// `select` cannot represent — the caller has to report that as a probe failure
-/// rather than write past the end of the set.
 @discardableResult
 func fdSet(_ fd: Int32, _ set: inout fd_set) -> Bool {
     guard fd >= 0, Int(fd) < fdSetWords * 32 else { return false }
     let intOffset = Int(fd) / 32
     let bitOffset = Int(fd) % 32
-    // Bit 31 is Int32's sign bit, so `Int32(1 << 31)` traps on "not enough bits";
-    // build the mask unsigned and reinterpret it.
     let mask = Int32(bitPattern: UInt32(1) << UInt32(bitOffset))
     withUnsafeMutablePointer(to: &set.fds_bits) { ptr in
         ptr.withMemoryRebound(to: Int32.self, capacity: fdSetWords) { bits in

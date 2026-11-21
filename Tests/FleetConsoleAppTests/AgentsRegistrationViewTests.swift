@@ -105,7 +105,6 @@ struct AgentsRegistrationViewTests {
         let visible = try text(in: window)
         #expect(visible.contains("8 agent IDs"))
         #expect(visible.contains("4 detected"))
-        // The roster is a one-line count on the tab; every entry is behind Show all.
         #expect(visible.contains("Show all 12"))
         #expect(!visible.contains("99%"))
         #expect(!visible.contains("999 MB"))
@@ -167,8 +166,6 @@ struct AgentsRegistrationViewTests {
         try observations(in: window).compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
     }
 
-    /// Public native event dispatch, scoped to this offscreen test window. Vision
-    /// locates rendered controls because SwiftUI's AX tree is lazy without an AX client.
     @MainActor private func click(_ title: String, in window: NSWindow) throws {
         let rendered = try observations(in: window)
         try capture(window, name: "before-\(title.replacingOccurrences(of: " ", with: "-"))")

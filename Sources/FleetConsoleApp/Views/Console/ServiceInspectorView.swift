@@ -1,15 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Inspector: one managed service, or one unmanaged process.
-//
-// The managed view keeps the old inspector's load-bearing parts — the four
-// evidence facts, the lease, the placement verdict across the fleet — and adds
-// the live resource numbers the console already has. Placement matters here:
-// "can this move to another node" is the question a fleet console exists to
-// answer, and it is answered with the same hard-constraint rules the evidence
-// chips use.
-
 struct ServiceInspectorView: View {
     @Bindable var model: AppModel
     let serviceID: String
@@ -63,11 +54,7 @@ struct ServiceInspectorView: View {
         model.hosts.probe(devices: model.deviceRows.map(\.record))
     }
 
-    // MARK: Header
-
     private func header(_ record: ServiceRecord) -> some View {
-        // `state.label` verbatim: "Running (unverified)" is not a placeholder
-        // for "Healthy", and the header is exactly where that would get lost.
         let stale = record.evidence.isStale(tolerance: model.staleTolerance)
         return VStack(alignment: .leading, spacing: ConsoleMetrics.panelInset) {
             InspectorHeader(symbol: Iconography.service(record),
@@ -86,8 +73,6 @@ struct ServiceInspectorView: View {
         }
     }
 
-    // MARK: Evidence
-
     private func evidenceCard(_ record: ServiceRecord) -> some View {
         InspectorCard(title: "Evidence") {
             if labels.label(for: record.id).name != nil {
@@ -101,22 +86,15 @@ struct ServiceInspectorView: View {
                           + (record.evidence.listeningPorts.isEmpty && !record.declaredPorts.isEmpty
                              ? " (declared, not yet observed)" : ""), mono: true)
             InspectorLine(key: "Owner", value: record.ownerAgent, mono: true)
-            // How the record got here, because it decides what the controller may
-            // do to it. Provenance travels with the claim — the same rule the
-            // network segments follow.
             InspectorLine(key: "Entered as",
                           value: record.claimed
                               ? "claimed" + (record.claimedAt.map { " \(Fmt.relative($0))" } ?? "")
                               : "launched by the controller")
             InspectorLine(key: "Purpose", value: record.purpose, wrap: true)
             InspectorLine(key: "Command", value: record.commandLine, mono: true, wrap: true)
-            // A working directory is a fact you act on — wrapped, not middle-
-            // truncated into "/Users/…/src".
             InspectorLine(key: "Directory", value: record.cwd, mono: true, wrap: true)
         }
     }
-
-    // MARK: Activity
 
     private func activityCard(_ record: ServiceRecord) -> some View {
         InspectorCard(title: "Activity") {
@@ -130,15 +108,11 @@ struct ServiceInspectorView: View {
         }
     }
 
-    // MARK: Lease
-
     private func leaseCard(_ record: ServiceRecord) -> some View {
         InspectorCard(title: "Lease") {
             InspectorLine(key: "Expires", value: record.state.isTerminal ? "—"
                           : "\(Fmt.duration(max(0, record.leaseRemaining))) from now", mono: true)
             InspectorLine(key: "TTL", value: Fmt.duration(record.leaseTTLSec), mono: true)
-            // "Ran for" once it is over. A terminal record's figure is a span that
-            // ended, not a clock still going.
             InspectorLine(key: record.state.isTerminal ? "Ran for" : "Uptime",
                           value: Fmt.duration(record.uptime), mono: true)
             if record.restartCount > 0 {
@@ -154,8 +128,6 @@ struct ServiceInspectorView: View {
                 .foregroundStyle(SurfaceInk.secondary)
         }
     }
-
-    // MARK: Placement
 
     @ViewBuilder
     private func placementCard(_ record: ServiceRecord) -> some View {
@@ -186,8 +158,6 @@ struct ServiceInspectorView: View {
         }
     }
 
-    // MARK: Log tail
-
     private func logCard(_ record: ServiceRecord) -> some View {
         InspectorCard(title: "stderr, last 2 KB") {
             if let logTail {
@@ -210,8 +180,6 @@ struct ServiceInspectorView: View {
             .font(ConsoleFont.caption)
         }
     }
-
-    // MARK: Events
 
     private var eventsCard: some View {
         InspectorCard(title: "Timeline") {
@@ -245,8 +213,6 @@ struct ServiceInspectorView: View {
         }
     }
 }
-
-// MARK: - Unmanaged
 
 struct UnmanagedInspectorView: View {
     @Bindable var model: AppModel
@@ -289,9 +255,6 @@ struct UnmanagedInspectorView: View {
 
                     InspectorCard(title: "Actions") {
                         VStack(alignment: .leading, spacing: 8) {
-                            // Three answers to "what is this doing here", in the
-                            // order you reach for them: watch it, expect it,
-                            // go and look at it.
                             InspectorActionButton(title: "Claim", symbol: "shield.lefthalf.filled",
                                                   tone: .good) {
                                 model.claim(process)

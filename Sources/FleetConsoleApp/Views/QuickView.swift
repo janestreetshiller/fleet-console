@@ -35,7 +35,6 @@ struct QuickViewMetrics {
     }
 }
 
-/// A fixed logarithmic scale, not a percentage of a guessed link speed.
 struct QuickViewRate {
     let bytesPerSecond: Double?
     init(bytesPerSecond: Double?) {
@@ -47,7 +46,6 @@ struct QuickViewRate {
     var readout: String { ConsoleFmt.byteRate(bytesPerSecond) }
 }
 
-/// Four instruments sharing the existing probes. No extra collectors or timers.
 struct QuickView: View {
     @Bindable var model: AppModel
     private static let instrumentSize: CGFloat = 90

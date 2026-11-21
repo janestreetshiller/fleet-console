@@ -1,4 +1,3 @@
-//! Rendering tests over every fixture scenario, view and size.
 
 use crate::app::{App, Key, Pane, View};
 use crate::output;
@@ -14,7 +13,6 @@ fn screen(scenario: Scenario, app: &App, mode: ColorMode, (cols, rows): (u16, u1
     output::text(&output::render(&dash, app, &Theme::new(mode), cols, rows), false)
 }
 
-/// Rules from the workstation UI baseline that apply to terminal text.
 fn assert_baseline(text: &str, context: &str) {
     for ornament in [" · ", " | ", "//", "→", "←", "»", "«", "›", "‹", "•"] {
         assert!(
@@ -117,7 +115,6 @@ fn no_color_rendering_has_no_colors() {
             assert_eq!(cell.fg, Color::Reset, "{view:?} cell {:?}", cell.symbol());
             assert_eq!(cell.bg, Color::Reset, "{view:?} cell {:?}", cell.symbol());
         }
-        // Meaning survives without color: states are words.
         let text = output::text(&buffer, false);
         if view == View::Overview {
             assert!(text.contains("critical") && text.contains("offline"), "{text}");

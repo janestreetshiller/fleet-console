@@ -1,12 +1,8 @@
 import SwiftUI
 import FleetCore
 
-/// One footprint for every peer in a section, including its last row.
-/// Measure at the final column width so wrapped content sets the height budget.
-/// No preference/state feedback loop is needed when the window resizes.
 struct QuantizedCardGrid: Layout {
     var minimumCellWidth: CGFloat = ConsoleMetrics.cardMinWidth
-    /// Compact artifacts use the widest peer rather than an arbitrary minimum.
     var usesLargestIntrinsicWidth = false
     var maximumColumns: Int = .max
     var horizontalSpacing: CGFloat = ConsoleMetrics.cardGap

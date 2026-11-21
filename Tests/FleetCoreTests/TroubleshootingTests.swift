@@ -1,18 +1,9 @@
 import XCTest
 @testable import FleetCore
 
-/// Suggestions are the product surface that tells a person what is going on
-/// without doing it for them. The failure modes that matter are inventing a
-/// problem from missing evidence, ranking on lifetime/global figures instead
-/// of the event slice, collapsing two categories that should both show, and
-/// offering a signal on something the controller does not own.
 final class TroubleshootingTests: XCTestCase {
 
-    /// Fixed instant so recency, staleness and lease remaining do not depend
-    /// on when the suite runs.
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
-
-    // MARK: - Fixtures
 
     private func service(
         id: String = "svc-a",
@@ -64,8 +55,6 @@ final class TroubleshootingTests: XCTestCase {
                          events: [ServiceEvent] = []) -> [TroubleshootingSuggestion] {
         Troubleshooting.suggestions(items: items, services: services, events: events, now: now)
     }
-
-    // MARK: - Ranking
 
     func testRecurrenceRanksByBoundedRecentEventCount() {
         let a = service(id: "svc-a", name: "alpha", evidence: freshHealthFailed())
@@ -151,8 +140,6 @@ final class TroubleshootingTests: XCTestCase {
         XCTAssertEqual(forward.map(\.id), reversed.map(\.id))
     }
 
-    // MARK: - Unavailable / stale evidence
-
     func testMissingPortScanDoesNotInventMissingListeners() {
         let record = service(
             state: .running,
@@ -214,8 +201,6 @@ final class TroubleshootingTests: XCTestCase {
         XCTAssertTrue(result[0].evidence.contains("Process existence is unavailable"))
         XCTAssertTrue(result[0].evidence.contains("process presence is not a health result"))
     }
-
-    // MARK: - No invention
 
     func testEmptyInputsProduceNothing() {
         XCTAssertTrue(suggest().isEmpty)
@@ -312,8 +297,6 @@ final class TroubleshootingTests: XCTestCase {
         XCTAssertTrue(text.contains("bounded recent log"))
     }
 
-    // MARK: - Bounded inputs
-
     func testSuggestionCountIsCappedAndKeepsHighestRecurrence() {
         var services: [ServiceRecord] = []
         var events: [ServiceEvent] = []
@@ -373,8 +356,6 @@ final class TroubleshootingTests: XCTestCase {
         XCTAssertLessThanOrEqual(result[0].evidence.count, Troubleshooting.maxEvidenceChars)
         XCTAssertTrue(result[0].evidence.contains("…"))
     }
-
-    // MARK: - Dedup
 
     func testHealthAttentionStateAndEventsCollapseToOneSuggestion() {
         let record = service(evidence: freshHealthFailed(), consecutiveHealthFailures: 4)

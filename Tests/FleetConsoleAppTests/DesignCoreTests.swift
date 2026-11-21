@@ -51,7 +51,6 @@ struct DesignCoreTests {
         let output = URL(fileURLWithPath: path, isDirectory: true)
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         _ = NSApplication.shared
-        // Offscreen rendering still creates windows; .prohibited disallows them.
         NSApp.setActivationPolicy(.accessory)
         if !NSApp.isRunning { NSApp.finishLaunching() }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
@@ -123,7 +122,6 @@ struct DesignCoreTests {
     @MainActor @Test("Primary action styling preserves real activation and unavailable behavior")
     func primaryActionActivation() throws {
         _ = NSApplication.shared
-        // Permit the offscreen test window without activating the application.
         NSApp.setActivationPolicy(.accessory)
         if !NSApp.isRunning { NSApp.finishLaunching() }
         for enabled in [true, false] {

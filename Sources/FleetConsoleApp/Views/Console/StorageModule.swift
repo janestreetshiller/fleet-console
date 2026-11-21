@@ -1,19 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Module: Storage — where the disk went, and what can safely come back.
-//
-// Four layers, in the order you actually ask the questions:
-//   1. The segmented bar: every byte of the boot volume, colour-coded by
-//      category, animated in when the scan lands. Segments are selectable —
-//      the inspector explains each one's basis.
-//   2. The disk map: a squarified heatmap of the surveyed directories —
-//      area is allocated bytes, colour is the same category as the bar.
-//   3. Volumes: each mounted APFS volume with its own capacity meter and
-//      purgeable accounting.
-//   4. Reclaimable space: the catalogue of known caches, with the consequence
-//      stated before anything is deleted. Data is reported, never offered.
-
 struct StorageModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
@@ -48,10 +35,6 @@ struct StorageModule: View {
                   secondaryButton: .cancel())
         }
         .onAppear {
-            // `scan()` re-reads volume capacity on its own worker hop, so it is
-            // never asked to measure against a snapshot that has not landed yet.
-            // The bare refresh is only for the volumes list below, which shows
-            // even when the breakdown has already been scanned.
             if breakdown.breakdown.scannedAt == nil && !breakdown.breakdown.scanning {
                 breakdown.scan()
             } else {
@@ -64,14 +47,9 @@ struct StorageModule: View {
     }
 
     private func scanAll() {
-        // No refreshVolumes() first: it publishes asynchronously through the
-        // main actor, so it could not land before scan() read the capacity.
-        // scan() refreshes capacity itself, on the hop that measures.
         breakdown.scan()
         scanner.rescan()
     }
-
-    // MARK: - Segmented bar
 
     private var breakdownCard: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -103,9 +81,6 @@ struct StorageModule: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .frame(height: 56)
             } else if breakdown.breakdown.segments.isEmpty {
-                // The app's own empty state, for the reason recorded on
-                // `InspectorPanel.emptyState`: `ContentUnavailableView` mis-lays
-                // a wrapping description at a width it did not expect.
                 EmptyPanelView(symbol: "internaldrive",
                                title: "Not measured yet",
                                detail: "Run a scan to break the volume down by category.")
@@ -117,8 +92,6 @@ struct StorageModule: View {
                                                        set: { console.selectSegment($0) }))
 
                 if !breakdown.breakdown.capacityKnown {
-                    // Rule 4: the bar covers the surveyed buckets and nothing
-                    // else here, so it says so rather than looking like a full disk.
                     Label("The boot volume's capacity could not be read, so free, purgeable and "
                           + "“System & Other” are missing — this is the measured buckets only.",
                           systemImage: "exclamationmark.triangle.fill")
@@ -146,19 +119,12 @@ struct StorageModule: View {
         .elevatedCard()
     }
 
-    /// Denominator for the bar. The capacity the scan itself read, not today's
-    /// volume reading — those differ for as long as a scan takes, and a bar
-    /// whose segments and total come from different moments does not add up.
-    /// With no capacity at all the segments are their own total, and the note
-    /// above says what the bar is therefore not showing.
     private var barTotal: Int64 {
         let result = breakdown.breakdown
         return result.capacityKnown
             ? result.volumeTotalBytes
             : result.segments.reduce(Int64(0)) { $0 + $1.bytes }
     }
-
-    // MARK: - Disk map
 
     private var diskMapCard: some View {
         let root = breakdown.volumes.first(where: \.isRoot)
@@ -194,8 +160,6 @@ struct StorageModule: View {
             action: .reveal(entry.path))
     }
 
-    // MARK: - Volumes
-
     private var volumesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Volumes")
@@ -216,8 +180,6 @@ struct StorageModule: View {
             .elevatedCard(padding: 0)
         }
     }
-
-    // MARK: - Reclaim
 
     private var reclaimSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -255,14 +217,6 @@ struct StorageModule: View {
                         .foregroundStyle(.secondary)
                         .padding(ConsoleMetrics.cardPadding)
                 } else {
-                    // Two columns where there is room for two. A reclaim row is an
-                    // icon, a name, a size and a button — about 300pt of content —
-                    // and the module column is over 700pt at the composed window
-                    // size, so a single stack spent more than half its width on
-                    // nothing and made a fourteen-entry catalogue a scroll. The
-                    // hairline between rows becomes the grid's own gap, which is
-                    // why it is dropped rather than drawn per cell: a separator
-                    // that only runs down one column reads as a broken table.
                     QuantizedCardGrid(minimumCellWidth: ConsoleMetrics.reclaimRowMinWidth,
                                       horizontalSpacing: 0, verticalSpacing: 0) {
                         ForEach(reclaimable) { candidate in
@@ -320,21 +274,11 @@ struct StorageModule: View {
     }
 }
 
-// MARK: - Segmented bar
-
-/// The volume as one contiguous bar, one segment per category. Segments under
-/// ~1.5% are drawn inside "System & Other" (a 200 MB sliver is not a segment,
-/// it is noise with a colour) — but only their *width* moves there. Every byte
-/// count the UI prints stays the number the scan produced, so the bar's
-/// tooltip, the legend chip and the inspector cannot disagree.
 struct SegmentedStorageBar: View {
     let segments: [BreakdownSegment]
     let total: Int64
     @Binding var selection: String?
 
-    /// One drawn stripe. `widthBytes` is what the stripe *occupies* — the
-    /// segment's own bytes plus anything rolled into it — while `segment.bytes`
-    /// stays the segment's own figure for every label and tooltip.
     private struct Stripe: Identifiable {
         let segment: BreakdownSegment
         var widthBytes: Int64
@@ -348,8 +292,6 @@ struct SegmentedStorageBar: View {
         var slivers: [BreakdownSegment] = []
         for segment in segments where segment.bytes > 0 {
             let share = Double(segment.bytes) / Double(total)
-            // "System & Other" is never a sliver, because it is the roll-up
-            // target: fold it away and the rolled-up bytes have nowhere to go.
             if share < 0.015, segment.category != .free, segment.category != .other {
                 slivers.append(segment)
             } else {
@@ -362,9 +304,6 @@ struct SegmentedStorageBar: View {
                 drawn[index].widthBytes += rolledUp
                 drawn[index].rolledUp = rolledUp
             } else {
-                // No "System & Other" segment at all (capacity unreadable). A
-                // crowded bar is a smaller lie than a bar that does not add up,
-                // so the slivers are drawn as themselves.
                 drawn.append(contentsOf: slivers.map { Stripe(segment: $0, widthBytes: $0.bytes) })
             }
         }
@@ -373,10 +312,6 @@ struct SegmentedStorageBar: View {
 
     var body: some View {
         let stripes = self.stripes
-        // Normally identical to `total` — the scan's segments sum to the volume.
-        // Allocated-size measurement can still exceed used space when APFS
-        // clones are counted twice, and a bar that overflows its own width is
-        // worse than one that renormalises.
         let denominator = Double(max(total, stripes.reduce(Int64(0)) { $0 + $1.widthBytes }))
         return GeometryReader { geometry in
             HStack(spacing: 2) {
@@ -398,9 +333,6 @@ struct SegmentedStorageBar: View {
                             toggle(stripe.id)
                             return .handled
                         }
-                        // Each stripe is its own element: the bar used to
-                        // collapse to one label, which made the segment
-                        // inspector unreachable without a pointer.
                         .accessibilityElement()
                         .accessibilityLabel(label(stripe))
                         .accessibilityAddTraits(selection == stripe.id ? [.isButton, .isSelected]
@@ -428,7 +360,6 @@ struct SegmentedStorageBar: View {
     private func tooltip(_ stripe: Stripe) -> String {
         let base = "\(stripe.segment.category.rawValue) — \(ConsoleFmt.bytes(stripe.segment.bytes))"
         guard stripe.rolledUp > 0 else { return base }
-        // Say it rather than let the stripe look bigger than its number.
         return base + "\nDrawn with \(ConsoleFmt.bytes(stripe.rolledUp)) of segments too small "
              + "to show — see the legend for their own figures."
     }
@@ -460,8 +391,6 @@ struct SegmentChip: View {
         )
     }
 }
-
-// MARK: - Volume row
 
 private struct VolumeRow: View {
     let volume: VolumeInfo
@@ -514,7 +443,6 @@ private struct VolumeRow: View {
     }
 }
 
-/// Thin capacity meter inside a volume row.
 struct CapacityMeter: View {
     let share: Double
     let tone: StatusTone
@@ -532,8 +460,6 @@ struct CapacityMeter: View {
         .animation(ConsoleAnimation.telemetry, value: share)
     }
 }
-
-// MARK: - Reclaim row
 
 private struct ReclaimRow: View {
     let candidate: ReclaimCandidate
@@ -571,8 +497,6 @@ private struct ReclaimRow: View {
             .menuIndicator(.hidden)
             .frame(width: 22)
             .help(candidate.consequence)
-            // The menu carries Move to Trash / Delete; an ellipsis glyph is not
-            // a name for that, so VoiceOver gets one that says whose it is.
             .accessibilityLabel("Actions for \(candidate.title)")
             .accessibilityHint(candidate.consequence)
         }
@@ -583,11 +507,7 @@ private struct ReclaimRow: View {
     }
 }
 
-// MARK: - Category ordering
-
 extension StorageCategory {
-    /// Draw order in the bar: real data left to right, then purgeable, then
-    /// free at the trailing edge — the same reading order as About This Mac.
     var sortRank: Int {
         switch self {
         case .apps: return 0
@@ -603,9 +523,6 @@ extension StorageCategory {
     }
 }
 
-// MARK: - Flow layout
-
-/// Simple wrapping layout for the legend chips.
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
 

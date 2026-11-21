@@ -1,7 +1,3 @@
-//! Elements shared by the quick view and the full window: the logo, dials,
-//! segmented gauges, the disk grid, rate bars, history sparks, buttons and
-//! the connection banner. Hard edges, 1px line borders, monospace text; color
-//! always travels with a word.
 
 use crate::geometry::{self, Pt};
 use crate::logo::{self, Tone};
@@ -17,7 +13,6 @@ use gpui::{
 pub const TEXT_SIZE: f32 = 12.0;
 pub const SMALL_SIZE: f32 = 11.0;
 
-/// The font chosen at start-up from what the system has installed.
 pub struct UiFont(pub SharedString);
 
 impl gpui::Global for UiFont {}
@@ -46,8 +41,6 @@ pub fn stroke(window: &mut Window, origin: Point<Pixels>, points: &[Pt], width: 
     }
 }
 
-/// A dashed polyline stroke, for the map's route lines between the
-/// controller and the agents it talks to.
 pub fn stroke_dashed(
     window: &mut Window,
     origin: Point<Pixels>,
@@ -70,8 +63,6 @@ pub fn stroke_dashed(
     }
 }
 
-/// A filled disc, the map's node plate. A 24-gon reads as a circle at the
-/// sizes the map draws and settles without going through lyon's arc handling.
 pub fn disc(window: &mut Window, origin: Point<Pixels>, center: Pt, radius: f32, color: Hsla) {
     if radius <= 0.0 {
         return;
@@ -96,7 +87,6 @@ pub fn disc(window: &mut Window, origin: Point<Pixels>, center: Pt, radius: f32,
     }
 }
 
-/// The F/C logo drawn from its cell grid. `cell` is the cell edge in points.
 pub fn logo(colors: Colors, cell: f32) -> impl IntoElement {
     let (bright, dark, bg) = (colors.bright, colors.dark, colors.bg);
     canvas(
@@ -126,7 +116,6 @@ pub fn logo(colors: Colors, cell: f32) -> impl IntoElement {
                         }
                     }
                 }
-                // The scanline through each cell, at sizes where it reads.
                 if cell >= 6.0 {
                     window.paint_quad(fill(
                         Bounds::new(
@@ -144,8 +133,6 @@ pub fn logo(colors: Colors, cell: f32) -> impl IntoElement {
     .flex_shrink_0()
 }
 
-/// A dial: track, red zone at the top of the scale, tick marks, the value
-/// arc and the needle. An unavailable value draws no arc and no needle.
 pub fn dial(gauge: &Gauge, colors: Colors, width: f32, height: f32) -> impl IntoElement {
     let fraction = gauge.metric.fraction().map(|f| f as f32);
     canvas(
@@ -196,8 +183,6 @@ pub fn dial(gauge: &Gauge, colors: Colors, width: f32, height: f32) -> impl Into
     .flex_shrink_0()
 }
 
-/// The words under a gauge: its detail when measured, the reason when not,
-/// and the band's name when it is warning or critical.
 pub fn gauge_caption(gauge: &Gauge) -> String {
     match gauge.metric.reason() {
         Some(reason) => reason.label().to_string(),
@@ -213,8 +198,6 @@ pub fn gauge_caption(gauge: &Gauge) -> String {
     }
 }
 
-/// `Gauge::spoken` without the trailing separator it leaves when a measured
-/// gauge has no detail.
 pub fn spoken(gauge: &Gauge) -> String {
     gauge
         .spoken()
@@ -222,7 +205,6 @@ pub fn spoken(gauge: &Gauge) -> String {
         .to_string()
 }
 
-/// Twenty segments, each colored by its own position's band.
 pub fn segments(cells: &[Option<Level>], colors: Colors, height: f32) -> Div {
     div()
         .flex()
@@ -238,7 +220,6 @@ pub fn segments(cells: &[Option<Level>], colors: Colors, height: f32) -> Div {
         }))
 }
 
-/// The quick view's 5 by 4 disk grid, filled in reading order.
 pub fn disk_grid(disk: &DiskGrid, colors: Colors, cell: f32) -> Div {
     let gap = 2.0;
     div()
@@ -255,7 +236,6 @@ pub fn disk_grid(disk: &DiskGrid, colors: Colors, cell: f32) -> Div {
         }))
 }
 
-/// A horizontal bar: `fraction` of the width lit, the rest unlit.
 pub fn bar(fraction: Option<f64>, colors: Colors, height: f32) -> Div {
     let lit = fraction.map(|f| f.clamp(0.0, 1.0) as f32).unwrap_or(0.0);
     div()
@@ -265,7 +245,6 @@ pub fn bar(fraction: Option<f64>, colors: Colors, height: f32) -> Div {
         .child(div().h_full().w(relative(lit)).bg(colors.dark))
 }
 
-/// A network rate: label, value, bar and, when unavailable, the reason.
 pub fn rate(rate: &Rate, colors: Colors) -> Div {
     div()
         .flex()
@@ -291,7 +270,6 @@ pub fn rate(rate: &Rate, colors: Colors) -> Div {
         })
 }
 
-/// A history spark: one bar per sample, a gap where nothing was measured.
 pub fn spark(history: &[Option<f64>], colors: Colors, count: usize, height: f32) -> Div {
     div()
         .flex()
@@ -309,8 +287,6 @@ pub fn spark(history: &[Option<f64>], colors: Colors, count: usize, height: f32)
         }))
 }
 
-/// A one-line hover text. GPUI 0.2.2 has no accessibility tree, so the same
-/// text is always also visible somewhere on screen; this is a convenience.
 pub struct TextTooltip {
     text: SharedString,
     colors: Colors,
@@ -342,8 +318,6 @@ pub fn tooltip(text: impl Into<SharedString>, colors: Colors) -> impl Fn(&mut Wi
     }
 }
 
-/// A bordered text button. A refused control is drawn dim, takes no clicks,
-/// and carries its reason as a tooltip; callers also print the reason.
 pub fn button(
     id: impl Into<ElementId>,
     label: impl Into<SharedString>,
@@ -374,8 +348,6 @@ pub fn button(
     }
 }
 
-/// A row in a list: the selected row is a solid dark-green bar with the
-/// selected-text color, as in the design package.
 pub fn row(id: impl Into<ElementId>, selected: bool, colors: Colors) -> Stateful<Div> {
     div()
         .id(id)
@@ -388,7 +360,6 @@ pub fn row(id: impl Into<ElementId>, selected: bool, colors: Colors) -> Stateful
         .when(!selected, |d| d.hover(|s| s.bg(colors.panel_fill())))
 }
 
-/// A fixed-width table cell that clips instead of wrapping.
 pub fn cell(width: f32, text: impl Into<SharedString>) -> Div {
     div()
         .w(px(width))
@@ -400,7 +371,6 @@ pub fn cell(width: f32, text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
-/// A flexible table cell that takes the remaining width and clips.
 pub fn cell_flex(text: impl Into<SharedString>) -> Div {
     div()
         .flex_1()
@@ -412,7 +382,6 @@ pub fn cell_flex(text: impl Into<SharedString>) -> Div {
         .child(text.into())
 }
 
-/// A bordered panel with a title in the top line.
 pub fn panel(title: impl Into<SharedString>, colors: Colors) -> Div {
     div()
         .flex()
@@ -440,9 +409,6 @@ pub fn phase_color(phase: Phase, colors: Colors) -> Hsla {
     }
 }
 
-/// The controller's state in words, shown before any value whenever the
-/// controller feed is not live: loading, stale with its age, disconnected or
-/// error with the detail the controller connection reported.
 pub fn connection_banner(connection: &Connection, colors: Colors, compact: bool) -> Option<Div> {
     if connection.phase == Phase::Live {
         return None;
@@ -492,7 +458,6 @@ pub fn connection_banner(connection: &Connection, colors: Colors, compact: bool)
     )
 }
 
-/// A small 2 by 2 grid icon for the "open window" button.
 pub fn grid_icon(color: Hsla) -> Div {
     let square = || div().w(px(4.0)).h(px(4.0)).bg(color);
     div()

@@ -45,8 +45,6 @@ struct OurosCredentialIsolationTests {
         #expect(!OurosCredentialContext.current.permitsProductionStorage)
         var browserCalls = 0
         let configuration = URLSessionConfiguration.ephemeral
-        // No credentials or URLProtocol are needed: a denied storage context
-        // must fail before constructing a network request or browser action.
         let billing = OurosBilling(sessionConfiguration: configuration, openBrowser: { _ in browserCalls += 1 })
         #expect(billing.credentialStorageIssue != nil)
         #expect(!billing.signedIn)

@@ -1,21 +1,3 @@
-//! The controller connection both clients use.
-//!
-//! Two background threads, each opening a fresh connection per request: a
-//! poller that reads `snapshot` on a fixed interval, and an action worker that
-//! runs operator requests one at a time from a bounded queue. Every request
-//! carries a deadline and a response byte limit through
-//! `fleet_proto::Client::send_bounded`, so a stalled or oversized controller
-//! reply ends as an error instead of a frozen client or unbounded memory.
-//!
-//! The render thread only reads shared state behind a mutex and a generation
-//! counter. Nothing here signals a process: every action is a controller
-//! request with the same semantics as the matching `fleetctl` command, and the
-//! controller keeps enforcing owner, lease and start-identity checks.
-//!
-//! Polling, not `subscribe`: a snapshot every two seconds costs one local
-//! socket round trip and one JSON decode, which the idle measurements in
-//! docs/CROSS-PLATFORM.md show is within budget. Subscriptions are added to
-//! `fleet-proto` only if that measurement stops holding.
 
 use crate::model::{self, LogChunk, ServiceEvent, Snapshot};
 use crate::observe::{Feed, Phase};
@@ -39,16 +21,11 @@ const OUTCOME_HISTORY: usize = 64;
 #[derive(Debug, Clone)]
 pub struct ControllerConfig {
     pub socket: PathBuf,
-    /// Clamped to 1 to 60 seconds.
     pub poll_interval: Duration,
-    /// Deadline for `snapshot`, `logs`, `events` and `reply`.
     pub request_timeout: Duration,
-    /// Deadline for `stop` and `restart`, which wait out the controller's
-    /// grace period before answering.
     pub lifecycle_timeout: Duration,
     pub max_snapshot_bytes: usize,
     pub max_log_bytes: i64,
-    /// Refuse every mutating action in the client. Logs and events still work.
     pub read_only: bool,
 }
 
@@ -71,8 +48,6 @@ impl ControllerConfig {
         self.poll_interval.clamp(MIN_POLL, MAX_POLL)
     }
 
-    /// Three missed polls plus one request deadline. Past this, a value that
-    /// was live is shown as stale even though no error was reported.
     pub fn stale_after(&self) -> Duration {
         self.poll_interval() * 3 + self.request_timeout
     }
@@ -93,7 +68,6 @@ impl LogStream {
     }
 }
 
-/// An operator request. Each maps to exactly one controller operation.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Action {
     Restart {
@@ -112,8 +86,6 @@ pub enum Action {
         service_id: String,
         ttl_sec: f64,
     },
-    /// Answer an agent's question. Approve and deny are replies whose text the
-    /// agent reads; the controller records it once and never rewrites it.
     Reply {
         message_id: i64,
         body: String,
@@ -133,8 +105,6 @@ impl Action {
         !matches!(self, Self::Logs { .. } | Self::Events { .. })
     }
 
-    /// Stop ends work and restart interrupts it; pause holds resources while
-    /// doing nothing. Each is confirmed before it is sent.
     pub fn needs_confirmation(&self) -> bool {
         matches!(
             self,
@@ -307,7 +277,6 @@ impl Controller {
         &self.config
     }
 
-    /// A copy of the feed. The snapshot itself is shared, not cloned.
     pub fn feed(&self) -> Feed<Snapshot> {
         self.shared
             .feed
@@ -320,7 +289,6 @@ impl Controller {
         self.feed().at(now, self.config.stale_after())
     }
 
-    /// Increments whenever the feed, the pending list or an outcome changes.
     pub fn generation(&self) -> u64 {
         self.shared.generation.load(Ordering::Acquire)
     }
@@ -329,8 +297,6 @@ impl Controller {
         let _ = self.polls.try_send(PollCommand::Refresh);
     }
 
-    /// Queue an action. Refused in read-only mode for mutating actions, and
-    /// when the bounded queue is full rather than growing without limit.
     pub fn submit(&self, action: Action) -> Result<u64, String> {
         if self.config.read_only && action.is_mutating() {
             return Err(format!(
@@ -361,7 +327,6 @@ impl Controller {
         }
     }
 
-    /// Actions queued or in flight, oldest first.
     pub fn pending(&self) -> Vec<(u64, Action)> {
         self.shared
             .pending
@@ -370,7 +335,6 @@ impl Controller {
             .unwrap_or_default()
     }
 
-    /// The most recent outcomes, newest last, at most 64.
     pub fn outcomes(&self) -> Vec<ActionOutcome> {
         self.shared
             .outcomes
@@ -393,8 +357,6 @@ impl Controller {
 
 impl Drop for Controller {
     fn drop(&mut self) {
-        // Blocking sends are bounded: each worker drains its queue promptly,
-        // and an in-flight request ends at its own deadline.
         let _ = self.polls.send(PollCommand::Shutdown);
         let _ = self.actions.send(Command::Shutdown);
         for thread in self.threads.drain(..) {
@@ -450,13 +412,11 @@ fn action_loop(
         }
         shared.changed();
         if mutated {
-            // Show the controller's new state now, not at the next tick.
             let _ = refresh.try_send(PollCommand::Refresh);
         }
     }
 }
 
-/// How one read ended, before it is folded into a feed.
 #[derive(Debug)]
 pub(crate) enum ReadOutcome {
     Snapshot(Box<Snapshot>),
@@ -596,8 +556,6 @@ fn describe(error: ClientError) -> String {
     }
 }
 
-/// Replace the home directory with `~` so a socket path can appear on screen
-/// and in captures without naming the account.
 pub fn display_path(path: &Path) -> String {
     let text = path.display().to_string();
     match std::env::var("HOME") {
@@ -633,15 +591,12 @@ mod tests {
         })
     }
 
-    /// A one-request controller stand-in answering with `reply`.
     fn serve_once(listener: UnixListener, reply: String) -> std::thread::JoinHandle<String> {
         std::thread::spawn(move || {
             let (stream, _) = listener.accept().unwrap();
             let mut reader = BufReader::new(stream.try_clone().unwrap());
             let mut line = String::new();
             reader.read_line(&mut line).unwrap();
-            // The client may hang up early on an oversized reply; that is the
-            // behavior under test, not a server failure.
             let mut writer = stream;
             let _ = writer
                 .write_all(reply.as_bytes())

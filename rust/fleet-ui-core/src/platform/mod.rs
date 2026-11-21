@@ -1,11 +1,3 @@
-//! What differs between macOS and Linux, behind one interface.
-//!
-//! Telemetry is sampled with `sysinfo` on both systems, plus the few sources it
-//! does not cover (Linux GPU busy time from sysfs). Every value a source cannot
-//! provide is `Metric::Unavailable(Reason::NotMeasured)`, and `capabilities()`
-//! states which values are measured on the running system so a client or a
-//! document can say so in words. Paths, notifications and the status-area item
-//! are here too, because each has a macOS and a Linux answer.
 
 mod sampler;
 
@@ -30,22 +22,15 @@ use std::time::{Duration, SystemTime};
 
 pub use sampler::Sampler;
 
-/// Process rows kept per sample, highest CPU first. A process tree needs
-/// parents, so this is generous, but it is a bound.
 pub const MAX_PROCESSES: usize = 2048;
-/// Volumes kept per sample.
 pub const MAX_VOLUMES: usize = 32;
-/// Samples of history kept for sparklines, matching `ServiceRecord.historyLimit`.
 pub const HISTORY: usize = 40;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessRow {
     pub pid: u32,
     pub ppid: Option<u32>,
-    /// Executable name only. Arguments are never collected: they carry paths,
-    /// tokens and hostnames that do not belong on a screen capture.
     pub name: String,
-    /// Percent of one core, as `ps` reports it; can exceed 100.
     pub cpu_pct: Metric,
     pub rss_bytes: u64,
     pub start_time: u64,
@@ -74,7 +59,6 @@ impl Volume {
     }
 }
 
-/// One reading of this machine.
 #[derive(Debug, Clone, PartialEq)]
 pub struct HostSample {
     pub taken_at: SystemTime,
@@ -84,8 +68,6 @@ pub struct HostSample {
     pub memory_used_bytes: Option<u64>,
     pub memory_total_bytes: Option<u64>,
     pub swap_used_bytes: Option<u64>,
-    /// The volume that holds user data: `/System/Volumes/Data` on macOS when
-    /// present, otherwise `/`.
     pub disk_pct: Metric,
     pub disk: Option<Volume>,
     pub net_rx_bytes_per_sec: Metric,
@@ -95,15 +77,11 @@ pub struct HostSample {
     pub process_count: usize,
     pub processes: Vec<ProcessRow>,
     pub volumes: Vec<Volume>,
-    /// The last `HISTORY` readings, oldest first, filled by `TelemetryWorker`.
-    /// `None` marks an interval with no measurement, which a chart leaves blank.
     pub cpu_history: Vec<Option<f64>>,
     pub rx_history: Vec<Option<f64>>,
     pub tx_history: Vec<Option<f64>>,
 }
 
-/// Something that can read this machine. The real implementation is
-/// `Sampler`; tests substitute recorded samples.
 pub trait TelemetrySource: Send {
     fn sample(&mut self) -> HostSample;
 }
@@ -118,7 +96,6 @@ impl TelemetrySource for Sampler {
 pub enum Support {
     Measured,
     NotMeasured,
-    /// Measured only on some hardware; the sample says which.
     Conditional,
 }
 
@@ -129,12 +106,10 @@ pub struct Capability {
     pub source: &'static str,
 }
 
-/// What this build measures on the running operating system.
 pub fn capabilities() -> &'static [Capability] {
     os::CAPABILITIES
 }
 
-/// Bounded rings of recent readings.
 #[derive(Default)]
 struct History {
     cpu: std::collections::VecDeque<Option<f64>>,
@@ -160,8 +135,6 @@ impl History {
     }
 }
 
-/// Background sampling. The render thread reads the latest sample; it never
-/// waits for a process scan.
 pub struct TelemetryWorker {
     feed: Arc<Mutex<Feed<HostSample>>>,
     generation: Arc<AtomicU64>,
@@ -243,20 +216,14 @@ impl Drop for TelemetryWorker {
     }
 }
 
-/// The controller socket this client connects to by default. See
-/// `fleet_proto::default_socket_path` for the override order.
 pub fn socket_path() -> PathBuf {
     fleet_proto::default_socket_path()
 }
 
-/// Whether a status-area item can be shown, and if not, why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StatusArea {
-    /// macOS menu bar status item.
     MenuBar,
-    /// A StatusNotifierItem host is registered on the session bus.
     StatusNotifier,
-    /// No host is available; the client runs as an ordinary window.
     Unavailable(String),
 }
 
@@ -264,8 +231,6 @@ pub fn status_area() -> StatusArea {
     os::status_area()
 }
 
-/// Post a desktop notification through the system's own tool. Returns the
-/// reason when none exists rather than failing silently.
 pub fn notify(title: &str, body: &str) -> Result<(), String> {
     os::notify(&sanitize(title, 80), &sanitize(body, 240))
 }
@@ -277,7 +242,6 @@ fn sanitize(text: &str, limit: usize) -> String {
         .collect()
 }
 
-/// Run a short command with a hard deadline, returning stdout on success.
 pub(crate) fn run_bounded(program: &str, args: &[&str], deadline: Duration) -> Option<String> {
     use std::process::{Command, Stdio};
     use std::time::Instant;

@@ -1,16 +1,8 @@
 import SwiftUI
 import FleetCore
 
-// CPU and memory are the primary instruments. Time zoom preserves individual
-// observations; focusing one metric gives it the full width and a taller plot.
-// Secondary instruments have a glance and a sheet, never an expanding main page.
 struct OverviewModule: View {
     @Bindable var model: AppModel
-    /// Read for one reason: the toolbar's search field is present on this module
-    /// and nothing here used to consume it. Typing a process name — the obvious
-    /// thing to type while looking at a process map — filtered nothing and gave
-    /// no sign it had done nothing, which reads as a frozen window rather than
-    /// as a field that does not apply here.
     @Bindable var console: ConsoleModel
 
     private var system: SystemMonitor { model.system }
@@ -22,8 +14,6 @@ struct OverviewModule: View {
 
     var body: some View {
         GeometryReader { geometry in
-            // `geometry.size` is already the unobscured module column: the
-            // toolbar's safe area is outside it, so nothing is subtracted twice.
             let layout = OverviewViewportGeometry(viewport: geometry.size, focused: focus != .both,
                                                   instrumentCount: system.power.hasBattery ? 5 : 4)
             VStack(alignment: .leading, spacing: OverviewViewportGeometry.gap) {
@@ -51,8 +41,6 @@ struct OverviewModule: View {
         .sheet(isPresented: $moreMetrics) { detailedMetrics }
     }
 
-    /// Detailed instruments have their own scrollable surface. Opening them must
-    /// not move the primary traces or push the process actions below the window.
     private var detailedMetrics: some View {
         VStack(alignment: .leading, spacing: ConsoleMetrics.cardGap) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -115,8 +103,6 @@ struct OverviewModule: View {
         return parts.joined(separator: " · ")
     }
 
-    // MARK: Sensors
-
     private var sensorCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
@@ -173,16 +159,12 @@ struct OverviewModule: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: CPU
-
     private func cpuCard(plotHeight: CGFloat) -> some View {
         TelemetryCard(
             title: "CPU",
             plate: "01 · CPU",
             tone: system.cpu.sampled ? SystemThresholds.utilization(system.cpu.usage) : .unknown,
             value: system.cpu.sampled ? ConsoleFmt.utilPercent(system.cpu.usage) : "—",
-            // Nil until two tick samples have been differenced, which parks the
-            // needle instead of resting it on a confident zero.
             gaugeValue: system.cpu.sampled ? system.cpu.usage : nil,
             subtitle: system.cpu.sampled
                 ? "user \(ConsoleFmt.utilPercent(system.cpu.userShare)) · sys \(ConsoleFmt.utilPercent(system.cpu.systemShare))"
@@ -214,19 +196,13 @@ struct OverviewModule: View {
         .accentColor
     }
 
-    // MARK: Memory
-
     private func memoryCard(plotHeight: CGFloat) -> some View {
         TelemetryCard(
             title: "Memory",
             plate: "02 · MEM",
             tone: SystemThresholds.memory(system.memory),
             value: ConsoleFmt.utilPercent(system.memory.usedShare),
-            // Always sampled: a share of physical memory is a ratio of two
-            // absolute numbers, not a rate, so it needs no previous tick.
             gaugeValue: system.memory.usedShare,
-            // The used figure in the units you act on sits with the pressure,
-            // so the facts under the trace stay one row wide or two rows tall.
             subtitle: "pressure \(system.memory.pressure.label) · "
                 + "\(ConsoleFmt.bytes(system.memory.usedBytes)) of \(ConsoleFmt.bytes(system.memory.totalBytes))"
         ) {
@@ -234,45 +210,24 @@ struct OverviewModule: View {
                           times: system.memorySeries.samples.map(\.time), range: timeRange,
                           tint: .accentColor,
                           height: plotHeight, metric: "Memory")
-            // Wrapped rather than laid out in one row of five. At a grid cell's
-            // width the old row hyphenated "COMPRESSED" and then pushed the total
-            // off the card; a flow lays out as many as fit and moves the rest down
-            // one line, which is the same answer at any column count.
             MemoryFacts(memory: system.memory)
         }
         .accessibilityIdentifier("overview.memory")
         .investigatable(.metric("memory", model: model), model: model)
     }
 
-    // MARK: Process map
-
     private func processMapCard(limit: Int) -> some View {
         OverviewProcessPreview(model: model, rows: model.processes.rows, query: console.search, limit: limit, console: console)
     }
-
-    // MARK: Disk
 
     private var diskCard: some View {
         TelemetryCard(
             title: "Disk",
             plate: "03 · I/O",
-            // Was `.neutral`, because throughput has no good or bad value. The
-            // dial reads capacity, which does — and it gets the early-warning
-            // band, since by the time a volume is 99% full macOS is failing
-            // writes rather than warning about them.
             tone: system.storage.totalBytes > 0
                 ? SystemThresholds.freeSpace(share: system.storage.usedShare)
                 : .unknown,
             value: ConsoleFmt.utilPercent(system.storage.usedShare),
-            // The dial reads **capacity**, not throughput, and that is the one
-            // place the gauge and the card's trace show different quantities. It
-            // is deliberate: a needle needs a bounded scale, and byte rates are
-            // the genuinely unbounded series in this app — the reason the chart
-            // below it is the only logarithmic one. A dial whose full deflection
-            // meant "the fastest rate seen so far this session" would be a scale
-            // that silently rewrites itself, which is the failure the throughput
-            // chart's fixed floor already exists to avoid. Used space is bounded,
-            // it has a real redline, and it is the disk fact worth a glance.
             gaugeValue: system.storage.totalBytes > 0 ? system.storage.usedShare : nil,
             subtitle: system.storage.device
         ) {
@@ -298,16 +253,12 @@ struct OverviewModule: View {
         .investigatable(.metric("disk", model: model), model: model)
     }
 
-    // MARK: GPU
-
     private var gpuCard: some View {
         TelemetryCard(
             title: "GPU",
             plate: "04 · GPU",
             tone: system.gpu.utilization.map { SystemThresholds.utilization($0) } ?? .unknown,
             value: ConsoleFmt.utilPercent(system.gpu.utilization),
-            // Nil when the accelerator is present but withheld the key — the
-            // honest reading is "not reported", never an idle GPU.
             gaugeValue: system.gpu.utilization,
             subtitle: system.gpu.model
         ) {
@@ -325,8 +276,6 @@ struct OverviewModule: View {
         }
         .investigatable(.metric("gpu", model: model), model: model)
     }
-
-    // MARK: Network and power
 
     private var networkCard: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -391,10 +340,6 @@ struct OverviewModule: View {
 
 }
 
-// MARK: - Process preview
-
-/// Filter first, then cap a memory ranking. The complete table and inspector
-/// keep their existing navigation paths instead of being duplicated here.
 struct OverviewProcessPreview: View {
     let model: AppModel
     let rows: [ProcessRow]
@@ -427,7 +372,6 @@ struct OverviewProcessPreview: View {
                 Text("Process")
                 Spacer()
                 Text("CPU").frame(width: 70, alignment: .trailing)
-                // The ranking key, marked where the eye reads the column.
                 HStack(spacing: 3) {
                     Text("Memory")
                     Image(systemName: "chevron.down").font(ConsoleFont.marker)
@@ -477,10 +421,6 @@ struct OverviewProcessPreview: View {
     }
 }
 
-// MARK: - Secondary glance
-
-/// Small current readings remain on Overview; their full charts and hardware
-/// facts belong to the adjacent Details action. Absence is never an idle zero.
 struct OverviewMetricGlance: View {
     let model: AppModel
     let storage: StorageSample
@@ -539,11 +479,6 @@ struct OverviewMetricGlance: View {
     }
 }
 
-// MARK: - Shared bits
-
-/// App / Wired / Compressed / Swap: one row where it fits, two rows of two where
-/// it does not — never three, which made the memory card set its row's height
-/// and left the CPU card beside it with a band of nothing under its cores.
 private struct MemoryFacts: View {
     let memory: MemorySample
 
@@ -576,13 +511,6 @@ private struct MemoryFact: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            // A four-column row of these divides the card evenly, which gives
-            // "COMPRESSED" less width than it needs at the kerned badge size —
-            // and SwiftUI's default response is to hyphenate, so the card read
-            // "COM-PRESSED" stacked over its number. A label that is one word is
-            // one line: it holds its intrinsic width and the row distributes
-            // what is left, rather than the longest label being broken to keep
-            // four columns nominally equal.
             Text(label)
                 .font(ConsoleFont.badge)
                 .foregroundStyle(SurfaceInk.secondary)
@@ -598,12 +526,6 @@ private struct MemoryFact: View {
     }
 }
 
-/// The row a module opens with when it has controls, and only then.
-///
-/// No title, no subtitle, no symbol. The sidebar's selection already names the
-/// page, so a heading restating it was a second toolbar spending the height the
-/// content needs. What is left is what the row is for: the controls that change
-/// the page, leading and trailing, on one line that never wraps.
 struct ModuleControlBar<Leading: View, Trailing: View>: View {
     @ViewBuilder var leading: Leading
     @ViewBuilder var trailing: Trailing

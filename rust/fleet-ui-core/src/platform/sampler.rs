@@ -1,4 +1,3 @@
-//! `sysinfo`-backed sampling shared by macOS and Linux.
 
 use super::{os, HostSample, ProcessRow, Volume, MAX_PROCESSES, MAX_VOLUMES};
 use crate::observe::{Metric, Reason};
@@ -47,7 +46,6 @@ impl Sampler {
         self.last_network = Some(now);
         self.samples += 1;
 
-        // CPU use is a difference between two readings; the first has none.
         let first = self.samples == 1;
         let cpu_pct = if first {
             Metric::Unavailable(Reason::AwaitingSample)
@@ -160,7 +158,6 @@ impl Sampler {
             tx = tx.saturating_add(data.transmitted());
         }
         if links == 0 {
-            // No physical link is a fact worth showing, not a zero rate.
             let none = Metric::Unavailable(Reason::NotMeasured);
             return (none, none);
         }

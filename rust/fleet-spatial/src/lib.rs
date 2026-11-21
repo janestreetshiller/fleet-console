@@ -1,17 +1,9 @@
-//! Relational Spatial Mapping Engine for FleetConsole.
-//!
-//! Replaces isolated tabular silos with four operational planes:
-//! 1. Topography: Interactive spatial & relational graph
-//! 2. Brain & Agents: Ouros-X adapter plane
-//! 3. Execution & Telemetry: Live process & resource mapping
-//! 4. Substrate: Storage and volume memory maps
 
 use fleet_telemetry::TelemetrySnapshot;
 use ouros_adapter::{AgentState, AgentTaskGraph};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// The four core operational planes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OperationalPlane {
     Topography,
@@ -31,7 +23,6 @@ impl OperationalPlane {
     }
 }
 
-/// Subsystem classification for nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum SubsystemCategory {
     ClusterHost,
@@ -43,7 +34,6 @@ pub enum SubsystemCategory {
     SocketEndpoint,
 }
 
-/// Relationship classification for edges.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RelationKind {
     IpcPipe,
@@ -100,9 +90,7 @@ pub struct SpatialNode {
     pub y: f32,
     pub vx: f32,
     pub vy: f32,
-    /// Scaled by RAM footprint / volume
     pub radius: f32,
-    /// Heat factor [0.0, 1.0] derived from CPU / thermal pressure
     pub heat: f32,
     pub details: NodeDetails,
     pub badges: Vec<DiagnosticBadge>,
@@ -115,7 +103,6 @@ pub struct SpatialEdge {
     pub target: String,
     pub relation: RelationKind,
     pub bandwidth_bytes_sec: u64,
-    /// Pulse rate derived from activity/throughput
     pub pulse_speed: f32,
 }
 
@@ -136,7 +123,6 @@ impl Default for Viewport {
     }
 }
 
-/// Context bound to the selected entity for the persistent contextual terminal.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ContextualTerminalBinding {
     pub entity_id: String,
@@ -146,17 +132,15 @@ pub struct ContextualTerminalBinding {
     pub inspection_summary: String,
 }
 
-/// Descriptive topology hierarchy node for the live sidebar mini-map.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TopologyHierarchyNode {
     pub id: String,
     pub label: String,
     pub category: SubsystemCategory,
-    pub glow_intensity: f32, // [0.0, 1.0]
+    pub glow_intensity: f32,
     pub children: Vec<TopologyHierarchyNode>,
 }
 
-/// Force-directed relational graph engine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RelationalTopologyGraph {
     pub nodes: HashMap<String, SpatialNode>,
@@ -183,7 +167,6 @@ impl RelationalTopologyGraph {
         Self::default()
     }
 
-    /// Ingest telemetry and Ouros-X brain graph to construct unified spatial topology.
     pub fn update_from_telemetry_and_brain(
         &mut self,
         telemetry: &TelemetrySnapshot,
@@ -192,7 +175,6 @@ impl RelationalTopologyGraph {
         let mut new_nodes = HashMap::new();
         let mut new_edges = Vec::new();
 
-        // 1. Host Node
         new_nodes.insert(
             "host-cluster".to_string(),
             SpatialNode {
@@ -218,7 +200,6 @@ impl RelationalTopologyGraph {
             },
         );
 
-        // 2. Runtime Core Node
         new_nodes.insert(
             "runtime-core".to_string(),
             SpatialNode {
@@ -253,7 +234,6 @@ impl RelationalTopologyGraph {
             pulse_speed: 1.0,
         });
 
-        // 3. Active Agents from Brain Adapter
         let mut agent_idx = 0;
         for (agent_id, task_node) in &brain.nodes {
             let angle = (agent_idx as f32) * 1.5 - 0.75;
@@ -270,7 +250,6 @@ impl RelationalTopologyGraph {
                 AgentState::Terminated => 0.0,
             };
 
-            // Calculate radius proportional to context memory tokens
             let token_ratio = task_node.context_memory.utilization_ratio();
             let radius = 28.0 + (token_ratio * 22.0);
 
@@ -320,7 +299,6 @@ impl RelationalTopologyGraph {
             });
         }
 
-        // Connect agent sub-edges
         for edge in &brain.edges {
             new_edges.push(SpatialEdge {
                 id: format!("edge-brain-{}-{}", edge.source_task_id, edge.target_task_id),
@@ -332,10 +310,8 @@ impl RelationalTopologyGraph {
             });
         }
 
-        // 4. Worker Processes from Telemetry
         let mut proc_idx = 0;
         for proc in &telemetry.processes {
-            // Include high-resource or relevant processes
             if proc.name == "swift-frontend"
                 || proc.name == "WindowServer"
                 || proc.name == "ouros-x"
@@ -386,7 +362,6 @@ impl RelationalTopologyGraph {
                     },
                 );
 
-                // Associate process to agent or runtime core
                 let parent_key = if proc.name.contains("ouros") {
                     "ouros-core"
                 } else if proc.name.contains("codex") {
@@ -408,7 +383,6 @@ impl RelationalTopologyGraph {
             }
         }
 
-        // 5. Storage Pools (Substrate)
         let mut store_idx = 0;
         for store in &telemetry.storage_pools {
             let store_id = format!("storage-{}", store_idx);
@@ -465,7 +439,6 @@ impl RelationalTopologyGraph {
             });
         }
 
-        // Preserve coordinates of existing nodes if available
         for (id, node) in new_nodes.iter_mut() {
             if let Some(existing) = self.nodes.get(id) {
                 node.x = existing.x;
@@ -478,13 +451,11 @@ impl RelationalTopologyGraph {
         self.nodes = new_nodes;
         self.edges = new_edges;
 
-        // Auto-select first agent or core if selection is empty
         if self.selected_node_id.is_none() {
             self.selected_node_id = Some("ouros-core".to_string());
         }
     }
 
-    /// Step the force-directed layout simulation.
     pub fn tick_simulation(&mut self, dt: f32) {
         let k_repulsion = 45000.0;
         let k_spring = 0.05;
@@ -492,9 +463,6 @@ impl RelationalTopologyGraph {
         let damping = 0.82;
         let center_gravity = 0.015;
 
-        // Snapshot positions in the existing map traversal order so pairwise
-        // accumulation keeps its floating-point operation order. Public IDs stay
-        // at the edge/integration boundary, outside the quadratic pairwise loop.
         let mut positions = Vec::with_capacity(self.nodes.len());
         let mut node_indices = HashMap::with_capacity(self.nodes.len());
         for (id, node) in &self.nodes {
@@ -503,7 +471,6 @@ impl RelationalTopologyGraph {
         }
         let mut forces = vec![[0.0_f32; 2]; positions.len()];
 
-        // 1. Repulsive forces between every node pair
         for i in 0..positions.len() {
             for j in (i + 1)..positions.len() {
                 let dx = positions[j][0] - positions[i][0];
@@ -522,13 +489,11 @@ impl RelationalTopologyGraph {
             }
         }
 
-        // 2. Spring forces along edges
         for edge in &self.edges {
             let (Some(&source), Some(&target)) = (
                 node_indices.get(edge.source.as_str()),
                 node_indices.get(edge.target.as_str()),
             ) else {
-                // Telemetry refreshes can leave an edge whose endpoint is gone.
                 continue;
             };
             let dx = positions[target][0] - positions[source][0];
@@ -540,16 +505,13 @@ impl RelationalTopologyGraph {
             let f_x = (dx / dist) * spring_force;
             let f_y = (dy / dist) * spring_force;
 
-            // Keep these sequential: source and target may be the same node.
             forces[source][0] += f_x;
             forces[source][1] += f_y;
             forces[target][0] -= f_x;
             forces[target][1] -= f_y;
         }
 
-        // 3. Center gravity and integration
         for (id, node) in self.nodes.iter_mut() {
-            // Root host node stays anchor near center
             if id == "host-cluster" {
                 continue;
             }
@@ -557,7 +519,6 @@ impl RelationalTopologyGraph {
             let grav_x = -node.x * center_gravity;
             let grav_y = -node.y * center_gravity;
 
-            // No nodes are added or removed between the snapshot and integration.
             let index = node_indices[id.as_str()];
             let total_fx = forces[index][0] + grav_x;
             let total_fy = forces[index][1] + grav_y;
@@ -570,7 +531,6 @@ impl RelationalTopologyGraph {
         }
     }
 
-    /// Focus viewport onto a specific subsystem node.
     pub fn focus_entity(&mut self, entity_id: &str) {
         if let Some(node) = self.nodes.get(entity_id) {
             self.selected_node_id = Some(entity_id.to_string());
@@ -580,7 +540,6 @@ impl RelationalTopologyGraph {
         }
     }
 
-    /// Build the live Descriptive Topology Map hierarchy for the sidebar.
     pub fn build_sidebar_hierarchy(&self) -> TopologyHierarchyNode {
         let mut agent_children = Vec::new();
         let mut proc_children = Vec::new();
@@ -623,7 +582,6 @@ impl RelationalTopologyGraph {
         }
     }
 
-    /// Get all diagnostic badges across all nodes (Diagnostics Drawer view).
     pub fn collect_all_diagnostic_badges(&self) -> Vec<(&SpatialNode, &DiagnosticBadge)> {
         let mut badges = Vec::new();
         for node in self.nodes.values() {
@@ -639,7 +597,6 @@ impl RelationalTopologyGraph {
         badges
     }
 
-    /// Bind contextual terminal session to the currently selected entity.
     pub fn get_contextual_terminal_binding(&self) -> ContextualTerminalBinding {
         let selected_id = self
             .selected_node_id
@@ -735,23 +692,19 @@ mod tests {
         assert!(spatial_graph.nodes.contains_key("codex-worker"));
         assert!(spatial_graph.nodes.len() >= 4);
 
-        // Tick simulation
         let prev_x = spatial_graph.nodes.get("ouros-core").unwrap().x;
         spatial_graph.tick_simulation(0.016);
         let next_x = spatial_graph.nodes.get("ouros-core").unwrap().x;
         assert_ne!(prev_x, next_x);
 
-        // Sidebar hierarchy check
         let sidebar = spatial_graph.build_sidebar_hierarchy();
         assert_eq!(sidebar.id, "host-cluster");
         assert_eq!(sidebar.children.len(), 1);
 
-        // Diagnostics check: swift-frontend is saturating CPU at 95.5% in simulated telemetry
         let badges = spatial_graph.collect_all_diagnostic_badges();
         assert!(!badges.is_empty());
         assert!(badges.iter().any(|(_, b)| b.title.contains("CPU Saturation")));
 
-        // Terminal binding
         spatial_graph.focus_entity("ouros-core");
         let terminal = spatial_graph.get_contextual_terminal_binding();
         assert_eq!(terminal.entity_id, "ouros-core");

@@ -1,11 +1,3 @@
-//! The phosphor palette from `design/tokens.json`, reduced to what the
-//! terminal can show.
-//!
-//! Truecolor terminals get the token colors; 256-color terminals the nearest
-//! xterm-256 index from the color cube or gray ramp (indices 0 to 15 vary by
-//! terminal theme, so they are never chosen); 16-color terminals the `ansi16`
-//! indices from the tokens. With no color, emphasis is bold, dim and reverse
-//! video, and every state also has a word, so nothing depends on color.
 
 use fleet_ui_core::theme::{tokens, Rgb};
 use fleet_ui_core::thresholds::Level;
@@ -20,7 +12,6 @@ pub enum ColorMode {
 }
 
 impl ColorMode {
-    /// `env` reads one environment variable; empty values count as unset.
     pub fn detect(no_color_flag: bool, env: impl Fn(&str) -> Option<String>) -> Self {
         let get = |name: &str| env(name).filter(|v| !v.is_empty());
         if no_color_flag || get("NO_COLOR").is_some() {
@@ -46,8 +37,6 @@ impl ColorMode {
     }
 }
 
-/// The nearest xterm-256 index for a color, from the 6x6x6 cube (16 to 231)
-/// and the gray ramp (232 to 255), by squared RGB distance.
 pub fn nearest_256(c: Rgb) -> u8 {
     const LEVELS: [u8; 6] = [0, 95, 135, 175, 215, 255];
     let distance = |r: u8, g: u8, b: u8| {
@@ -76,7 +65,6 @@ pub fn nearest_256(c: Rgb) -> u8 {
     best.1
 }
 
-/// What a piece of text means; the theme decides how that looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
     Text,
@@ -97,8 +85,6 @@ impl Tone {
 
 #[derive(Debug, Clone)]
 pub struct Theme {
-    /// Applied to the whole screen. Empty in 16-color and no-color modes so the
-    /// terminal's own background stays.
     pub base: Style,
     pub border: Style,
     pub title: Style,
@@ -207,7 +193,6 @@ impl Theme {
         }
     }
 
-    /// Band styles from the design package: dark green, bright green, amber, red.
     pub fn level(&self, level: Level) -> Style {
         match level {
             Level::Normal => self.dark,
@@ -217,7 +202,6 @@ impl Theme {
         }
     }
 
-    /// Every style this theme can produce, for tests.
     #[cfg(test)]
     pub fn all_styles(&self) -> Vec<Style> {
         let mut v = vec![
@@ -288,7 +272,6 @@ mod tests {
             ColorMode::detect(false, env(&[("NO_COLOR", "1"), ("COLORTERM", "truecolor")])),
             ColorMode::None
         );
-        // An empty NO_COLOR does not disable color.
         assert_eq!(
             ColorMode::detect(false, env(&[("NO_COLOR", ""), ("TERM", "xterm-256color")])),
             ColorMode::Ansi256
@@ -304,10 +287,8 @@ mod tests {
         let rgb = |r, g, b| Rgb { r, g, b };
         assert_eq!(nearest_256(rgb(0, 0, 0)), 16);
         assert_eq!(nearest_256(rgb(255, 255, 255)), 231);
-        // #55ff55 sits between cube levels 95 and 255 on red and blue.
         assert_eq!(nearest_256(rgb(0x55, 0xff, 0x55)), 16 + 36 + 6 * 5 + 1);
         assert_eq!(nearest_256(rgb(0x00, 0xaa, 0x00)), 16 + 6 * 3);
-        // A mid gray prefers the gray ramp.
         assert_eq!(nearest_256(rgb(128, 128, 128)), 244);
     }
 

@@ -1,10 +1,3 @@
-//! Everything a client draws, derived from the two feeds.
-//!
-//! `Dashboard::build` is a pure function of its inputs: the controller feed,
-//! the telemetry feed, the pending and finished actions, and a clock. Both
-//! clients call it on each change and render the result, so the terminal and
-//! the window cannot disagree about a count, a band or an unavailable value.
-//! It allocates a few hundred rows at most; every list has a bound.
 
 use crate::controller::{Action, ActionOutcome, ActionPayload};
 use crate::format;
@@ -28,8 +21,6 @@ const OTHER_PROCESSES: usize = 15;
 pub const DISK_CELLS: usize = 20;
 pub const GAUGE_SEGMENTS: usize = 20;
 
-/// The reply text sent when the operator approves or denies an agent question.
-/// The agent reads it with `fleetctl inbox`.
 pub const APPROVE_REPLY: &str = "approved";
 pub const DENY_REPLY: &str = "denied";
 
@@ -41,10 +32,7 @@ pub struct Inputs<'a> {
     pub pending: &'a [(u64, Action)],
     pub outcomes: &'a [ActionOutcome],
     pub read_only: bool,
-    /// Socket path as it may be shown, home directory already replaced.
     pub socket_label: String,
-    /// Force the remote interpretation even when a local `fleetd` with the
-    /// controller's pid exists.
     pub assume_remote_controller: bool,
     pub now: SystemTime,
 }
@@ -66,15 +54,11 @@ pub struct Dashboard {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Connection {
     pub phase: Phase,
-    /// One sentence a person can act on.
     pub summary: String,
     pub detail: Option<String>,
     pub controller_version: Option<String>,
     pub socket_label: String,
     pub age: Option<String>,
-    /// Whether the controller supervises this machine. When it does not (an
-    /// SSH-forwarded socket from another machine), its pids are not joined
-    /// with local processes.
     pub locality: Locality,
     pub telemetry_phase: Phase,
     pub read_only: bool,
@@ -82,11 +66,8 @@ pub struct Connection {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Locality {
-    /// A local process with the controller's pid is named `fleetd`.
     Local,
-    /// No such local process; the controller runs elsewhere.
     Remote,
-    /// Not decided yet: no snapshot or no local process sample.
     Unknown,
 }
 
@@ -118,7 +99,6 @@ impl Gauge {
         }
     }
 
-    /// Accessible description: label, value and the reason when unavailable.
     pub fn spoken(&self) -> String {
         match self.metric.reason() {
             Some(reason) => format!("{} unavailable, {}", self.label, reason.label()),
@@ -130,7 +110,6 @@ impl Gauge {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiskGrid {
     pub gauge: Gauge,
-    /// 20 cells, a 5 by 4 grid in reading order; `Some` cells are used space.
     pub cells: Vec<Option<Level>>,
 }
 
@@ -139,7 +118,6 @@ pub struct Rate {
     pub label: &'static str,
     pub metric: Metric,
     pub text: String,
-    /// Bar length relative to the highest rate in the retained history.
     pub fraction: Option<f64>,
     pub history: Vec<Option<f64>>,
 }
@@ -169,8 +147,6 @@ pub struct NodeTile {
     pub state: NodeState,
     pub freshness: Freshness,
     pub gauges: Vec<Gauge>,
-    /// Network rate text for the `net` row; the percent gauge needs a link
-    /// capacity that is not measured.
     pub network_text: String,
     pub cpu_history: Vec<Option<f64>>,
     pub services_up: Option<usize>,
@@ -203,8 +179,6 @@ pub struct ClusterView {
     pub tiles: Vec<NodeTile>,
 }
 
-/// Why a control is unavailable for a row. Clients show this text instead of
-/// sending a request that the controller would refuse.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Control {
     Allowed,
@@ -234,7 +208,6 @@ pub struct ServiceRow {
     pub cpu: Metric,
     pub memory: String,
     pub lease: String,
-    /// The four separate facts, in words.
     pub process: String,
     pub listening: String,
     pub health: String,
@@ -292,7 +265,6 @@ pub struct TranscriptLine {
     pub agent: String,
     pub verb: String,
     pub text: String,
-    /// Set for a question still awaiting an answer.
     pub question: Option<Question>,
 }
 
@@ -324,8 +296,6 @@ pub struct VolumeRow {
 pub struct StorageView {
     pub phase: Phase,
     pub volumes: Vec<VolumeRow>,
-    /// The per-path breakdown the Swift app scans is not implemented in the
-    /// Rust clients; this says so instead of showing an empty list.
     pub largest_paths: Result<Vec<(String, String)>, String>,
 }
 
@@ -352,13 +322,10 @@ pub struct AttentionRow {
     pub severity: Severity,
     pub title: String,
     pub detail: String,
-    /// Where the report came from: the controller, or this client's own telemetry.
     pub source: &'static str,
     pub service_id: Option<String>,
     pub message_id: Option<i64>,
-    /// What can be done through the controller, in words.
     pub available: String,
-    /// The read-only commands an agent would run to investigate this target.
     pub agent_commands: Vec<String>,
 }
 
@@ -727,8 +694,6 @@ fn device_tile(device: &DeviceRecord, controller_phase: Phase, now: SystemTime) 
     let cpu = Metric::from_option(live(m.cpu_pct), missing);
     let mem = Metric::from_option(live(ratio(m.mem_used_gb, m.mem_total_gb)), missing);
     let gpu = Metric::from_option(live(m.gpu_pct), missing);
-    // An offline node keeps its last disk reading: disk does not change while
-    // it is down, and the design labels it last-known.
     let disk = Metric::from_option(ratio(m.disk_used_gb, m.disk_total_gb), missing);
     let disk_detail = match (m.disk_used_gb, m.disk_total_gb) {
         (Some(u), Some(t)) if offline => format!("last known, {u:.0} of {t:.0} GB"),
@@ -989,8 +954,6 @@ fn process_view(
     let mut shown: HashSet<u32> = HashSet::new();
     let mut note = None;
 
-    // Roots come from the controller only when it supervises this machine;
-    // a remote controller's pids name processes on another host.
     let mut roots: Vec<(u32, String, ProcessRole, Option<String>)> = Vec::new();
     match (snapshot, locality) {
         (Some(s), Locality::Local) => {
@@ -1148,8 +1111,6 @@ fn descend(
 
 fn clock(epoch: f64) -> String {
     let seconds_of_day = (epoch.max(0.0) as u64) % 86_400;
-    // UTC wall time. A local time zone needs a database this crate does not
-    // carry; the clients label the column so it is not mistaken for local.
     format!(
         "{:02}:{:02}",
         seconds_of_day / 3_600,

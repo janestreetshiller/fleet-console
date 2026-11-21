@@ -1,46 +1,21 @@
-//! Specialized memory and process knowledge for the resident agent.
-//!
-//! This is the component that separates an agent from a script: concrete
-//! interpretations of the numbers fleetd reports, in the same voice as the
-//! project's own documentation (`docs/RUNBOOKS.md`, `THREAT-MODEL.md`), so the
-//! advice an operator gets from the agent matches the advice they would get
-//! from the project. Every function is pure and fixture-testable.
 
-/// Interpret a service's resident-memory trend from its history window.
-///
-/// `memHistory` is newest-last (the `ServiceRecord` cap is 40 samples). A
-/// monotonic climb with a real slope is a leak candidate; oscillation is
-/// normal allocator behavior; flat is steady state. We deliberately do not
-/// call anything a leak without a sustained slope — one big sample is often a
-/// legitimate one-off (build, index, migration).
 #[derive(Debug, Clone, PartialEq)]
 pub struct MemoryTrend {
     pub classification: TrendClass,
-    /// MB per sample over the window, when a slope exists.
     pub slope_mb_per_sample: Option<f64>,
-    /// How many samples the verdict rests on.
     pub samples: usize,
     pub note: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TrendClass {
-    /// Sustained growth across the window — a leak candidate worth watching.
     Climbing,
-    /// Oscillating within a band — normal allocator/cache behavior.
     Oscillating,
-    /// Flat within noise.
     Steady,
-    /// Rising but under the leak slope threshold — worth a note, not an alarm.
     Creeping,
-    /// Not enough samples to say anything honest.
     InsufficientData,
 }
 
-/// The sustained growth rate (MB/sample) above which we call a climb a leak
-/// candidate. Tuned against fleetd's 5s tick: 1 MB per 5s is ~17 GB/day, which
-/// no healthy service does, but a slow 0.1 MB/sample creep can run for days
-/// before it hurts — so creeping gets a note instead of an alarm.
 pub const LEAK_SLOPE_MB_PER_SAMPLE: f64 = 1.0;
 pub const CREEP_SLOPE_MB_PER_SAMPLE: f64 = 0.1;
 pub const MIN_SAMPLES_FOR_TREND: usize = 6;
@@ -58,7 +33,6 @@ pub fn classify_memory_trend(history_mb: &[f64]) -> MemoryTrend {
         };
     }
 
-    // Least-squares slope over the window.
     let n = samples as f64;
     let xs: f64 = (0..samples).map(|i| i as f64).sum();
     let ys: f64 = history_mb.iter().sum();
@@ -127,9 +101,6 @@ pub fn classify_memory_trend(history_mb: &[f64]) -> MemoryTrend {
     }
 }
 
-/// Field triage for one process's memory: what the number means and what the
-/// honest next step is. This is advice, not a command — mutating tools stay
-/// behind explicit confirm fields at the tool layer.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcessMemoryAdvice {
     pub rss_mb: f64,
@@ -145,8 +116,6 @@ pub enum RssClass {
     Unknown,
 }
 
-/// RSS thresholds in MB. 1024 is "this process dominates the machine's budget
-/// conversation"; 200 is an ordinary daemon.
 pub const HEAVY_RSS_MB: f64 = 1024.0;
 pub const NORMAL_RSS_MB: f64 = 200.0;
 
@@ -189,10 +158,6 @@ pub fn classify_process_memory(rss_mb: Option<f64>, name: &str) -> ProcessMemory
     ProcessMemoryAdvice { rss_mb: rss, classification: class, note }
 }
 
-/// System-wide pressure verdict from the compressor/swap counters the
-/// console already surfaces (`SystemTelemetry`): macOS has no
-/// `/proc/meminfo`, so pressure is read from what the kernel reports through
-/// `vm_stat`-adjacent counters — compression activity and swap-ins.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PressureVerdict {
     pub level: PressureLevel,
@@ -207,8 +172,6 @@ pub enum PressureLevel {
 }
 
 pub fn classify_pressure(compressor_mb: f64, swap_used_mb: f64, total_physical_mb: f64) -> PressureVerdict {
-    // 16 GB machine: ~4 GB compressed means the kernel is actively squeezing;
-    // swap used at all, at more than a token amount, means real pressure.
     let compressed_ratio = if total_physical_mb > 0.0 {
         compressor_mb / total_physical_mb
     } else {
@@ -246,10 +209,6 @@ pub fn classify_pressure(compressor_mb: f64, swap_used_mb: f64, total_physical_m
     PressureVerdict { level, note }
 }
 
-/// Priority ordering for "what do I look at first" — the routing knowledge.
-/// A climbing leak candidate outranks a big-but-steady process; unanswered
-/// operator mail outranks everything (the project's own rule: an agent with
-/// no services but an unanswered question still must appear).
 pub fn triage_rank(
     trend: &MemoryTrend,
     rss_class: RssClass,

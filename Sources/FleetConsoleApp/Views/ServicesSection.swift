@@ -79,9 +79,6 @@ struct ServiceRowView: View {
                           tone: isStale ? .unknown : service.state.tone,
                           badge: service.state.needsAttention ? service.state.tone : nil,
                           title: labels.displayName(for: service),
-                          // The state beside the name; under it, what the service
-                          // is *for* — the purpose its agent declared at launch.
-                          // The owner and project are in the tooltip and detail.
                           titleDetail: service.state.label + (isStale ? " · stale" : ""),
                           subtitle: service.purpose,
                           trailingText: Fmt.duration(service.uptime),
@@ -92,9 +89,6 @@ struct ServiceRowView: View {
                 if let color = labels.label(for: service.id).color {
                     ServiceColorTag(color: color, compact: true).font(FleetFont.micro)
                 }
-                // Provenance, not status: how the record entered the registry has
-                // no good/bad axis, and it decides what the row's verbs can do.
-                // `.neutral` for the same reason the VLAN tag is neutral.
                 if service.claimed {
                     Tag(text: "Claimed", tone: .neutral)
                 }
@@ -124,12 +118,11 @@ struct ServiceRowView: View {
     }
 
     private var leaseCountdown: String {
-        _ = model.clockTick   // 1 Hz redraw for the countdown only
+        _ = model.clockTick
         return service.leaseRemaining > 0 ? Fmt.duration(service.leaseRemaining) : "Expired"
     }
 }
 
-/// Expanded detail: ownership, evidence, resources, lease and the safe actions.
 struct ServiceDetail: View {
     let service: ServiceRecord
     let model: AppModel
@@ -230,11 +223,6 @@ struct ServiceDetail: View {
                 Button("Project Folder") { model.revealInFinder(service.cwd) }
                 Button("Renew Lease") { model.renew(service) }
             }
-                // Absent, not disabled, and not merely left to fail at the daemon:
-                // a claimed record is one the controller did not start, so every
-                // signal verb is refused on the wire. Drawing five buttons that can
-                // only return an error is the same mistake as a Full Screen menu
-                // item on a window that refuses full screen.
             if service.isSignallableByController {
                 RowActions {
                     if service.state == .paused {
@@ -283,8 +271,6 @@ struct ServiceDetail: View {
     }
 }
 
-/// Unmanaged processes get visibility and read-only actions only. FleetConsole
-/// will not kill something it did not start (threat model T2).
 struct UnmanagedRowView: View {
     let process: UnmanagedProcess
     let model: AppModel
@@ -298,8 +284,6 @@ struct UnmanagedRowView: View {
                           title: process.command,
                           subtitle: "pid \(process.pid) · first seen \(Fmt.relative(process.firstSeen))") {
                 if process.formerServiceID != nil { Tag(text: "Leaked", tone: .warn) }
-                // A port number is not wrappable text. Unconstrained it broke as
-                // ":876" / "5" beside the tag it shares an accessory slot with.
                 Text(Fmt.ports(process.ports))
                     .font(FleetFont.mono())
                     .foregroundStyle(.secondary)

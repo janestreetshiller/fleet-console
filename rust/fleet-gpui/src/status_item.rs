@@ -1,19 +1,6 @@
-//! The status-area item.
-//!
-//! macOS: an `NSStatusItem` in the menu bar, created on the main thread
-//! through the Objective-C runtime. Its button shows the F/C logo as a
-//! template image; a click sends on a channel that a GPUI task reads, which
-//! opens, focuses or closes the quick view as a popover under the item.
-//!
-//! Linux: this client does not publish a StatusNotifierItem. The window shows
-//! `fleet_ui_core::platform::status_area()`'s answer in words: either that a
-//! host exists but no item is published, or why no host is available. The
-//! client then runs as an ordinary window and quits when it is closed.
 
 use fleet_ui_core::platform::StatusArea;
 
-/// Where the status item sits, in points relative to the top-left corner of
-/// its display: the left edge and bottom edge of the item, and its width.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Anchor {
     pub display: u32,
@@ -24,22 +11,16 @@ pub struct Anchor {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Unavailable {
-    /// No item, for this reason.
     Immediate(String),
-    /// The reason needs a session-bus query; run `describe(status_area())`
-    /// off the main thread.
     Probe,
 }
 
-/// Top-left corner for a popover of `window_width` under the item: right
-/// edges aligned, kept 8 points inside the display.
 pub fn popover_origin(anchor: Anchor, display_width: f32, window_width: f32) -> (f32, f32) {
     let right = anchor.x + anchor.width;
     let max_x = (display_width - window_width - 8.0).max(8.0);
     ((right - window_width).clamp(8.0, max_x), anchor.y + 4.0)
 }
 
-/// The sentence a window shows when there is no status-area item.
 pub fn describe(area: &StatusArea) -> Option<String> {
     match area {
         StatusArea::MenuBar => None,
@@ -53,8 +34,6 @@ pub fn describe(area: &StatusArea) -> Option<String> {
     }
 }
 
-// objc 0.2's `msg_send!`, `sel!` and `class!` expand to a test of
-// `feature = "cargo-clippy"`, which this crate does not declare.
 #[cfg(target_os = "macos")]
 #[allow(unexpected_cfgs)]
 mod mac {
@@ -69,7 +48,6 @@ mod mac {
     use std::sync::{Mutex, OnceLock};
 
     const TARGET_CLASS: &str = "FleetConsoleStatusItemTarget";
-    /// `NSVariableStatusItemLength`.
     const VARIABLE_LENGTH: f64 = -1.0;
 
     static CLICKS: Mutex<Option<UnboundedSender<()>>> = Mutex::new(None);
@@ -91,7 +69,6 @@ mod mac {
             let mut decl = ClassDecl::new(TARGET_CLASS, class!(NSObject))
                 .expect("the status item target class name is unused");
             // SAFETY: the method signature matches an action selector taking
-            // one object argument.
             unsafe {
                 decl.add_method(
                     sel!(fleetStatusItemClicked:),
@@ -102,7 +79,6 @@ mod mac {
         })
     }
 
-    /// An autoreleased NSString.
     unsafe fn ns_string(text: &str) -> id {
         unsafe {
             let s: id = NSString::alloc(nil).init_str(text);
@@ -110,9 +86,6 @@ mod mac {
         }
     }
 
-    /// The logo as an 18 by 15 point template image: the F opaque, the C at
-    /// partial alpha, overlap cells between, so the menu bar tints it for
-    /// light and dark appearances.
     unsafe fn logo_image() -> id {
         const CELL: f64 = 3.0;
         unsafe {
@@ -146,16 +119,12 @@ mod mac {
         }
     }
 
-    /// The menu bar item. Lives for the rest of the process; AppKit objects
-    /// here are touched only on the main thread.
     pub struct Item {
         item: id,
         _target: id,
     }
 
     impl Item {
-        /// Must run on the main thread after the application has launched,
-        /// which is where GPUI's `Application::run` callback runs.
         pub fn install() -> Result<(Self, UnboundedReceiver<()>), Unavailable> {
             let refuse = |why: &str| {
                 Unavailable::Immediate(format!(
@@ -173,7 +142,6 @@ mod mac {
                 if item == nil {
                     return Err(refuse("the status bar did not create an item"));
                 }
-                // The status bar does not keep the item alive by itself.
                 let item: id = msg_send![item, retain];
                 let button: id = msg_send![item, button];
                 if button == nil {
@@ -187,8 +155,6 @@ mod mac {
                     let _: () = msg_send![button, setTitle: ns_string("FC")];
                 }
                 let _: () = msg_send![button, setToolTip: ns_string("FleetConsole")];
-                // VoiceOver reads this native control even though the GPUI
-                // windows expose no accessibility tree.
                 let _: () =
                     msg_send![button, setAccessibilityLabel: ns_string("FleetConsole quick view")];
                 let target: id = msg_send![target_class(), new];
@@ -244,7 +210,6 @@ mod mac {
 #[cfg(target_os = "macos")]
 pub use mac::Item;
 
-/// No status item is published on this platform; see the module notes.
 #[cfg(not(target_os = "macos"))]
 pub struct Item;
 

@@ -1,9 +1,6 @@
 import Foundation
 import FleetCore
 
-// The extra connection surfaces. Each one reports what it actually found —
-// including "not configured" and "not installed", which are answers, not gaps.
-
 struct InternetStatus: Equatable {
     var reachable: Bool?
     var latencyMs: Double?
@@ -24,12 +21,10 @@ struct Tunnel: Equatable, Identifiable {
     var interface: String
     var ipv4: String?
     var mtu: Int?
-    /// Tailscale owns one utun; saying so stops it being read as a second VPN.
     var isTailscale: Bool
 }
 
 struct VPNStatus: Equatable {
-    /// Configured VPN services from `scutil --nc list`, with their state.
     var services: [ConfiguredVPN] = []
     var tunnels: [Tunnel] = []
     var checkedAt = Date()
@@ -106,9 +101,6 @@ struct ExoStatus: Equatable {
 
 enum ConnectionProbes {
 
-    /// A TCP connect to a well-known host. This is the only probe in FleetConsole
-    /// that leaves the machine by default, it is a bare TCP handshake carrying no
-    /// data, and the target is configurable.
     static func internet(target: String = "1.1.1.1:443", timeout: TimeInterval = 2) -> InternetStatus {
         var status = InternetStatus(target: target)
         let parts = target.split(separator: ":")
@@ -125,13 +117,11 @@ enum ConnectionProbes {
     static func vpn(tailscaleIPv4: String?) -> VPNStatus {
         var status = VPNStatus()
 
-        // Configured services, e.g. "* (Disconnected)   ABC-123 PPP (L2TP) "Work" [...]"
         let listed = Shell.run("/usr/sbin/scutil", ["--nc", "list"], timeout: 6)
         for line in listed.stdout.split(separator: "\n") {
             guard let open = line.firstIndex(of: "("), let close = line.firstIndex(of: ")"),
                   open < close else { continue }
             let state = String(line[line.index(after: open)..<close]).trimmingCharacters(in: .whitespaces)
-            // The service name is the quoted field.
             let quoted = line.split(separator: "\"")
             guard quoted.count >= 2 else { continue }
             status.services.append(VPNStatus.ConfiguredVPN(name: String(quoted[1]),
@@ -139,8 +129,6 @@ enum ConnectionProbes {
                                                            enabled: line.hasPrefix("*")))
         }
 
-        // Active tunnel interfaces, with Tailscale's identified so it is not
-        // double-counted as "a VPN you did not know about".
         for (interface, ipv4) in Self.tunnelInterfaces() {
             status.tunnels.append(Tunnel(interface: interface,
                                          ipv4: ipv4,
@@ -180,7 +168,6 @@ enum ConnectionProbes {
             status.interfaces.append(String(line.dropFirst("VLAN User Defined Name:".count))
                 .trimmingCharacters(in: .whitespaces))
         }
-        // Fall back to interface names if the friendly names were not printed.
         if status.interfaces.isEmpty {
             let ifconfig = Shell.run("/sbin/ifconfig", ["-a"], timeout: 6).stdout
             for raw in ifconfig.split(separator: "\n") where raw.hasPrefix("vlan") {
@@ -204,9 +191,6 @@ enum ConnectionProbes {
         return status
     }
 
-    /// exo (the distributed inference cluster). Reports what is actually present:
-    /// a binary, running processes, and whether its local endpoint answers. No
-    /// cluster details are claimed that were not observed.
     static func exo(endpoint: String = "127.0.0.1:52415", table: ProcessTable? = nil) -> ExoStatus {
         var status = ExoStatus(endpoint: endpoint)
         status.executablePath = Shell.which("exo", candidates: [

@@ -2,8 +2,6 @@ import Foundation
 import Testing
 @testable import FleetConsoleApp
 
-/// All requests terminate here, including unexpected paths. No sockets, keychain,
-/// browser, app model, live processes or real credentials are used by this suite.
 private final class InvestigationTransportProbe: URLProtocol, @unchecked Sendable {
     enum Scenario: Sendable, Equatable {
         case ready, notRunnable, catalogDenied, catalogUnauthorized, malformedCatalog, completionDenied
@@ -58,7 +56,6 @@ private final class InvestigationTransportProbe: URLProtocol, @unchecked Sendabl
         case "/auth/device/token":
             body = ["access_token": Self.syntheticToken, "token_type": "Bearer", "expires_in": 3600]
         case "/hvy/v1/fleet-console/entitlement":
-            // A runnable agent must not depend on this multi-device-only flag.
             body = ["accountID": "synthetic-only-account", "active": false, "periodEnd": NSNull()]
         case "/hvy/v1/fleet-console/offers":
             body = ["configured": false, "offers": []]
@@ -90,7 +87,6 @@ private final class InvestigationTransportProbe: URLProtocol, @unchecked Sendabl
                 body = ["choices": [["message": ["content": "Synthetic snapshot analysis only."]]]]
             }
         default:
-            // This fixture deliberately has no live-network fallback.
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL)); return
         }
         guard let url = request.url,
@@ -201,8 +197,6 @@ struct InvestigationTransportTests {
         #expect(InvestigationTransportProbe.requests.count == 2)
     }
 
-    /// Explicit synthetic credentials avoid device login, polling and Keychain.
-    /// All requests in this serial matrix terminate in the private URLProtocol.
     @MainActor @Test func entitledTransportAndAmbiguousOutcomeMatrix() async throws {
         InvestigationTransportProbe.reset()
         let suite = "FleetInvestigationTransport.matrix." + UUID().uuidString

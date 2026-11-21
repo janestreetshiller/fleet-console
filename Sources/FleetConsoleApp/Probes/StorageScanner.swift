@@ -1,32 +1,10 @@
 import Foundation
 import AppKit
 
-/// Finds space worth reclaiming, and is careful about the difference between a
-/// cache and your data.
-///
-/// The rule that shapes everything here: **a directory being large is not a reason
-/// to delete it.** A local model weighs 7 GB and takes an hour to fetch again; a
-/// package cache weighs 2 GB and comes back on its own the next time you build.
-/// A cleaner that treats those the same is not a tool, it is a trap. So every
-/// candidate declares what actually happens when it goes, and anything holding
-/// real data is reported but never offered for deletion.
-///
-/// Nothing in this file deletes anything on its own. `reclaim(_:)` runs only when
-/// something calls it, and the UI only calls it after an explicit confirmation
-/// that names the paths and the consequence.
-
-// MARK: - Model
-
 struct ReclaimCandidate: Identifiable, Equatable {
-    /// How much you lose by deleting it — not how large it is.
     enum Risk: Equatable {
-        /// Regenerates transparently. Deleting costs you nothing but the next
-        /// build being slightly slower.
         case safe
-        /// Regenerates, but at a real cost in bandwidth or time.
         case review
-        /// Not a cache. Reported so you can see where the disk went; never offered
-        /// for deletion, because this tool does not delete your data.
         case keep
 
         var label: String {
@@ -52,38 +30,23 @@ struct ReclaimCandidate: Identifiable, Equatable {
     let title: String
     let icon: String
     let risk: Risk
-    /// What happens after it is gone. Shown before anything is deleted.
     let consequence: String
     let paths: [String]
     var sizeBytes: Int64
 
-    /// `safe` entries are removed outright, the way `brew cleanup` and
-    /// `npm cache clean` already do. Anything that costs something to rebuild goes
-    /// to the Trash instead, so a wrong call is recoverable — at the price of not
-    /// freeing the space until the Trash is emptied. That trade is stated in the
-    /// confirmation rather than decided quietly.
     var movesToTrash: Bool { risk == .review }
 }
 
-/// One entry in the catalogue, before it has been resolved against the disk.
 private struct CandidateSpec {
     let id: String
     let title: String
     let icon: String
     let risk: ReclaimCandidate.Risk
     let consequence: String
-    /// Paths relative to the home directory.
     let paths: [String]
 }
 
-// MARK: - Catalogue
-//
-// Deliberately a list of known things rather than a heuristic. A cleaner that
-// guesses from directory names is how people lose work: `~/Library/Application
-// Support/<some app>` is enormous on this machine and every byte of it matters.
-
 private let catalogue: [CandidateSpec] = [
-    // ── Package and build caches ────────────────────────────────────────────
     .init(id: "uv", title: "uv package cache", icon: "shippingbox", risk: .safe,
           consequence: "uv re-downloads wheels the next time you install. No project breaks.",
           paths: [".cache/uv"]),
@@ -106,7 +69,6 @@ private let catalogue: [CandidateSpec] = [
           consequence: "Xcode rebuilds indexes and intermediates. First build after this is slow.",
           paths: ["Library/Developer/Xcode/DerivedData"]),
 
-    // ── System caches ──────────────────────────────────────────────────────
     .init(id: "wallpaper", title: "Aerial wallpaper videos", icon: "photo", risk: .safe,
           consequence: "macOS re-downloads a wallpaper only if you pick an aerial one again.",
           paths: ["Library/Application Support/com.apple.wallpaper/aerials"]),
@@ -114,7 +76,6 @@ private let catalogue: [CandidateSpec] = [
           consequence: "Permanently removes what is already in the Trash.",
           paths: [".Trash"]),
 
-    // ── Costly to rebuild ──────────────────────────────────────────────────
     .init(id: "huggingface", title: "Hugging Face model cache", icon: "brain", risk: .review,
           consequence: "These are model weights. They re-download on next use — potentially gigabytes over the network.",
           paths: [".cache/huggingface"]),
@@ -134,15 +95,12 @@ private let catalogue: [CandidateSpec] = [
           consequence: "Downloaded language runtimes. Re-fetched on next use.",
           paths: [".cache/codex-runtimes"]),
 
-    // ── Reported, never offered ────────────────────────────────────────────
     .init(id: "data-models", title: "Local model and voice data", icon: "brain", risk: .keep,
           consequence: "Local model weights and voice data belonging to installed apps. This is data, not cache — FleetConsole will not delete it.",
           paths: ["Library/Application Support/Heavyweights LM",
                   "Library/Application Support/LocalAIVoice",
                   "Library/Application Support/Buzz"]),
 ]
-
-// MARK: - Scan result
 
 struct ReclaimScan: Equatable {
     var candidates: [ReclaimCandidate] = []
@@ -160,23 +118,15 @@ struct ReclaimScan: Equatable {
     }
 }
 
-// MARK: - Scanner
-
 @Observable
 @MainActor
 final class StorageScanner {
     private(set) var scan = ReclaimScan()
-    /// Set when a reclaim partially failed — usually a path macOS protects.
     private(set) var lastError: String?
     private(set) var lastReclaimed: String?
 
     private let queue = DispatchQueue(label: "com.fleetconsole.app.reclaim")
 
-    /// Walks the catalogue and measures what is actually on disk.
-    ///
-    /// Explicitly on demand. Measuring these trees costs real I/O, so it does not
-    /// run on the sampling timer — a monitor that thrashes the disk to tell you the
-    /// disk is busy is its own bug.
     func rescan() {
         guard !scan.scanning else { return }
         scan.scanning = true
@@ -191,8 +141,6 @@ final class StorageScanner {
         }
     }
 
-    // The three helpers below do the actual filesystem work and are called from the
-    // reclaim queue, never the main actor.
     nonisolated private static func measure() -> [ReclaimCandidate] {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
         var results: [ReclaimCandidate] = []
@@ -204,7 +152,6 @@ final class StorageScanner {
             guard !existing.isEmpty else { continue }
 
             let size = existing.reduce(Int64(0)) { $0 + allocatedSize(of: $1) }
-            // Anything under a megabyte is noise in a list about gigabytes.
             guard size > 1_000_000 else { continue }
 
             results.append(ReclaimCandidate(id: spec.id, title: spec.title, icon: spec.icon,
@@ -214,9 +161,6 @@ final class StorageScanner {
         return results.sorted { $0.sizeBytes > $1.sizeBytes }
     }
 
-    /// Sums allocated size, which is what the volume actually gets back — not
-    /// logical file size, which overstates on a compressed or sparse tree.
-    /// Shared with `StorageBreakdown`, which measures its buckets the same way.
     nonisolated static func allocatedSize(of path: String) -> Int64 {
         let url = URL(fileURLWithPath: path)
         let keys: [URLResourceKey] = [.totalFileAllocatedSizeKey, .fileAllocatedSizeKey, .isRegularFileKey]
@@ -233,15 +177,6 @@ final class StorageScanner {
         return total
     }
 
-    // MARK: - Reclaim
-
-    /// Deletes or trashes one candidate. Called only from an explicit confirmation.
-    ///
-    /// `keep` candidates are refused here as well as hidden in the UI, so a future
-    /// caller cannot route around the rule by constructing the action itself.
-    /// `completion` is `@MainActor` because that is where it has always been
-    /// called from. Saying so makes it `Sendable`, which is what lets it cross
-    /// onto `queue` and back.
     func reclaim(_ candidate: ReclaimCandidate, completion: @escaping @MainActor (Bool) -> Void) {
         guard candidate.risk.reclaimable else {
             lastError = "\(candidate.title) holds data, not cache — it is not reclaimable."
@@ -262,9 +197,6 @@ final class StorageScanner {
                     if toTrash {
                         try FileManager.default.trashItem(at: url, resultingItemURL: nil)
                     } else {
-                        // Empty the directory rather than removing it: several of these
-                        // are recreated by their owning tool only at install time, and a
-                        // missing cache root is a worse failure than an empty one.
                         try Self.emptyDirectory(url)
                     }
                 } catch {

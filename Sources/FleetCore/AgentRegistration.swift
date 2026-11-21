@@ -20,8 +20,6 @@ public enum AgentRegistrationError: LocalizedError, Equatable, Sendable {
     }
 }
 
-/// A client-local address book of agent ownership IDs, not a session registry.
-/// Adding an ID neither launches a process nor changes the controller's records.
 public struct AgentRegistrationStore: Sendable {
     public let fileURL: URL
 
@@ -85,8 +83,6 @@ public struct AgentRegistrationStore: Sendable {
     }
 }
 
-/// Registered IDs and controller-observed ownership stay distinct. A registered
-/// ID without a matching profile has no invented service, session or activity.
 public struct AgentRosterEntry: Identifiable, Hashable, Sendable {
     public let id: String
     public let isRegistered: Bool
@@ -118,8 +114,6 @@ public enum AgentGlanceEntry: Identifiable, Hashable, Sendable {
     }
 }
 
-/// A bounded menu glance, not a shortened source of truth. The full entries and
-/// explicit overflow count feed a separate manager; detected sessions lead.
 public struct AgentGlanceRoster: Sendable {
     public static let maximumRows = 5
     public let entries: [AgentGlanceEntry]

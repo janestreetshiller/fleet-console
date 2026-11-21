@@ -1,14 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// The two primitives every list row in FleetConsole is built from.
-//
-// Before this, the hover state, highlight background, chevron rotation, expansion
-// animation and padding were reimplemented in four different row views, which is
-// why they had drifted apart by a point here and a pixel there. There is now one
-// implementation; a row supplies content, not chrome.
-
-/// Icon + title + subtitle + optional trailing text and accessory.
 protocol FleetAccessibleLabel: View {
     var accessibilityText: String { get }
 }
@@ -18,15 +10,12 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
     var tone: StatusTone = .neutral
     var badge: StatusTone?
     let title: String
-    /// A short word set beside the title — a state — in the tone's ink when
-    /// it is one to act on, so the subtitle line is left for what the row is.
     var titleDetail: String?
     var subtitle: String?
     var trailingText: String?
     var trailingMono = false
     var iconSize: CGFloat = FleetMetrics.iconRowLarge
     var titleFont: Font = FleetFont.rowTitle
-    /// Subtitle sits under the title (regular rows) or beside it (compact rows).
     var inlineSubtitle = false
     @ViewBuilder var accessory: Accessory
 
@@ -65,15 +54,6 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
                             .font(FleetFont.caption)
                             .foregroundStyle(SurfaceInk.secondary)
                             .lineLimit(1)
-                            // Tail, not middle. A row subtitle is composed prose
-                            // read left to right — "pid 54610 · first seen 13h
-                            // 17m ago", "claude · local API for triage" — where
-                            // the leading tokens identify and the trailing ones
-                            // qualify. Middle truncation ate the qualifier and
-                            // kept a meaningless tail, turning summaries into
-                            // "pid…p 8h 10m". Middle stays where both ends are
-                            // load-bearing: paths, socket pairs, reverse-DNS
-                            // labels. Those are identifiers, not sentences.
                             .truncationMode(.tail)
                     }
                 }
@@ -87,20 +67,6 @@ struct FleetRowLabel<Accessory: View>: FleetAccessibleLabel {
                     .font(trailingMono ? FleetFont.mono(12) : FleetFont.caption)
                     .foregroundStyle(SurfaceInk.secondary)
                     .lineLimit(1)
-                    // `fixedSize` for the same reason `Tag` has it, and it was
-                    // missing here while `Tag` was guarded by its own audit
-                    // check. A trailing text is a timestamp, a port or a
-                    // duration — a short, complete, already-abbreviated value —
-                    // competing for width against a title holding
-                    // `layoutPriority(1)`. Without this it loses and truncates,
-                    // and the surface sheet showed all three Needs-attention
-                    // rows doing it at once: "12…", "2m a…", and one clipped to
-                    // the single character "1". A timestamp that truncates is
-                    // not a shorter timestamp, it is no timestamp — "12…" is
-                    // twelve minutes or twelve hours or twelve days.
-                    //
-                    // The title is the right loser: it is one line already, and
-                    // its full text is in the subtitle and the row's tooltip.
                     .fixedSize()
             }
         }
@@ -124,8 +90,6 @@ extension FleetRowLabel where Accessory == EmptyView {
     }
 }
 
-/// A row that expands in place. Owns every piece of interaction chrome so that
-/// individual rows cannot drift apart from one another again.
 struct DisclosureRow<Label: FleetAccessibleLabel, Detail: View>: View {
     let id: String
     @Binding var expanded: String?
@@ -192,7 +156,6 @@ private struct OptionalHelp: ViewModifier {
     }
 }
 
-/// Small actions strip shown inside an expanded row.
 struct RowActions<Content: View>: View {
     @ViewBuilder var content: Content
 
@@ -206,8 +169,6 @@ struct RowActions<Content: View>: View {
     }
 }
 
-/// The connection pip used in footers: the one place a bare dot is still the
-/// right primitive, because there is no entity to identify — only a state.
 struct ConnectionPip: View {
     let connected: Bool
     var label: String

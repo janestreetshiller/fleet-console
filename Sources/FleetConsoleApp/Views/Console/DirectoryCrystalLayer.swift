@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// The faceted substrate encodes folder containment. Filled sibling fans are
-/// grouping planes, never extra dependency edges between sibling directories.
 struct DirectoryCrystalLayer: View {
     let crystal: DirectoryCrystal?
     let offset: CGSize

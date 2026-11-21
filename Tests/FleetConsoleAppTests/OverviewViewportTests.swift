@@ -142,8 +142,6 @@ struct OverviewViewportTests {
         try capture(window, name: "overview-unavailable-\(dark ? "dark" : "light")")
     }
 
-    // The shipping root requests refresh. Only the observational test harness
-    // may exercise its live controller/probe integration.
     @MainActor @Test("Shipping agent map occupies the viewport with real observed activity in both appearances",
         .enabled(if: RPCRequestPolicy.forArguments(ProcessInfo.processInfo.arguments) == .observational))
     func shippingWindowViewport() async throws {

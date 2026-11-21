@@ -16,8 +16,6 @@ enum OurosCredentialStorageError: LocalizedError {
     }
 }
 
-/// Pure context checks precede any Security.framework entry. Debug builds,
-/// interpreters, test runners and unbundled tools cannot select real storage.
 struct OurosCredentialContext: Sendable {
     let debugBuild: Bool
     let processName: String
@@ -64,7 +62,6 @@ protocol OurosCredentialStore {
     func clear() throws
 }
 
-/// Missing test injection fails locally. There is deliberately no fallback.
 @MainActor
 struct UnavailableOurosCredentialStore: OurosCredentialStore {
     func read() throws -> OurosCredential? { throw OurosCredentialStorageError.developmentRequiresExplicitStore }
@@ -72,8 +69,6 @@ struct UnavailableOurosCredentialStore: OurosCredentialStore {
     func clear() throws { throw OurosCredentialStorageError.developmentRequiresExplicitStore }
 }
 
-/// The backend is a lazy factory: a denied context cannot initialize production
-/// storage or a singleton as a side effect of deciding whether it is allowed.
 @MainActor
 struct GuardedOurosCredentialStore: OurosCredentialStore {
     let context: OurosCredentialContext

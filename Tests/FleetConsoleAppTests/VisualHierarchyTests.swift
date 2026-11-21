@@ -39,8 +39,6 @@ struct VisualHierarchyTests {
 
     @MainActor @Test("Sidebar provides the agent-awareness return destination and devices")
     func sidebarGroups() throws {
-        // Cached offscreen bitmaps omit the native vibrant selected-row layer.
-        // Render the awareness return destination while a diagnostic tool is selected.
         let console = ConsoleModel()
         console.open(.storage)
         let window = host(NavigationSplitView {

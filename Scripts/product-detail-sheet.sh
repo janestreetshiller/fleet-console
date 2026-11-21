@@ -1,12 +1,4 @@
 #!/bin/bash
-# Renders the two privacy-bounded FleetConsole product-detail views.
-#
-#   Scripts/product-detail-sheet.sh          # render, print the directory
-#   Scripts/product-detail-sheet.sh --open   # render and open it
-#
-# The app runs with a disposable CFFIXED_USER_HOME inside the controlled output
-# directory. The bounded renderer uses synthetic data, disables keychain access,
-# and never visits Terminal, Files, account, or other tool surfaces.
 set -euo pipefail
 
 if [[ "${1:-}" != "" && "${1:-}" != "--open" ]] || [[ "$#" -gt 1 ]]; then

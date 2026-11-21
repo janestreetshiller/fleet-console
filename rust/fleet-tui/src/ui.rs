@@ -1,6 +1,3 @@
-//! The full-screen renderer. Draws one frame from the dashboard and the
-//! interface state; owns no state of its own. Returns the geometry the mouse
-//! handler needs (tab positions, the selectable list's rows and scroll offset).
 
 use crate::app::{App, Pane, Tone as StatusTone, View};
 use crate::content::{self, Fact};
@@ -19,7 +16,6 @@ use ratatui::Frame;
 
 pub const MIN_WIDTH: u16 = 60;
 pub const MIN_HEIGHT: u16 = 16;
-/// Below this width every view uses one column.
 pub const WIDE: u16 = 100;
 
 #[derive(Debug, Clone, Default)]
@@ -32,7 +28,6 @@ pub struct Geometry {
 #[derive(Debug, Clone, Copy)]
 pub struct ListGeometry {
     pub view: View,
-    /// The rows region, header excluded.
     pub rows: Rect,
     pub offset: usize,
 }
@@ -131,16 +126,11 @@ fn pane<'a>(title: String, theme: &Theme) -> Block<'a> {
         .title(Span::styled(format!(" {title} "), theme.title))
 }
 
-/// Header text in priority order. When the row is too narrow, the awaiting
-/// count goes first (the Agents and Attention views repeat it), then the
-/// version's prefix, then the remote marker, then the version. Read-only and
-/// the connection phase always stay.
 fn draw_header(frame: &mut Frame, area: Rect, dash: &Dashboard, theme: &Theme) {
     let c = &dash.connection;
     let version = c.controller_version.as_deref().map(content::clean);
     let remote = c.locality == fleet_ui_core::views::Locality::Remote;
     let awaiting = dash.header.awaiting_reply.filter(|n| *n > 0);
-    // "services disconnected" repeats the phase; only a live count is shown.
     let subtitle = (c.phase == Phase::Live).then(|| dash.header.subtitle.clone());
     let build = |shown: bool, awaiting: bool, prefix: bool, remote: bool, version: bool| {
         let mut left = vec![
@@ -242,8 +232,6 @@ fn draw_tabs(frame: &mut Frame, area: Rect, app: &App, theme: &Theme) -> Vec<(u1
     ranges
 }
 
-/// The connection banner: present whenever the controller feed is not live,
-/// and when local telemetry is not live.
 pub fn banner_lines<'a>(dash: &Dashboard, theme: &Theme) -> Vec<Line<'a>> {
     let c = &dash.connection;
     let mut lines = Vec::new();
@@ -321,7 +309,6 @@ fn list_title(base: &str, view: View, dash: &Dashboard, app: &App) -> String {
     }
 }
 
-/// Render a selectable table and report where its rows landed.
 #[allow(clippy::too_many_arguments)]
 fn selectable(
     frame: &mut Frame,
@@ -410,7 +397,6 @@ fn overview(
         (left, right, agents, Some(machine))
     } else {
         let attention_rows = (dash.attention.len().min(4) as u16).max(1) + 2;
-        // The local machine panel only when the agents list still gets room.
         let machine_rows = MACHINE_ROWS + 2;
         let with_machine = area.height >= cluster_height + attention_rows + machine_rows + 4;
         let [a, b, m, c] = Layout::vertical([
@@ -423,7 +409,6 @@ fn overview(
         (a, b, c, with_machine.then_some(m))
     };
 
-    // Cluster: summary line and one selectable row per node.
     let block = pane(list_title("Cluster", View::Overview, dash, app), theme);
     let inner = block.inner(cluster_area);
     frame.render_widget(block, cluster_area);
@@ -542,7 +527,6 @@ fn overview(
         theme,
     );
 
-    // Needs attention: the most severe reports; actions live in view 6.
     let block = pane(
         format!("Needs attention, {}", dash.attention.len()),
         theme,
@@ -582,7 +566,6 @@ fn overview(
         this_machine(frame, machine_area, dash, theme);
     }
 
-    // Active agents.
     let block = pane(format!("Agents, {}", dash.agents.rows.len()), theme);
     let inner = block.inner(agents_area);
     frame.render_widget(block, agents_area);
@@ -631,12 +614,9 @@ fn overview(
     geometry
 }
 
-/// Rows in the local machine panel: five gauges and the CPU history.
 const MACHINE_ROWS: u16 = 7;
 const SPARK: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
 
-/// This machine's own telemetry, read by this client: the popover's quick
-/// view in terminal form.
 fn this_machine(frame: &mut Frame, area: Rect, dash: &Dashboard, theme: &Theme) {
     let q = &dash.quick;
     let block = pane(
@@ -732,7 +712,6 @@ fn this_machine(frame: &mut Frame, area: Rect, dash: &Dashboard, theme: &Theme) 
     frame.render_widget(Paragraph::new(lines), inner);
 }
 
-/// Requests this client sent: in flight first, then the latest outcomes.
 fn draw_requests(frame: &mut Frame, area: Rect, dash: &Dashboard, theme: &Theme) {
     let block = pane("Requests from this client".into(), theme);
     let inner = block.inner(area);
@@ -770,8 +749,6 @@ fn role_style(role: ProcessRole, tag: Option<&str>, theme: &Theme) -> Style {
     }
 }
 
-/// Rows a wrapped paragraph needs, estimated from line widths (word wrapping
-/// can need one more row per line; callers leave room or clip).
 fn wrapped_height(lines: &[Line], width: u16) -> u16 {
     let width = usize::from(width.max(1));
     lines
@@ -975,7 +952,6 @@ fn services(
             vec!["service", "state", "pid", "uptime", "rst", "cpu", "mem"],
             vec![
                 Constraint::Fill(1),
-                // "running, unverified" in full.
                 Constraint::Length(19),
                 Constraint::Length(6),
                 Constraint::Length(6),
@@ -1107,7 +1083,6 @@ fn agents(
                         Span::styled("n", theme.key),
                         Span::styled(" deny", theme.tone(Tone::Text)),
                     ]),
-                    // The full reason is in the detail pane.
                     Control::Refused(reason) => Line::from(Span::styled(
                         if reason.contains("read-only") {
                             "read-only client"
@@ -1619,15 +1594,12 @@ pub fn footer_hints(app: &App) -> Vec<(&'static str, &'static str)> {
         View::Overview | View::Storage => keys.push(("a", "agent")),
     }
     if app.read_only {
-        // A read-only client sends nothing that changes state; do not offer it.
         keys.retain(|(k, _)| !matches!(*k, "r" | "s" | "n" | "y" | "y n"));
     }
     keys.extend([("?", "help"), ("q", "quit")]);
     keys
 }
 
-/// Drop hints until the row fits: navigation first (the help lists it),
-/// then the view's actions from the last; `?` and `q` always stay.
 pub fn fit_hints(
     mut hints: Vec<(&'static str, &'static str)>,
     width: usize,

@@ -3,34 +3,12 @@ import AppKit
 import SwiftUI
 import FleetCore
 
-// Renders every FleetConsole surface to PNG.
-//
-// This lives in the app target rather than in a throwaway package beside it,
-// because the console's views need `AppModel`, `ConsoleModel`, `ChromeTools` and
-// the probes — the whole target. Reaching them from outside would mean
-// symlinking the target into a second package and keeping the two in step, and a
-// design sheet that drifts from the app is worse than no sheet.
-//
-// It is compiled only when `FLEET_SURFACE_RENDERER` is defined, which only
-// `Scripts/surface-sheet.sh` does. `Scripts/build-app.sh` does not, so none of
-// this — including the fixtures — is in the shipped binary.
-//
-// The fixtures below are the point. Rendering the *live* fleet gives whatever
-// happens to be running, which on a quiet machine is six empty states; a sheet
-// is meant to show each surface carrying its full vocabulary at once — every
-// status tone, evidence in all four of its separate facts, an expiring lease, a
-// crash, an unmanaged listener.
-
 @MainActor
 enum SurfaceRenderer {
     nonisolated static let flag = "--render-surfaces"
-    /// A bounded product-detail export: two fixture views, no tool or account surfaces.
     nonisolated static let overviewOnlyFlag = "--render-surfaces-only"
 
-    /// The console window's canonical size, and the popover's own width.
     private static let popoverWidth: CGFloat = FleetMetrics.popoverWidth
-
-    // MARK: - Entry point
 
     static let churnFlag = "--measure-churn"
 
@@ -56,8 +34,6 @@ enum SurfaceRenderer {
         try? FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
 
         if overviewOnly {
-            // Model construction reads settings and initializes a trial clock.
-            // Keep both in a process-local fixture home, never the operator's state.
             let fixtureHome = out.appendingPathComponent("fixture-home").standardizedFileURL.path
             guard ProcessInfo.processInfo.environment["CFFIXED_USER_HOME"] == fixtureHome,
                   FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path == fixtureHome else {
@@ -66,8 +42,6 @@ enum SurfaceRenderer {
             }
         }
 
-        // Offscreen windows still need a running NSApplication for layout,
-        // fonts and appearance resolution — but not an activated one.
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
         app.finishLaunching()
@@ -76,23 +50,6 @@ enum SurfaceRenderer {
         return true
     }
 
-    // MARK: - Churn
-
-    /// Counts how many times the live probes publish over a fixed window.
-    ///
-    /// "Do not rebuild the menu when nothing changed" is a claim, and a claim
-    /// about a running app is worth exactly what it is measured at. This boots
-    /// the real `AppModel` — real timers, real `ps`, real `netstat` — puts an
-    /// `withObservationTracking` loop on each published surface, and prints how
-    /// often each one actually fired.
-    ///
-    /// The interesting number is `routing`. Its snapshot carries the whole
-    /// interface inventory and its `checkedAt` moves on every pass, so a plain
-    /// `!=` would publish on every single refresh forever. `sameContent(as:)`
-    /// is what makes the expected count **0** on a machine whose network is not
-    /// changing — and 0 is only meaningful next to a `processes` count that is
-    /// non-zero, which proves the harness is watching a live model rather than a
-    /// dead one.
     private static func measureChurn() {
         let app = NSApplication.shared
         app.setActivationPolicy(.prohibited)
@@ -126,9 +83,6 @@ enum SurfaceRenderer {
         exit(0)
     }
 
-    /// Re-arms itself on every change, counting as it goes. A static method rather
-    /// than three mutually-recursive local functions: `onChange` is `@Sendable`, and
-    /// a local function captured into it is not.
     private static func watch(_ key: String, _ counts: Counter,
                               _ read: @escaping @MainActor () -> Void) {
         withObservationTracking(read, onChange: {
@@ -146,14 +100,10 @@ enum SurfaceRenderer {
         func value(_ key: String) -> Int { counts[key] ?? 0 }
     }
 
-    // MARK: - The run
-
     private static func render(into out: URL, overviewOnly: Bool = false) {
         let model = overviewOnly
             ? AppModel(billing: OurosBilling(useKeychain: false))
             : AppModel()
-        // Only aggregate system telemetry stays live. Process and network
-        // identity collectors are disabled in this explicit fixture mode.
         DaemonClient.shared.stop()
         model.network.ethernet = EthernetStatus(interface: "en0", connected: true,
             ipv4: "198.51.100.10", linkSpeed: "1000baseT", duplex: "full")
@@ -164,8 +114,6 @@ enum SurfaceRenderer {
             backendState: "Running", deviceName: "demo-mac", dnsName: "demo.example.invalid",
             ipv4: "203.0.113.42", tailnet: "demo.example.invalid", peerCount: 3, onlinePeerCount: 2)
         let fixture = Fixtures.snapshot()
-        // The client-local roster is separate from Snapshot. Never let fixture
-        // views fall back to the operator's persistent singleton.
         let rosterFile = out.appendingPathComponent(".fixture-agents-\(UUID().uuidString).json")
         do {
             try JSONEncoder().encode(["claude", "codex", "operator"])
@@ -174,26 +122,11 @@ enum SurfaceRenderer {
         defer { try? FileManager.default.removeItem(at: rosterFile) }
         let registration = AgentRegistrationModel(fileURL: rosterFile)
 
-        // A declared VLAN segment, so the sheet shows the segment vocabulary
-        // rather than the absence of it. Same rule as every other fixture here:
-        // rendering only what happens to be true on the build machine gives a
-        // sheet of empty states, and the segment surfaces are exactly the ones
-        // that render *nothing* until something is declared.
-        //
-        // It goes in through `adopt` — the config path — rather than by
-        // constructing a `NetworkSegment` directly, so what the sheet proves is
-        // the chain a real `config.json` takes.
-        //
-        // Always use synthetic declarations, never the operator's configured
-        // network names, subnets or gateways. Live network inspection belongs
-        // to the running app, not to the public fixture sheet.
         VLANRegistry.shared.adopt(Fixtures.segments)
 
         for appearance in (overviewOnly ? [Appearance.dark] : Appearance.allCases) {
             NSApp.appearance = NSAppearance(named: appearance.name)
             if overviewOnly {
-                // These are the shipping view implementations with synthetic data.
-                // Do not traverse tool panels: terminal/files can create processes.
                 model.requestedSection = .quickView
                 renderPopoverSurface(AnyView(FleetPopover(model: model, openDashboard: {}, registration: registration)),
                                      named: "popover-quick-view", model: model, fixture: fixture,
@@ -252,9 +185,6 @@ enum SurfaceRenderer {
         window.orderOut(nil)
     }
 
-    /// The Task Composer window on its own — a surface the sheet should prove
-    /// renders without defects (the assign picker, the plate labels, the launch
-    /// footer) before it ever reaches a launch.
     private static func renderTaskComposer(registration: AgentRegistrationModel, appearance: Appearance, into out: URL) {
         let roster = ["claude", "codex", "operator"].map { AgentProfile(id: $0) }
         let composer = TaskComposerModel(agentProfiles: roster, registration: registration)
@@ -284,26 +214,15 @@ enum SurfaceRenderer {
         window.orderOut(nil)
     }
 
-    /// Apply a state change with animation suppressed. Every surface here is
-    /// reached by mutating `ConsoleModel`/`ChromeTools`, and each of those
-    /// mutations animates — a module cross-fade, a panel slide. Captured
-    /// mid-flight the result is two frames composited into one backing store,
-    /// which is what put a doubled, offset "Files" in the panel header.
     private static func mutate(_ body: () -> Void) {
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction, body)
     }
 
-    /// Turn the run loop so SwiftUI lays out, then reassert the synthetic
-    /// snapshot and turn it again so the fixture is what gets drawn.
     private static func hold(_ model: AppModel, _ fixture: Snapshot, turns: Int = 30) {
         settle(turns: max(turns, 30))
         mutate { model.apply(fixture) }
-        // The connection banner and the titlebar pill read these directly rather
-        // than inferring them from the snapshot, so a sheet rendered with the
-        // subscription deliberately shut down would otherwise show every surface
-        // wearing a red "controller offline" pill.
         model.connected = true
         model.connectionError = nil
         model.lastSnapshotAt = fixture.generatedAt
@@ -315,11 +234,6 @@ enum SurfaceRenderer {
         var name: NSAppearance.Name { self == .light ? .aqua : .darkAqua }
     }
 
-    // MARK: - Menu bar
-
-    /// The status item on a strip of menu bar, drawn through the same
-    /// `MenuBarItemController.render` the live item uses: once with nothing to
-    /// act on, once with an attention count beside the meters.
     private static func renderMenuBar(model: AppModel, appearance: Appearance, into out: URL) {
         let states: [(String, String, StatusTone?)] = [("clear", "", nil), ("alert", "!3", .warn)]
         for (name, alert, tint) in states {
@@ -349,12 +263,9 @@ enum SurfaceRenderer {
         }
     }
 
-    // MARK: - Popover
-
     private static func renderPopover(model: AppModel, fixture: Snapshot,
                                       registration: AgentRegistrationModel,
                                       appearance: Appearance, into out: URL) {
-        // Capture the whole shared chrome on every tab, not detached tab bodies.
         for section in FleetSection.allCases {
             model.requestedSection = section
             let name = section.menuTitle.lowercased().replacingOccurrences(of: " ", with: "-")
@@ -362,16 +273,9 @@ enum SurfaceRenderer {
                                  named: "popover-" + name, model: model, fixture: fixture,
                                  appearance: appearance, into: out)
         }
-        // The administration rows on their own. Inside the Connections tab they
-        // sit below a scroll fold that a still capture cannot reach, and a
-        // surface the sheet cannot show is a surface nobody reviews.
         renderPopoverSurface(AnyView(NetworkAdminPreview(model: model)),
                              named: "popover-network-admin", model: model, fixture: fixture,
                              appearance: appearance, into: out)
-        // The diagnostic panel carrying output far taller than its 132pt bound.
-        // It shipped for a release drawing straight over the rows beneath it, and
-        // no surface caught that because no fixture ever put enough text in it.
-        // A four-line ping never reaches the bound; a support bundle is hundreds.
         model.actions.previewOutcome(title: "Copied support bundle",
                                      output: Self.tallDiagnosticFixture)
         renderPopoverSurface(AnyView(NetworkAdminPreview(model: model)),
@@ -388,8 +292,6 @@ enum SurfaceRenderer {
                              appearance: appearance, into: out)
     }
 
-    /// Deliberately far taller than the panel's bound — the whole point of the
-    /// surface is to prove the overflow is clipped and scrolled, not painted.
     private static let tallDiagnosticFixture: String = {
         let interfaces = ["en0", "en5", "en6", "en7", "utun4"]
         return interfaces.map { name in
@@ -416,15 +318,9 @@ enum SurfaceRenderer {
         hosting.appearance = NSAppearance(named: appearance.name)
         hosting.frame = NSRect(x: 0, y: 0, width: popoverWidth, height: 700)
 
-        // A hosting view has to be in a window before SwiftUI will lay it out
-        // against a real appearance and give a usable `fittingSize`.
         let window = NSWindow(contentRect: hosting.frame,
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.appearance = NSAppearance(named: appearance.name)
-        // The real popover draws on `NSPopover`'s own backdrop, so this content
-        // is transparent by itself. Without a fill behind it the dark capture
-        // came out as white-on-white — every label invisible, which reads as a
-        // broken surface rather than a missing backdrop.
         window.isOpaque = true
         window.backgroundColor = .windowBackgroundColor
         window.contentView = hosting
@@ -436,13 +332,9 @@ enum SurfaceRenderer {
         window.setContentSize(NSSize(width: popoverWidth, height: fitted.height))
         hold(model, fixture)
 
-        // The window, not the hosting view — same as the console path. A view
-        // captured on its own carries no window backdrop.
         capture(window, to: out.appendingPathComponent("\(name)-\(appearance.rawValue).png"))
         window.orderOut(nil)
     }
-
-    // MARK: - Console
 
     private static func renderConsole(model: AppModel, fixture: Snapshot,
                                       appearance: Appearance, into out: URL) {
@@ -450,9 +342,6 @@ enum SurfaceRenderer {
         controller.show()
         guard let window = controller.window else { return }
 
-        // Park it where it cannot be seen. `cacheDisplay` needs the window
-        // ordered in — it renders the view's backing store, not the screen — so
-        // it cannot simply be left unordered.
         window.setFrameOrigin(NSPoint(x: -20_000, y: -20_000))
         window.appearance = NSAppearance(named: appearance.name)
         hold(model, fixture)
@@ -467,8 +356,6 @@ enum SurfaceRenderer {
             capture(window, to: out.appendingPathComponent(
                 "console-\(module.rawValue.lowercased().replacingOccurrences(of: " ", with: "-"))-\(appearance.rawValue).png"))
         }
-        // The relations workspace uses shipping view code and controller fixtures.
-        // Capture at both widths without activating or foregrounding a window.
         mutate { controller.console.openOperationsSection("Agents") }
         hold(model, fixture)
         capture(window, to: out.appendingPathComponent("console-agent-topology-\(appearance.rawValue).png"))
@@ -476,7 +363,6 @@ enum SurfaceRenderer {
         hold(model, fixture)
         capture(window, to: out.appendingPathComponent("compact-agent-topology-\(appearance.rawValue).png"))
         mutate { controller.console.openOperationsSection("Services") }
-        // The narrow layout is a separate acceptance surface for every module.
         window.setContentSize(NSSize(width: 982, height: 720))
         for module in ConsoleModule.allCases {
             mutate { controller.console.open(module) }
@@ -486,12 +372,10 @@ enum SurfaceRenderer {
         }
         window.setContentSize(DashboardWindowGeometry.defaultContentSize)
 
-        // Home — the priority view the window opens on.
         mutate { controller.console.goHome() }
         hold(model, fixture)
         capture(window, to: out.appendingPathComponent("console-home-\(appearance.rawValue).png"))
 
-        // Inspectors, each driven by the selection that produces it.
         mutate { controller.console.atHome = false }
         let inspectors: [(String, () -> Void)] = [
             ("service", {
@@ -520,19 +404,6 @@ enum SurfaceRenderer {
         }
         mutate { controller.console.selectedDeviceID = "self" }
 
-        // The chrome tool panels.
-        //
-        // Terminal and Files come out with their header, close button and panel
-        // frame drawn and the emulator body **blank**. `cacheDisplay` walks the
-        // AppKit drawing path, and SwiftTerm renders the grid through its own
-        // Metal layer, which that path cannot see — the same reason the package
-        // compiles a .metal shader at build time.
-        //
-        // Capturing the emulator would mean CGWindowListCreateImage, which needs
-        // Screen Recording consent and would put a permission prompt in the
-        // middle of a build script. A blank body that is visibly blank is a
-        // better outcome than a screenshot tool that silently starts asking for
-        // recording rights, so the limitation stays and is stated here.
         for tool in ConsoleTool.allCases {
             mutate { controller.tools.toggle(tool, context: ToolContext()) }
             hold(model, fixture, turns: 20)
@@ -545,11 +416,6 @@ enum SurfaceRenderer {
         window.orderOut(nil)
     }
 
-    // MARK: - Capture
-
-    /// SwiftUI lays out on the run loop, and an `@Observable` write does not
-    /// take effect until it has turned. One turn is enough for a module switch;
-    /// a tool panel spawning a process needs more.
     private static func settle(turns: Int = 6) {
         let deadline = Date().addingTimeInterval(Double(turns) * 0.02)
         while Date() < deadline {
@@ -558,8 +424,6 @@ enum SurfaceRenderer {
     }
 
     private static func capture(_ window: NSWindow, to url: URL) {
-        // The frame view, not the content view — the titlebar, its accessory
-        // pill and the toolbar are part of the surface being documented.
         guard let frameView = window.contentView?.superview else { return }
         capture(frameView, to: url)
     }
@@ -569,10 +433,6 @@ enum SurfaceRenderer {
         guard bounds.width > 1, bounds.height > 1,
               let rep = view.bitmapImageRepForCachingDisplay(in: bounds) else { return }
         rep.size = bounds.size
-        // `bitmapImageRepForCachingDisplay` can hand back a rep the view is
-        // already using, and `cacheDisplay` only repaints what is dirty — so
-        // without marking the whole frame dirty first, a capture can carry
-        // pixels from the previous surface.
         view.setNeedsDisplay(bounds)
         view.window?.displayIfNeeded()
         view.cacheDisplay(in: bounds, to: rep)
@@ -582,15 +442,10 @@ enum SurfaceRenderer {
     }
 }
 
-// MARK: - Fixtures
-
 @MainActor
 enum Fixtures {
-    // Stable display-only identity. These paths are never opened by the fixture.
     static let userName = "demo"
     static let homePath = "/Users/demo"
-    // Demo process identities are injected before any collector/timer starts.
-    // Live verification does not use this branch or these measurements.
     static let processRows: [ProcessRow] = [
         (Int32(48122), "Demo API", "python3 -m http.server 8787", 4.2, Int64(186_000_000), [8787]),
         (Int32(51903), "Demo Web", "npm run dev", 11.8, Int64(412_000_000), [5173]),
@@ -604,8 +459,6 @@ enum Fixtures {
     private static let serviceLogsPath = "\(homePath)/Library/Logs/FleetConsole/services"
     private static let socketPath = "\(homePath)/Library/Application Support/FleetConsole/fleetd.sock"
 
-    /// Synthetic config declarations using RFC 5737 documentation subnets.
-    /// They need not match the rendering machine's live interfaces.
     static let segments: [FleetConfig.SegmentConfig] = [
         .init(tag: 40, name: "Demo Guest", cidr: "192.0.2.0/24", gateway: "192.0.2.1",
               purpose: "isolated wireless"),
@@ -636,12 +489,8 @@ enum Fixtures {
             recentEvents: events())
     }
 
-    // MARK: Services — one per status tone, so the sheet carries the whole
-    // vocabulary rather than five rows of green.
-
     private static func services() -> [ServiceRecord] {
         [
-            // Healthy: a check ran and passed. The only state that earns green.
             ServiceRecord(
                 id: healthyServiceID, friendlyName: "api", ownerAgent: "claude",
                 purpose: "local API for triage",
@@ -662,8 +511,6 @@ enum Fixtures {
                 stdoutPath: "\(serviceLogsPath)/api.out",
                 stderrPath: "\(serviceLogsPath)/api.err"),
 
-            // Running (unverified): alive, listening, but no check configured —
-            // the best state a service without a health check can reach.
             ServiceRecord(
                 id: "svc-web", friendlyName: "web", ownerAgent: "claude",
                 purpose: "vite dev server for the console UI",
@@ -678,7 +525,6 @@ enum Fixtures {
                 resources: ResourceSample(cpuPct: 11.8, memMB: 412, processCount: 3,
                                           sampledAt: ago(3))),
 
-            // Degraded: passing its check, breaching a budget.
             ServiceRecord(
                 id: "svc-embed", friendlyName: "embed", ownerAgent: "local",
                 purpose: "embedding worker for local search",
@@ -698,7 +544,6 @@ enum Fixtures {
                                           sampledAt: ago(4)),
                 budgetBreaches: ["cpu 88% over 60% warn threshold"]),
 
-            // Expiring: the lease is nearly up and nobody has renewed it.
             ServiceRecord(
                 id: "svc-tunnel", friendlyName: "tunnel", ownerAgent: "codex",
                 purpose: "ssh tunnel to the staging box",
@@ -713,7 +558,6 @@ enum Fixtures {
                 resources: ResourceSample(cpuPct: 0.1, memMB: 9, processCount: 1,
                                           sampledAt: ago(5))),
 
-            // Unhealthy: the check ran and failed, repeatedly.
             ServiceRecord(
                 id: "svc-search", friendlyName: "search", ownerAgent: "claude",
                 purpose: "meilisearch index for notes",
@@ -733,8 +577,6 @@ enum Fixtures {
                                           sampledAt: ago(4)),
                 consecutiveHealthFailures: 6),
 
-            // Crashed: exited without being asked to. Terminal, so it drops out
-            // of `activeServices` and only shows where history is shown.
             ServiceRecord(
                 id: crashedServiceID, friendlyName: "indexer", ownerAgent: "local",
                 purpose: "nightly re-index of the workspace",
@@ -748,12 +590,6 @@ enum Fixtures {
                                    checkedAt: ago(600)),
                 restartCount: 2, lastExitCode: 101),
 
-            // Claimed, expired, three ports. The case the row layout actually
-            // fails on: every accessory in a row is `fixedSize`, so "Claimed" +
-            // "Expired" + a three-port list claimed the whole width and the row
-            // took it out of the only compressible thing left — the title. The
-            // real fleet had one of these and 42 surfaces had none, so the sheet
-            // showed rows with names while the app showed one without.
             ServiceRecord(
                 id: "svc-claimed", friendlyName: "llama-server", ownerAgent: "operator",
                 purpose: "claimed from the unmanaged list",
@@ -843,15 +679,7 @@ enum Fixtures {
         ]
     }
 
-    /// Newest first, and monotonic — which is what the daemon delivers.
-    ///
-    /// `registry.events` is `ORDER BY seq DESC` and the module does not re-sort, so
-    /// the header's "newest first" is a claim the daemon backs and the view passes
-    /// through. This fixture used to be in neither order, which rendered a scrambled
-    /// log on the one surface anybody reviews the Event Log from — a sheet that
-    /// disagrees with the app teaches reviewers to stop trusting the sheet.
     private static func events() -> [ServiceEvent] {
-        // Descending age, so `seq` and `ts` agree the way an append-only log's do.
         var seq: Int64 = 4_108
         func next() -> Int64 { seq -= 1; return seq + 1 }
         return [

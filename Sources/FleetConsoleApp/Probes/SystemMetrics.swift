@@ -4,36 +4,13 @@ import IOKit
 import IOKit.ps
 import Darwin
 
-/// Host resource sampling — CPU, GPU, memory, SSD, network and battery.
-///
-/// Like `NetworkMonitor`, this runs in the app rather than the daemon, and for the
-/// same reason: it is read-only, needs no privilege, and nothing here is worth
-/// waking the controller for. Every number comes from a kernel interface the
-/// logged-in user can already read — Mach `host_statistics`, the IOKit registry,
-/// and `sysctl`. There is no `powermetrics`, because that wants root, and a
-/// resource monitor that prompts for an admin password to draw a bar chart is a
-/// worse trade than not drawing it.
-///
-/// The honesty rules from the rest of the app apply unchanged. A utilisation
-/// figure is a *difference between two samples*, so the first tick after launch
-/// has no value to report and says so rather than drawing a confident 0%. A key
-/// missing from the IOKit registry renders `unknown`, never zero.
-
-// MARK: - Samples
-
-/// CPU load, derived from per-core Mach tick counters.
 struct CPUSample: Equatable {
-    /// False until two ticks have been differenced. Nothing is drawn as a value
-    /// before this is true — a rate needs an interval.
     var sampled = false
-    /// 0…1 across all cores.
     var usage: Double = 0
     var userShare: Double = 0
     var systemShare: Double = 0
     var idleShare: Double = 1
-    /// 0…1 per logical core, in Mach's enumeration order.
     var perCore: [Double] = []
-    /// 0…1 averaged over each cluster, or nil when the split is unknown.
     var efficiencyUsage: Double?
     var performanceUsage: Double?
     var loadAverage: [Double] = []
@@ -42,13 +19,11 @@ struct CPUSample: Equatable {
     var busyShare: Double { userShare + systemShare }
 }
 
-/// Static facts about the CPU, read once.
 struct CPUTopology: Equatable {
     var brand = "CPU"
     var logicalCores = 0
     var efficiencyCores = 0
     var performanceCores = 0
-    /// Index range of each cluster within `perCore`, when Apple Silicon reports one.
     var efficiencyRange: Range<Int>?
     var performanceRange: Range<Int>?
 
@@ -61,14 +36,10 @@ struct CPUTopology: Equatable {
     }
 }
 
-/// Apple Silicon GPU statistics from the IOAccelerator registry entry.
 struct GPUSample: Equatable {
-    /// False when no accelerator published `PerformanceStatistics` — the honest
-    /// state for a machine or OS build that does not expose it.
     var available = false
     var model: String?
     var coreCount: Int?
-    /// 0…1. Nil when the accelerator exists but withheld the key.
     var utilization: Double?
     var rendererUtilization: Double?
     var tilerUtilization: Double?
@@ -77,12 +48,10 @@ struct GPUSample: Equatable {
     var checkedAt = Date()
 }
 
-/// Unified memory, split the way Activity Monitor splits it.
 struct MemorySample: Equatable {
     enum Pressure: Equatable {
         case normal, warning, critical, unknown
 
-        /// Reads as the object of "pressure …", which is where it is always shown.
         var label: String {
             switch self {
             case .normal: return "normal"
@@ -109,16 +78,12 @@ struct MemorySample: Equatable {
     }
 }
 
-/// The boot volume plus throughput for the physical device behind it.
 struct StorageSample: Equatable {
     var volumeName = "Macintosh HD"
     var totalBytes: Int64 = 0
-    /// What Finder reports as available — purgeable space counted the way the
-    /// system will actually let you use it.
     var availableBytes: Int64 = 0
     var device: String?
     var model: String?
-    /// Nil until two samples have been differenced.
     var readBytesPerSec: Double?
     var writeBytesPerSec: Double?
     var readOpsPerSec: Double?
@@ -134,8 +99,6 @@ struct StorageSample: Equatable {
     var sampled: Bool { readBytesPerSec != nil }
 }
 
-/// `ProcessInfo.thermalState` — the one thermal fact macOS gives an unprivileged
-/// process, and the one that explains a sudden drop in clock speed.
 struct ThermalSample: Equatable {
     var state: ProcessInfo.ThermalState = .nominal
 
@@ -150,8 +113,6 @@ struct ThermalSample: Equatable {
     }
 }
 
-/// Typed `sysctlbyname`. Shared with `HostProbe`, which reports the same facts
-/// about this machine that it asks other machines for.
 enum Sysctl {
     static func int(_ name: String) -> Int? {
         var value: Int64 = 0
@@ -169,13 +130,6 @@ enum Sysctl {
     }
 }
 
-// MARK: - Sampler
-//
-// Owns the previous counter values, and is touched only from the monitor's serial
-// probe queue. Kept separate from the `@MainActor` monitor so the delta state can
-// never be read from two threads at once — which is also what makes the
-// `@unchecked Sendable` below true rather than merely convenient.
-
 private final class HostSampler: @unchecked Sendable {
     private var previousCPUTicks: [[UInt32]] = []
     private var previousDisk: (read: Int64, write: Int64, readOps: Int64,
@@ -189,10 +143,6 @@ private final class HostSampler: @unchecked Sendable {
         topology = Self.readTopology()
     }
 
-    // MARK: CPU
-
-    /// Differences the per-core tick counters against the previous call. The first
-    /// call establishes a baseline and reports `sampled == false`.
     func cpu() -> CPUSample {
         var sample = CPUSample()
         sample.loadAverage = Self.loadAverage()
@@ -230,8 +180,6 @@ private final class HostSampler: @unchecked Sendable {
 
         for (core, current) in ticks.enumerated() {
             let previous = previousCPUTicks[core]
-            // Tick counters are monotonic but can be reset by a core going offline;
-            // a negative delta means the baseline is meaningless, so skip the core.
             let user = delta(current[Int(CPU_STATE_USER)], previous[Int(CPU_STATE_USER)])
             let system = delta(current[Int(CPU_STATE_SYSTEM)], previous[Int(CPU_STATE_SYSTEM)])
             let idle = delta(current[Int(CPU_STATE_IDLE)], previous[Int(CPU_STATE_IDLE)])
@@ -271,8 +219,6 @@ private final class HostSampler: @unchecked Sendable {
         values.isEmpty ? nil : values.reduce(0, +) / Double(values.count)
     }
 
-    // MARK: GPU
-
     func gpu() -> GPUSample {
         var sample = GPUSample()
         guard let matching = IOServiceMatching("IOAccelerator") else { return sample }
@@ -293,8 +239,6 @@ private final class HostSampler: @unchecked Sendable {
                     .trimmingCharacters(in: CharacterSet(charactersIn: "\0"))
             sample.coreCount = (properties["gpu-core-count"] as? NSNumber)?.intValue
 
-            // The accelerator reports whole percentages; absent keys stay nil so the
-            // UI can say "not reported" instead of drawing an idle GPU.
             sample.utilization = Self.percent(stats["Device Utilization %"])
             sample.rendererUtilization = Self.percent(stats["Renderer Utilization %"])
             sample.tilerUtilization = Self.percent(stats["Tiler Utilization %"])
@@ -310,8 +254,6 @@ private final class HostSampler: @unchecked Sendable {
         return min(1, max(0, number.doubleValue / 100))
     }
 
-    // MARK: Memory
-
     func memory() -> MemorySample {
         var sample = MemorySample()
         sample.totalBytes = Int64(ProcessInfo.processInfo.physicalMemory)
@@ -326,9 +268,6 @@ private final class HostSampler: @unchecked Sendable {
         }
         guard status == KERN_SUCCESS else { return sample }
 
-        // `host_page_size` rather than the `vm_kernel_page_size` global, which is a
-        // `var` Swift 6 cannot tell apart from writable state. It is also the
-        // documented pairing for the counts `host_statistics64` just returned.
         var pageSize: vm_size_t = 0
         guard host_page_size(mach_host_self(), &pageSize) == KERN_SUCCESS else { return sample }
         let page = Int64(pageSize)
@@ -340,17 +279,10 @@ private final class HostSampler: @unchecked Sendable {
         let purgeable = Int64(stats.purgeable_count) * page
         let external = Int64(stats.external_page_count) * page
 
-        // Activity Monitor's "Memory Used" = app + wired + compressed, where file-backed
-        // and purgeable pages are cache the system can reclaim, not memory in use.
         sample.wiredBytes = wired
         sample.compressedBytes = compressed
         sample.cachedBytes = max(0, external + purgeable)
         sample.appBytes = max(0, active + inactive + speculative - sample.cachedBytes)
-        // The buckets this sums are counters the kernel updates independently, and
-        // under heavy compressor churn their total can drift above physical RAM —
-        // a real reading, but one that renders "18.2 GB of 17.2 GB" on the one card
-        // whose arithmetic a reader checks first. A used figure is clamped to what it
-        // is used *of*; the overshoot is noise in the counters, not extra memory.
         sample.usedBytes = min(sample.totalBytes,
                                sample.appBytes + wired + compressed)
         sample.pressure = Self.memoryPressure()
@@ -376,8 +308,6 @@ private final class HostSampler: @unchecked Sendable {
         default: return .unknown
         }
     }
-
-    // MARK: Storage
 
     func storage() -> StorageSample {
         var sample = StorageSample()
@@ -423,9 +353,6 @@ private final class HostSampler: @unchecked Sendable {
         var writeOps: Int64
     }
 
-    /// The registry lists a driver per block device, including the synthesised ones
-    /// backing disk images. The internal SSD is the one with the largest whole-media
-    /// child, which is a more durable rule than assuming `disk0`.
     private static func busiestBlockStorage() -> BlockStorage? {
         guard let matching = IOServiceMatching("IOBlockStorageDriver") else { return nil }
         var iterator: io_iterator_t = 0
@@ -471,11 +398,8 @@ private final class HostSampler: @unchecked Sendable {
         return best
     }
 
-    // MARK: Network
-
     func network() -> NetworkTrafficSample {
         guard let counters = NativeNetworkCounters.read() else {
-            // A failed read breaks the interval; the next success is a baseline.
             previousNetwork = nil
             return NetworkTrafficSample()
         }
@@ -487,12 +411,9 @@ private final class HostSampler: @unchecked Sendable {
         let sample = NetworkTrafficRates.sample(current: counters,
                                                 previous: previousNetwork?.counters,
                                                 elapsed: elapsed)
-        // Replace even after reset, hot-plug or a gap so the next tick can recover.
         previousNetwork = (counters, now)
         return sample
     }
-
-    // MARK: Power
 
     func power() -> PowerSample {
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -508,16 +429,11 @@ private final class HostSampler: @unchecked Sendable {
         return PowerSourceDecoder.sample(descriptions: descriptions)
     }
 
-    // MARK: Topology
-
     private static func readTopology() -> CPUTopology {
         var topology = CPUTopology()
         topology.brand = sysctlString("machdep.cpu.brand_string") ?? "CPU"
         topology.logicalCores = sysctlInt("hw.logicalcpu") ?? ProcessInfo.processInfo.processorCount
 
-        // Apple Silicon publishes one perflevel per cluster type, ordered fastest
-        // first. Mach enumerates logical CPUs the other way round — efficiency
-        // cores lead — which is asserted by a test, not assumed here.
         guard let level0 = sysctlInt("hw.perflevel0.logicalcpu"),
               let level1 = sysctlInt("hw.perflevel1.logicalcpu"),
               level0 + level1 == topology.logicalCores else { return topology }
@@ -548,14 +464,6 @@ private final class HostSampler: @unchecked Sendable {
     }
 }
 
-// MARK: - Monitor
-
-/// Samples the host on a fixed cadence and publishes immutable value types.
-///
-/// The cadence is 2 s. `NetworkMonitor` re-probes every 20 s because a Wi-Fi SSID
-/// does not change faster than that, but utilisation is only meaningful as a
-/// recent average, and a slower tick makes a bar that is always describing the
-/// past. Two seconds also keeps the sampler's own cost off the graph.
 @Observable
 @MainActor
 final class SystemMonitor {
@@ -567,14 +475,8 @@ final class SystemMonitor {
     private(set) var power = PowerSample()
     private(set) var thermal = ThermalSample()
     private(set) var topology = CPUTopology()
-    /// Fan and die temperatures from the SMC. `available == false` is a
-    /// normal answer on VMs and very old Macs; see FleetCore's SMC.swift.
     private(set) var sensors = SensorSample()
 
-    /// Ring buffers behind the live charts. Bounded so a long-running app
-    /// cannot grow them without limit. Disk I/O is kept as separate read/write
-    /// series — a combined "I/O" number hides a write storm behind idle reads,
-    /// which is precisely the case the chart exists to catch.
     private(set) var cpuSeries = MetricHistory()
     var cpuHistory: [Double] { cpuSeries.samples.map(\.value) }
     private(set) var gpuSeries = MetricHistory()
@@ -596,19 +498,11 @@ final class SystemMonitor {
 
     private let sampler = HostSampler()
     private let smc = SMCSampler()
-    /// Premium gate for the SMC. Injected so the monitor can be exercised
-    /// without dragging a UserDefaults suite into every preview.
     @ObservationIgnored private let isPremiumUnlocked: (PremiumFeature) -> Bool
     private let queue = DispatchQueue(label: "com.fleetconsole.app.system")
-    // Nonisolated so `deinit` can invalidate it; nothing observes this handle.
     @ObservationIgnored nonisolated(unsafe) private var timer: Timer?
     private var sampling = false
 
-    // The default is *unlocked*, not locked: a monitor constructed without a
-    // licence is one being previewed, tested, or run by the developer, and a
-    // preview whose premium card is a lock screen previews the wrong product.
-    // The app injects the real gate; the default exists so every other call
-    // site reads the hardware.
     init(isPremiumUnlocked: @escaping (PremiumFeature) -> Bool = { _ in true }) {
         self.isPremiumUnlocked = isPremiumUnlocked
         topology = sampler.topology
@@ -618,22 +512,15 @@ final class SystemMonitor {
         sample()
     }
 
-    /// The run loop holds the timer even though the closure is weak, so it has to
-    /// be invalidated here or a per-view instance would strand a live sampler.
     deinit {
         timer?.invalidate()
     }
 
-    /// Re-samples now. Safe to call from a refresh button — an in-flight sample is
-    /// not queued behind another.
     func sample() {
         guard !sampling else { return }
         sampling = true
         let sampler = self.sampler
         let smc = self.smc
-        // The SMC is premium-gated at the source, not at the card: when it is
-        // locked the keys are never read, so the free tier cannot pay the I/O
-        // cost of a feature it cannot see.
         let readSensors = isPremiumUnlocked(.smcSensors)
         queue.async { [weak self] in
             let sampledAt = Date()
@@ -651,8 +538,6 @@ final class SystemMonitor {
         }
     }
 
-    /// Assigns only what changed, so one moving number does not invalidate every
-    /// row that reads this object.
     private func publish(cpu: CPUSample, gpu: GPUSample, memory: MemorySample,
                          storage: StorageSample, network: NetworkTrafficSample,
                          power: PowerSample, sensors: SensorSample, sampledAt: Date) {
@@ -684,12 +569,6 @@ final class SystemMonitor {
 
 }
 
-// MARK: - Thresholds
-//
-// One place decides when a number turns amber or red, so CPU and GPU cannot
-// disagree about what "busy" means. The bands are deliberately generous: a
-// resource monitor that goes red whenever a build runs teaches you to ignore red.
-
 enum SystemThresholds {
     static func utilization(_ value: Double) -> StatusTone {
         switch value {
@@ -699,8 +578,6 @@ enum SystemThresholds {
         }
     }
 
-    /// Free space is the one metric where the warning has to arrive early — by the
-    /// time a disk is 99% full, macOS is already failing writes.
     static func freeSpace(share: Double) -> StatusTone {
         switch share {
         case ..<0.85: return .good
@@ -718,10 +595,6 @@ enum SystemThresholds {
         }
     }
 
-    /// Colour for a process on the map. Deliberately *not* derived from its size:
-    /// area already encodes that, and a heatmap whose colour repeats its geometry
-    /// carries one dimension of information while looking like two. Size is the
-    /// market cap, CPU is the day's move.
     static func cpuActivity(percent: Double) -> StatusTone {
         switch percent {
         case ..<10: return .good
@@ -741,12 +614,7 @@ enum SystemThresholds {
     }
 }
 
-// MARK: - Formatting
-
 enum SystemFmt {
-    /// The same shared formatter the console uses. This was a second
-    /// identically-configured `ByteCountFormatter`, i.e. two places for a byte
-    /// count to drift apart.
     private static let byteFormatter = SharedByteFormatter(countStyle: .file)
 
     static func size(_ value: Int64) -> String {
@@ -759,22 +627,16 @@ enum SystemFmt {
         return byteFormatter.string(fromByteCount: Int64(value)) + "/s"
     }
 
-    /// Percentages are shown whole. A utilisation figure with a decimal point
-    /// implies a precision that a two-second average does not have.
     static func percent(_ value: Double?) -> String {
         guard let value else { return "—" }
         return "\(Int((value * 100).rounded()))%"
     }
 
-    /// Whole degrees. The SMC reports tenths; a tenth of a degree on a
-    /// two-second sample is noise wearing a decimal point.
     static func temperature(_ celsius: Double?) -> String {
         guard let celsius else { return "—" }
         return "\(Int(celsius.rounded()))°C"
     }
 
-    /// Whole RPM, thousands-separated ("1,912 rpm" reads at a glance;
-    /// "1912 rpm" makes the eye count digits).
     static func rpm(_ value: Double?) -> String {
         guard let value else { return "—" }
         return "\(Int(value.rounded()).formatted()) rpm"

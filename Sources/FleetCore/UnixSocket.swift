@@ -1,7 +1,6 @@
 import Foundation
 import Darwin
 
-// macOS peer-credential lookup constants (sys/socket.h, sys/un.h).
 private let kSOL_LOCAL: Int32 = 0
 private let kLOCAL_PEERCRED: Int32 = 0x001
 
@@ -25,11 +24,6 @@ private func posixError(_ context: String) -> FleetError {
     .io("\(context): \(String(cString: strerror(errno))) (errno \(errno))")
 }
 
-/// One accepted connection. Framing is newline-delimited JSON.
-/// `@unchecked Sendable` under two different disciplines: `buffer` is confined to
-/// the one thread the server starts per accepted connection, while `closed` and
-/// every write are serialised by `writeLock` — the broadcast path writes while
-/// that owning thread is parked in `read`.
 public final class SocketConnection: @unchecked Sendable {
     public let fd: Int32
     public let peerUID: uid_t
@@ -42,19 +36,14 @@ public final class SocketConnection: @unchecked Sendable {
         self.peerUID = peerUID
         var one: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
-        // Without a send timeout a subscriber that stops draining wedges writeLine
-        // forever. 5s is one daemon tick: a peer that far behind gets dropped.
         var sndTimeout = timeval(tv_sec: 5, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &sndTimeout, socklen_t(MemoryLayout<timeval>.size))
     }
 
-    /// Backstop for callers that drop the connection on an error path; `close()`
-    /// is idempotent so this cannot double-close a reissued descriptor.
     deinit {
         close()
     }
 
-    /// Blocking read of one newline-terminated message. nil = peer closed.
     public func readLine() throws -> Data? {
         while true {
             if let idx = buffer.firstIndex(of: 0x0A) {
@@ -121,8 +110,6 @@ public final class SocketConnection: @unchecked Sendable {
     }
 }
 
-/// Listening socket. Created 0600 inside a 0700 directory; every accepted peer's
-/// euid is verified against ours before a single byte is read (threat model T5).
 public final class UnixSocketServer {
     private let path: String
     private var listenFD: Int32 = -1
@@ -136,8 +123,6 @@ public final class UnixSocketServer {
 
     public func start(backlog: Int32 = 32) throws {
         try FleetPaths.ensureDirectories()
-        // A stale socket file from a crash would block bind(); it is safe to remove
-        // because we already verified no live daemon answers on it (see probeAlive).
         unlink(path)
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -146,7 +131,7 @@ public final class UnixSocketServer {
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, socklen_t(MemoryLayout<Int32>.size))
 
         var addr = try makeSockaddr(path)
-        let previousMask = umask(0o177)  // resulting socket file is 0600
+        let previousMask = umask(0o177)
         let bindResult = withUnsafePointer(to: &addr) { ptr -> Int32 in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) {
                 Darwin.bind(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
@@ -165,8 +150,6 @@ public final class UnixSocketServer {
         listenFD = fd
     }
 
-    /// Blocking accept loop. Each accepted connection is handed to `handler` on its
-    /// own thread; the handler owns closing it.
     public func run(handler: @escaping @Sendable (SocketConnection) -> Void) {
         while listenFD >= 0 {
             let clientFD = accept(listenFD, nil, nil)
@@ -213,7 +196,6 @@ public final class UnixSocketServer {
     }
 }
 
-/// Blocking client used by fleetctl and by the app's background connections.
 public enum UnixSocketClient {
     public static func connect(path: String = FleetPaths.socket.path,
                                timeout: TimeInterval = 5) throws -> SocketConnection {
@@ -238,7 +220,6 @@ public enum UnixSocketClient {
         return SocketConnection(fd: fd, peerUID: geteuid())
     }
 
-    /// One request, one response. Used for every non-streaming operation.
     public static func send(_ request: RPCRequest,
                             path: String = FleetPaths.socket.path,
                             timeout: TimeInterval = 15,
@@ -255,7 +236,6 @@ public enum UnixSocketClient {
         return try Codec.decode(RPCResponse.self, from: line)
     }
 
-    /// Cheap liveness probe used before removing a stale socket file.
     public static func probeAlive(path: String = FleetPaths.socket.path) -> Bool {
         guard FileManager.default.fileExists(atPath: path) else { return false }
         return (try? send(RPCRequest(op: .ping), path: path, timeout: 2))?.ok == true

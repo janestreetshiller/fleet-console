@@ -1,22 +1,9 @@
 import Foundation
 
-// Agents: their sessions, their mailbox, and the profiles the UI groups them by.
-// Sessions are ordinary processes rather than managed services; the mailbox lets
-// one ask a question without the operator watching a terminal.
-// MARK: - Agent sessions
-//
-// The coding agents you actually run — Claude Code, Codex, Gemini CLI, opencode,
-// aider — are ordinary processes, not services launched through the controller.
-// They are the thing you most want to see ("who is working right now, in which
-// project"), so they are detected directly rather than requiring registration.
-
-/// Who wrote the line a preview is showing. A tool result and a sentence the
-/// agent wrote are different kinds of evidence about what it is doing, and
-/// flattening them into one grey line loses the distinction that matters.
 public enum AgentTurn: String, Codable, Sendable {
-    case assistant      // the agent said something
-    case user           // you (or a tool result) said something to it
-    case tool           // the agent invoked a tool
+    case assistant
+    case user
+    case tool
 
     public var label: String {
         switch self {
@@ -40,30 +27,15 @@ public struct AgentSession: Codable, Sendable, Identifiable, Hashable {
     public var tool: String
     public var symbol: String
     public var pid: Int32
-    /// Working directory, i.e. the project it is operating on.
     public var project: String?
     public var startedAt: Date?
     public var cpuPct: Double
     public var memMB: Double
     public var commandLine: String
 
-    // MARK: Live transcript
-    //
-    // A session row that says "claude · fleet-console · pid 14446" answers *that*
-    // an agent is running, which you could already see in Activity Monitor. What
-    // you actually want to know is what it is doing right now, and for the tools
-    // that keep a transcript on disk that is readable without asking the agent.
-    // Everything below is nil when there is no transcript to read — an absent
-    // preview is the honest rendering of "this tool does not publish one".
-
-    /// The session identifier the tool itself uses — the "uid" in the transcript
-    /// filename. Shown so a row can be tied back to a resumable session.
     public var sessionUID: String?
-    /// The tool's own name for the session, when it has one.
     public var sessionName: String?
-    /// Absolute path of the transcript the preview was read from.
     public var transcriptPath: String?
-    /// The most recent turn, trimmed to one line.
     public var preview: String?
     public var previewTurn: AgentTurn?
     public var previewAt: Date?
@@ -94,23 +66,16 @@ public struct AgentSession: Codable, Sendable, Identifiable, Hashable {
         return parts.joined(separator: " · ")
     }
 
-    /// "said 12s ago" — the age of the transcript line, not of the process.
     public var previewAge: String? {
         guard let previewAt, let previewTurn else { return nil }
         return "\(previewTurn.label) \(Fmt.relative(previewAt))"
     }
 }
 
-// MARK: - Agent messages
-//
-// A local mailbox so an agent can say something and get an answer without the
-// operator having to be watching a terminal. Messages are append-only; a reply is
-// the one field that can be written afterwards, and it is written exactly once.
-
 public enum MessageKind: String, Codable, Sendable, CaseIterable {
-    case status         // "here is what I did"
-    case question       // needs a human answer before the agent can continue
-    case problem        // something went wrong and the agent stopped
+    case status
+    case question
+    case problem
 
     public var label: String {
         switch self {
@@ -137,11 +102,9 @@ public struct AgentMessage: Codable, Sendable, Identifiable, Hashable {
     public var kind: MessageKind
     public var body: String
     public var createdAt: Date
-    /// Set when the agent wants an answer; drives the unanswered badge.
     public var needsReply: Bool
     public var reply: String?
     public var repliedAt: Date?
-    /// Whether the operator has seen it (notifications fire once).
     public var seenAt: Date?
 
     public init(id: Int64 = 0, agent: String, serviceID: String? = nil, serviceName: String? = nil,
@@ -164,19 +127,9 @@ public struct AgentMessage: Codable, Sendable, Identifiable, Hashable {
     public var isAwaitingReply: Bool { needsReply && reply == nil }
 }
 
-// MARK: - Agents
-//
-// Ownership is the point of the registry, so it deserves to be a view of its own:
-// "what has this agent left running, and when does it all expire" is the question
-// you actually ask when an agent has gone quiet.
-
-/// Everything known about one agent: what it is doing now, what it has done, and
-/// what it has said.
 public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
     public var id: String
 
-    // Now
-    /// Records owned and not finished; see `AgentSummary.owned`.
     public var owned = 0
     public var running = 0
     public var paused = 0
@@ -186,11 +139,9 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
     public var memMB: Double = 0
     public var nextLeaseExpiry: Date?
 
-    // History
     public var totalLaunched = 0
     public var totalStopped = 0
     public var totalCrashed = 0
-    /// Services the controller had to reap because this agent stopped renewing.
     public var totalLeaked = 0
     public var totalRestarts = 0
     public var healthFailures = 0
@@ -201,7 +152,6 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
     public var purposes: [String] = []
     public var recentServices: [ServiceRecord] = []
 
-    // Mailbox
     public var messageCount = 0
     public var awaitingReply = 0
     public var lastMessage: AgentMessage?
@@ -210,7 +160,6 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
 
     public var isActive: Bool { running > 0 }
 
-    /// One line that is true whether the agent is busy or has been idle for days.
     public var headline: String {
         if running > 0 {
             var parts = [running == 1 ? "1 service running" : "\(running) services running"]
@@ -228,7 +177,6 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
         return parts.joined(separator: " · ")
     }
 
-    /// How trustworthy this agent's cleanup has been, as a plain fraction.
     public var cleanupRecord: String {
         guard totalLaunched > 0 else { return "no launches yet" }
         let clean = totalLaunched - totalLeaked - totalCrashed
@@ -248,12 +196,7 @@ public struct AgentProfile: Codable, Sendable, Identifiable, Hashable {
 }
 
 public struct AgentSummary: Codable, Sendable, Identifiable, Hashable {
-    public var id: String            // the agent name
-    /// Records this agent owns that are not finished — the set `running` is drawn
-    /// from. It exists so a row can tell "owns nothing" apart from "owns
-    /// something, none of it running", which are the same number and not the same
-    /// fact: an agent whose only service expired had a blank where its siblings
-    /// had counts, which reads as a row that failed to render.
+    public var id: String
     public var owned: Int = 0
     public var running: Int
     public var needingAttention: Int
@@ -262,7 +205,6 @@ public struct AgentSummary: Codable, Sendable, Identifiable, Hashable {
     public var nextLeaseExpiry: Date?
     public var totalCPU: Double
     public var totalMemMB: Double
-    /// Distinct purposes, so a summary line can say what the agent is doing.
     public var purposes: [String]
     public var awaitingReply: Int = 0
     public var lastMessageAt: Date?

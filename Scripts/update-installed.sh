@@ -1,24 +1,4 @@
 #!/bin/bash
-# Builds a committed revision and swaps it in for /Applications/FleetConsole.app.
-#
-#   Scripts/update-installed.sh              # HEAD
-#   Scripts/update-installed.sh <git-ref>    # any commit, branch or tag
-#   Scripts/update-installed.sh <git-ref> --no-launch  # replace without launch
-#   Scripts/update-installed.sh <full-source-revision> --prebuilt  # reviewed signed artifact
-# Offline mode: FLEETCONSOLE_OFFLINE=1 and an existing FLEETCONSOLE_DEPENDENCY_CACHE.
-#
-# The build comes from a clean, detached worktree of the ref, so uncommitted
-# edits in this checkout — yours or another session's — never reach the
-# installed app. Then:
-#
-#   1. the running app is asked to quit;
-#   2. the installed bundle is moved to the Trash, not deleted, so the update is
-#      one drag to undo. Moving it is a rename on the same volume: the running
-#      fleetd keeps executing its old binary and every managed service stays up;
-#   3. the new bundle is copied in, its signature verified, and the app relaunched.
-#
-# fleetd is not restarted. It picks up the new binary the next time launchd
-# starts it; pass --restart-controller to kickstart it now.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -73,8 +53,6 @@ if [ "$PREBUILT" = 1 ]; then
 else
 echo "▸ building $SHORT from a clean worktree…"
 git -C "$ROOT" worktree add --detach "$WORKTREE" "$COMMIT" >/dev/null
-# Offline mode consumes an existing pinned cache; it never fetches a package.
-# Copy only dependency state into the new worktree, not compiled products.
 if [ "${FLEETCONSOLE_OFFLINE:-0}" = "1" ]; then
     CACHE="${FLEETCONSOLE_DEPENDENCY_CACHE:-}"
     case "$CACHE" in
@@ -88,7 +66,6 @@ if [ "${FLEETCONSOLE_OFFLINE:-0}" = "1" ]; then
         fi
     done
     mkdir -p "$WORKTREE/.build"
-    # -X omits file-provider/Finder metadata that resource signing rejects.
     cp -RX "$CACHE/checkouts" "$CACHE/repositories" "$WORKTREE/.build/"
     cp -X "$CACHE/workspace-state.json" "$WORKTREE/.build/workspace-state.json"
 fi
@@ -100,9 +77,6 @@ codesign --verify --deep --strict "$NEW"
 if [ "$PREBUILT" = 0 ] && [ -n "${FLEETCONSOLE_NOTARY_PROFILE:-}" ]; then
     FLEETCONSOLE_OUTPUT_DIR="$OUTPUT" "$WORKTREE/Scripts/notarize.sh"
 fi
-# A local replacement must not silently downgrade the installed publisher or
-# identity. Optional notarization uses only the existing configured workflow.
-# Publisher checks precede quitting or moving the app.
 if [ -d "$INSTALLED" ]; then
     OLD_SIGNATURE="$(codesign -dv --verbose=2 "$INSTALLED" 2>&1)"
     OLD_TEAM="$(printf '%s\n' "$OLD_SIGNATURE" | awk -F= '/^TeamIdentifier=/{print $2; exit}')"

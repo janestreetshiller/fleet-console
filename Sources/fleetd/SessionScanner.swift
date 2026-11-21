@@ -1,18 +1,11 @@
 import Foundation
 import FleetCore
 
-/// Detects the coding agents you are actually running, and collects host metrics.
-///
-/// These two things previously lived in separate menu-bar apps: agent sessions in
-/// Agent Menubar, host CPU/RAM/SSD in the AI-Pocket SwiftBar plugin. Both are
-/// "pertinent info" that belongs in the two FleetConsole menus, so both are
-/// gathered here.
 enum SessionScanner {
 
     struct Tool {
         let name: String
         let symbol: String
-        /// Matched against the executable name, then the full command line.
         let executables: [String]
         let patterns: [String]
     }
@@ -32,8 +25,6 @@ enum SessionScanner {
         Tool(name: "Qwen", symbol: "q.circle", executables: ["qwen"], patterns: ["qwen-code"]),
     ]
 
-    /// One pass over the process table; no extra subprocesses except a single
-    /// `lsof` for the working directories of the sessions actually found.
     static func scan(table: ProcessTable, uid: uid_t = geteuid()) -> [AgentSession] {
         var sessions: [AgentSession] = []
 
@@ -42,10 +33,6 @@ enum SessionScanner {
             let executable = proc.executableName.lowercased()
             let line = proc.commandLine.lowercased()
 
-            // The desktop apps ship binaries with the same names as their CLIs
-            // ("claude" inside Claude.app, Codex helpers inside ChatGPT.app). A GUI
-            // app is not a coding session, and counting its four helper processes
-            // as four sessions is worse than not detecting it at all.
             if line.contains(".app/contents/") { continue }
             if line.contains("(renderer)") || line.contains("(service)")
                 || line.contains("helper") { continue }
@@ -55,8 +42,6 @@ enum SessionScanner {
                     || candidate.patterns.contains(where: { line.contains($0) })
             }) else { continue }
 
-            // A tool's own helper processes share its name; keep the group leader
-            // so one session is one row.
             if proc.pid != proc.pgid, table.process(proc.pgid) != nil { continue }
 
             sessions.append(AgentSession(
@@ -71,7 +56,6 @@ enum SessionScanner {
                 commandLine: String(proc.commandLine.prefix(300))))
         }
 
-        // Working directory = the project being worked on. One lsof call for all.
         if !sessions.isEmpty {
             let cwds = workingDirectories(for: sessions.map(\.pid))
             for index in sessions.indices {
@@ -97,10 +81,6 @@ enum SessionScanner {
         return directories
     }
 
-    // MARK: - Host metrics
-
-    /// CPU, memory and whole-container SSD usage for this machine. Uses the APFS
-    /// container rather than `df /`, which understates a Mac's real disk usage.
     static func localMetrics() -> HostMetrics {
         var metrics = HostMetrics(collectedAt: Date())
 
@@ -121,9 +101,6 @@ enum SessionScanner {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         if let bytes = Double(totalBytes) { metrics.memTotalGB = bytes / 1_073_741_824 }
 
-        // The whole APFS container, not `df /` — a Mac's root volume understates
-        // real usage badly because of firmlinks and snapshots.
-        // diskutil indents with "|   ", so the pipes must be stripped before matching.
         let container = Shell.run("/usr/sbin/diskutil", ["apfs", "list"], timeout: 12).stdout
         var capacity: Double?
         var inUse: Double?
@@ -142,13 +119,11 @@ enum SessionScanner {
     }
 
     private static func bytes(in line: String) -> Double? {
-        // e.g. "Size (Capacity Ceiling):   1000240963584 B (1.0 TB)"
         let parts = line.split(separator: " ")
         guard let index = parts.firstIndex(of: "B"), index > 0 else { return nil }
         return Double(parts[index - 1])
     }
 
-    /// The same metrics from another machine, over the SSH trust you already have.
     static func remoteMetrics(sshHost: String) -> HostMetrics {
         var metrics = HostMetrics(collectedAt: Date())
         let script = "echo CPU:$(top -l 1 -s 0 -n 0 | awk '/CPU usage/{print $3+$5}'); "

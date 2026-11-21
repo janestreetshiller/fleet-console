@@ -64,7 +64,7 @@ struct AgentAwarenessWorkspaceTests {
         #expect(press(try #require(element(accessibilityID, in: root))))
         settle()
         #expect(press(try #require(element("awareness.focus", in: root))))
-        for _ in 0..<3 { settle() } // Allow the production focus animation to finish.
+        for _ in 0..<3 { settle() }
         let beforeFrame = try frame(#require(element(accessibilityID, in: root)))
         let before = AwarenessGraph.build(sessions: model.sessions, processes: model.processes.rows,
             processCapturedAt: model.processes.capturedAt, topology: model.topology)

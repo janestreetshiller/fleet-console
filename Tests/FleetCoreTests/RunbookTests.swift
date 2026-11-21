@@ -1,20 +1,8 @@
 import XCTest
 @testable import FleetCore
 
-/// The runbook format is a safety boundary, and a boundary nobody tests is a
-/// boundary that has already moved. Two things are checked here: that the three
-/// documents actually shipping are clean, and that every rule in the linter
-/// rejects the shape it was written for.
-///
-/// The second half matters more. Each rule exists because a plausible author
-/// would write that shape by accident, so each rule gets a test that writes it
-/// on purpose.
 final class RunbookTests: XCTestCase {
 
-    // MARK: - Fixtures
-
-    /// A minimal document with no defects. Every linter test below starts here
-    /// and breaks exactly one thing, so a failure names its own cause.
     private func valid(
         parameters: [RunbookParameter] = [],
         evidence: [RunbookEvidence] = [.managedServices],
@@ -50,11 +38,6 @@ final class RunbookTests: XCTestCase {
         runbook.defects.filter { $0.severity == .warning }.map(\.message)
     }
 
-    // MARK: - The shipped library
-
-    /// The three documents that actually ship must be clean — not merely
-    /// loadable. A warning in a shipped runbook is a warning nobody will ever
-    /// action, and it teaches the next author that warnings are decoration.
     func testEveryShippedRunbookIsClean() {
         for runbook in RunbookLibrary.all {
             XCTAssertTrue(runbook.defects.isEmpty,
@@ -71,9 +54,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertNil(RunbookLibrary.runbook(id: "no-such-runbook"))
     }
 
-    /// Diagnosis and mutation partition the steps: every step is in exactly one,
-    /// because the read-only pass runs the first set and the approval sheet
-    /// lists the second.
     func testDiagnosisAndMutationsPartitionEveryRunbook() {
         for runbook in RunbookLibrary.all {
             let split = runbook.diagnosis.count + runbook.mutations.count
@@ -83,9 +63,6 @@ final class RunbookTests: XCTestCase {
         }
     }
 
-    /// Every mutation in a shipped runbook needs a human. This is the same rule
-    /// the linter enforces, asserted directly against what ships so that a
-    /// regression in the linter cannot hide a regression in the library.
     func testNoShippedRunbookChangesAnythingUnattended() {
         for runbook in RunbookLibrary.all {
             for step in runbook.mutations {
@@ -102,14 +79,9 @@ final class RunbookTests: XCTestCase {
         }
     }
 
-    /// The reclaim ceiling has exactly one rung. A second one would eventually
-    /// be raised — by a well-meaning author, in a document nobody re-read — and
-    /// the thing on the other side of it is the operator's own data.
     func testReclaimScopeHasNoSecondRung() {
         XCTAssertEqual(RunbookReclaimScope.allCases, [.regeneratesFreely])
     }
-
-    // MARK: - The rule the format exists for
 
     func testAnUnattendedMutationIsRefused() {
         let runbook = valid(steps: [stop(.parameter("svc"), approval: .automatic)],
@@ -126,8 +98,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(runbook.isLoadable, "\(runbook.defects.map(\.message))")
     }
 
-    /// Not dangerous, corrosive: approvals for steps that change nothing teach
-    /// the operator to click through the ones that do.
     func testApprovalOnAReadOnlyStepIsWarnedAbout() {
         let observe = RunbookStep(id: "look", title: "Look",
                                   action: .observe(.managedServices),
@@ -136,8 +106,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(runbook.isLoadable)
         XCTAssertTrue(warnings(runbook).contains { $0.contains("approval to change nothing") })
     }
-
-    // MARK: - Rationale
 
     func testAMutationWithoutARationaleIsRefused() {
         let runbook = valid(parameters: [RunbookParameter(name: "svc", kind: .serviceID,
@@ -148,7 +116,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(criticals(runbook).contains { $0.contains("no rationale") })
     }
 
-    /// A read-only step with no rationale is sloppy, not unsafe.
     func testAReadOnlyStepWithoutARationaleIsOnlyAWarning() {
         let observe = RunbookStep(id: "look", title: "Look",
                                   action: .observe(.managedServices),
@@ -157,8 +124,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(runbook.isLoadable)
         XCTAssertTrue(warnings(runbook).contains { $0.contains("no rationale") })
     }
-
-    // MARK: - Target caps
 
     func testASweepAtTheCeilingIsAccepted() {
         let runbook = valid(steps: [stop(.each(.leaseExpired, max: RunbookValidation.maxTargets))],
@@ -174,8 +139,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(criticals(runbook).contains { $0.contains("ceiling") })
     }
 
-    /// A cap of zero matches nothing, which means the step silently does not
-    /// happen and the runbook reports success.
     func testACapOfZeroIsRefused() {
         let runbook = valid(steps: [stop(.each(.leaseExpired, max: 0))],
                             stopWhen: [.targetUnmanaged, .tooManyTargets])
@@ -190,8 +153,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(warnings(runbook).contains { $0.contains("more than it expected") })
     }
 
-    // MARK: - Parameters
-
     func testAStepReferringToAnUndeclaredParameterIsRefused() {
         let runbook = valid(steps: [stop(.parameter("nope"))], stopWhen: [.targetUnmanaged])
         XCTAssertFalse(runbook.isLoadable)
@@ -204,8 +165,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(criticals(runbook).contains { $0.contains("undeclared parameter 'port'") })
     }
 
-    /// A query inside a sweep resolves its parameter too — the reference is
-    /// nested two levels down and is exactly the one an author would forget.
     func testAQueryReferringToAnUndeclaredParameterIsRefused() {
         let runbook = valid(steps: [stop(.each(.ownedBy(parameter: "who"), max: 2))],
                             stopWhen: [.targetUnmanaged, .tooManyTargets])
@@ -213,8 +172,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(criticals(runbook).contains { $0.contains("undeclared parameter 'who'") })
     }
 
-    /// Asking the operator for something nothing consumes is worse than not
-    /// asking: it implies the answer mattered.
     func testAnUnusedParameterIsWarnedAbout() {
         let runbook = valid(parameters: [RunbookParameter(name: "spare", kind: .path,
                                                           prompt: "Which path?")])
@@ -222,9 +179,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(warnings(runbook).contains { $0.contains("'spare' is asked for and never used") })
     }
 
-    // MARK: - Stops
-
-    /// The one stop that is not a matter of taste.
     func testActingOnServicesWithoutAnUnmanagedStopIsRefused() {
         let runbook = valid(parameters: [RunbookParameter(name: "svc", kind: .serviceID,
                                                           prompt: "Which?")],
@@ -234,10 +188,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(criticals(runbook).contains { $0.contains("not the controller's to touch") })
     }
 
-    /// The rule is about services specifically. A runbook that only deletes
-    /// caches has no target to be unmanaged, and must not be asked to declare a
-    /// stop that cannot occur — a rule that fires where it does not apply is a
-    /// rule authors learn to work around.
     func testAStorageOnlyRunbookNeedsNoUnmanagedStop() {
         let reclaim = RunbookStep(id: "clear", title: "Clear caches",
                                   action: .reclaim(.regeneratesFreely),
@@ -247,13 +197,10 @@ final class RunbookTests: XCTestCase {
         XCTAssertTrue(runbook.defects.isEmpty, "\(runbook.defects.map(\.message))")
     }
 
-    /// Observing a service is not acting on one.
     func testAReadOnlyRunbookNeedsNoUnmanagedStop() {
         XCTAssertTrue(valid().defects.isEmpty)
         XCTAssertTrue(valid().isAdvisoryOnly)
     }
-
-    // MARK: - The document
 
     func testAnUnknownFormatVersionIsRefused() {
         let runbook = valid(formatVersion: Runbook.currentFormat + 1)
@@ -285,7 +232,6 @@ final class RunbookTests: XCTestCase {
     }
 
     func testDefectsAreOrderedMostSevereFirst() {
-        // One critical (unattended mutation) and one warning (unused parameter).
         let runbook = valid(parameters: [RunbookParameter(name: "spare", kind: .path,
                                                           prompt: "Which path?")],
                             steps: [stop(.each(.leaseExpired, max: 2), approval: .automatic)],
@@ -294,7 +240,6 @@ final class RunbookTests: XCTestCase {
         XCTAssertEqual(runbook.defects.last?.severity, .warning)
     }
 
-    /// Warnings never block; criticals always do.
     func testOnlyCriticalsBlockLoading() {
         let warned = valid(parameters: [RunbookParameter(name: "spare", kind: .path,
                                                          prompt: "Which?")])

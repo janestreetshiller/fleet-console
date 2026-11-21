@@ -7,8 +7,6 @@ private struct CanonicalBillingReceipt: @unchecked Sendable {
     let body: [String: String]?
 }
 
-/// A strict transport fixture: historical routes and invented routes return 404.
-/// It intercepts every request; no device grant, payment or browser is created.
 private final class CanonicalBillingProtocol: URLProtocol, @unchecked Sendable {
     enum Scenario { case normal, deniedToken, unauthorizedEntitlement, unsafeLinks, redirectedOffers }
     private static let lock = NSLock()

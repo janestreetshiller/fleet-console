@@ -1,20 +1,3 @@
-//! The FleetConsole controller protocol, in Rust.
-//!
-//! This is the seam the port runs through. `FleetConsole.app` has always been a
-//! client — it speaks newline-delimited JSON over a `0600` Unix socket and never
-//! signals a process itself — so a Rust daemon can replace the Swift one without
-//! the GUI knowing, and a Rust TUI can be a second client of the same socket.
-//! That only holds if both sides agree on the bytes, which is what
-//! `fleet-conformance` exists to prove against the running daemon.
-//!
-//! Two details are load-bearing and easy to get wrong:
-//!
-//! * **Dates are epoch seconds**, because Swift's `Codec` pins
-//!   `dateEncodingStrategy = .secondsSince1970`. They are `f64` here, not a
-//!   date type, so nothing can quietly reinterpret them.
-//! * **Absent is not null.** Swift decodes a missing key into `nil`, but a
-//!   present `null` is also valid; we skip serializing `None` so requests look
-//!   exactly like the ones the Swift client sends.
 
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
@@ -22,8 +5,6 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// Operations the controller accepts. The wire values are Swift enum raw values,
-/// which are the case names verbatim — so `refreshDevices`, not `refresh_devices`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RpcOp {
     #[serde(rename = "ping")]
@@ -118,13 +99,10 @@ impl RpcRequest {
     }
 }
 
-/// The controller's identity and liveness. Modelled fully because it is the
-/// smallest complete thing both implementations must agree on.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DaemonInfo {
     pub version: String,
     pub pid: i32,
-    /// Epoch seconds.
     #[serde(rename = "startedAt")]
     pub started_at: f64,
     #[serde(rename = "lastTickAt", default, skip_serializing_if = "Option::is_none")]
@@ -137,12 +115,6 @@ pub struct DaemonInfo {
     pub socket_path: String,
 }
 
-/// The reply envelope.
-///
-/// `snapshot`, `service` and `events` stay `serde_json::Value` deliberately.
-/// Porting the registry model is the large half of this work, and a half-modelled
-/// `ServiceRecord` that silently drops fields would be worse than an honest
-/// opaque one. They get real types as each subsystem is ported.
 #[derive(Debug, Clone, Deserialize)]
 pub struct RpcResponse {
     pub ok: bool,
@@ -183,21 +155,11 @@ impl std::fmt::Display for ClientError {
 
 impl std::error::Error for ClientError {}
 
-/// An explicit socket for clients, such as an SSH-forwarded controller socket.
 pub const SOCKET_VARIABLE: &str = "FLEETCONSOLE_SOCKET";
-/// Relocates controller state. Matches `FleetPaths.stateRootVariable`.
 pub const STATE_ROOT_VARIABLE: &str = "FLEETCONSOLE_STATE_ROOT";
 
 const SUPPORT_SUFFIX: &str = "Library/Application Support/FleetConsole";
 
-/// Where the controller listens, in this order:
-///
-/// 1. `FLEETCONSOLE_SOCKET`, used as given.
-/// 2. `FLEETCONSOLE_STATE_ROOT`, with the layout `FleetPaths` uses under it.
-/// 3. On macOS, `FleetPaths.socket` under `HOME`.
-/// 4. Elsewhere, `$XDG_RUNTIME_DIR/fleetconsole/fleetd.sock`, the place a
-///    forwarded or future local controller socket is expected, falling back to
-///    `$HOME/.local/state/fleetconsole/fleetd.sock`.
 pub fn default_socket_path() -> PathBuf {
     socket_path_from(|name| std::env::var_os(name).filter(|v| !v.is_empty()))
 }
@@ -219,11 +181,6 @@ fn socket_path_from(env: impl Fn(&str) -> Option<std::ffi::OsString>) -> PathBuf
     }
 }
 
-/// A blocking client for one request/response exchange.
-///
-/// Blocking on purpose: every operation here is a single round trip against a
-/// local socket, and an async runtime would be machinery without a job. The
-/// `subscribe` op is the exception and is not modelled yet.
 pub struct Client {
     reader: BufReader<UnixStream>,
     writer: UnixStream,
@@ -235,9 +192,6 @@ impl Client {
         Self::from_stream(stream)
     }
 
-    /// Callers that hardened the socket before connecting — owner-only path,
-    /// connect timeout, descriptor identity — hand the stream over here. The
-    /// read deadline matches `connect` so a stuck daemon cannot pin a client.
     pub fn from_stream(stream: UnixStream) -> Result<Self, ClientError> {
         stream
             .set_read_timeout(Some(Duration::from_secs(15)))
@@ -260,8 +214,6 @@ impl Client {
         serde_json::from_str(&buffer).map_err(ClientError::Decode)
     }
 
-    /// Proposal traffic shares the operator turn's deadline and cannot read
-    /// arbitrary daemon output into memory. Ordinary clients keep `send`.
     pub fn send_bounded(
         &mut self,
         request: &RpcRequest,
@@ -292,15 +244,13 @@ impl Client {
                 if error.kind() != std::io::ErrorKind::Interrupted { return Err(ClientError::Io(error)); }
             }
         }
-        // Darwin rejects Unix SO_SNDTIMEO; poll + O_NONBLOCK gives both writes
-        // and reads the same deadline, including partial and trickled frames.
         self.writer.set_nonblocking(true).map_err(ClientError::Io)?;
         let result = (|| {
             let mut line = serde_json::to_vec(request).map_err(ClientError::Decode)?;
             line.push(b'\n');
             let mut left = line.as_slice();
             while !left.is_empty() {
-                ready(self.writer.as_raw_fd(), 4, deadline)?; // POLLOUT
+                ready(self.writer.as_raw_fd(), 4, deadline)?;
                 let written = match self.writer.write(left) {
                     Ok(written) => written,
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => continue,
@@ -313,7 +263,7 @@ impl Client {
             loop {
                 remaining(deadline)?;
                 if self.reader.buffer().is_empty() {
-                    ready(self.reader.get_ref().as_raw_fd(), 1, deadline)?; // POLLIN
+                    ready(self.reader.get_ref().as_raw_fd(), 1, deadline)?;
                 }
                 let available = match self.reader.fill_buf() {
                     Ok(available) => available,
@@ -341,8 +291,6 @@ impl Client {
         }
     }
 
-    /// The exact bytes we would put on the wire, for tests that assert shape
-    /// rather than behaviour.
     pub fn encode(request: &RpcRequest) -> String {
         serde_json::to_string(request).unwrap_or_default()
     }
@@ -354,9 +302,6 @@ mod tests {
 
     #[test]
     fn omits_absent_fields() {
-        // The Swift client sends only `op` for a ping. Emitting explicit nulls
-        // would still decode, but it would make the two implementations
-        // distinguishable on the wire, which defeats the point.
         let encoded = Client::encode(&RpcRequest::new(RpcOp::Ping));
         assert_eq!(encoded, r#"{"op":"ping"}"#);
     }

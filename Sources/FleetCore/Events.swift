@@ -1,13 +1,8 @@
 import Foundation
 
-// The append-only event log's vocabulary. Every state change files one of these,
-// and the log outlives the records it describes — `prune` drops terminal service
-// rows and never touches events.
-// MARK: - Events (append-only)
-
 public enum EventKind: String, Codable, Sendable, CaseIterable {
     case registered
-    case claimed        // an already-running process was adopted into the registry
+    case claimed
     case started
     case restarted
     case healthPassed
@@ -34,9 +29,6 @@ public enum EventKind: String, Codable, Sendable, CaseIterable {
     case rejectedPeer
     case daemonStarted
     case daemonStopping
-    /// Written by the *next* generation on startup: a controller that dies through
-    /// fatalError or SIGKILL never gets to record its own exit, so the only evidence is
-    /// a `daemonStarted` with no `daemonStopping` after it.
     case daemonCrashed
 
     public var isBad: Bool {
@@ -92,7 +84,6 @@ public struct ServiceEvent: Codable, Sendable, Identifiable, Hashable {
     public var ts: Date
     public var kind: EventKind
     public var detail: String
-    /// Evidence snapshot captured at the moment the event was written.
     public var evidence: Evidence?
 
     public var id: Int64 { seq }

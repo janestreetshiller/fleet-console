@@ -33,7 +33,6 @@ def _canonical_directory(path):
     current = current.resolve(strict=True)
     if not stat.S_ISDIR(current.stat().st_mode):
         raise StagingError("staging destination has a non-directory ancestor")
-    # Only the missing suffix is normalized; existing symlinks were resolved first.
     return Path(os.path.normpath(str(current.joinpath(*reversed(missing)))))
 
 
@@ -46,8 +45,6 @@ def _protected_locations(directories):
         try:
             info = path.stat()
         except FileNotFoundError:
-            # ~/Applications (or /Applications on non-macOS test hosts) may not exist.
-            # Its canonical path is still forbidden, and all other errors fail closed.
             if sys.platform == "darwin" and Path(directory) == Path("/Applications"):
                 raise StagingError("cannot establish Applications filesystem identity")
             continue
@@ -138,15 +135,11 @@ def assemble(output_dir, root, bin_dir, configuration):
             previous_cwd = os.open(".", flags)
             try:
                 os.fchdir(bundle_fd)
-                # cwd is an OS-held directory identity, not a path passed to the
-                # child. Neither ancestor nor bundle renames can redirect '.'.
                 result = subprocess.run([
                     "/bin/bash", str(root / "Scripts/assemble-app.sh"),
                     str(root), str(bin_dir), configuration,
                 ], check=False).returncode
                 if result == 0:
-                    # Shell pwd can resolve a stale PWD through a replacement
-                    # symlink. getcwd reports this still-pinned directory instead.
                     print(f"\n✓ built {os.getcwd()}\n")
                     print("No app was installed and no controller was stopped or restarted.")
                     print("See docs/RELEASE.md for release checks and deliberate installation.")
@@ -233,9 +226,6 @@ def notarize(output_dir, root):
     with notary_bundle(output_dir) as bundle_fd:
         previous_cwd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)
         try:
-            # Private archive scratch is independent of the mutable output path.
-            # Keep its root pinned for creation/cleanup too; a renamed stage
-            # cannot redirect archive writes or remove a pre-existing archive.
             _, identities = _protected_locations((Path("/Applications"), Path.home() / "Applications"))
             with _output_directory(root, identities, False) as scratch_fd:
                 if scratch_fd is None:

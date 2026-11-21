@@ -14,10 +14,8 @@ struct OurosOffer: Decodable, Sendable {
             && interval == "month" && intervalCount == 1
     }
 
-    /// The hosted fixer. Its price comes from the catalog, never from here.
     static let cloudAgentID = "fleet-console-cloud-agent"
 
-    /// "$10/month", from the catalog's own figures.
     var priceLabel: String {
         let amount = (Decimal(priceCents) / 100).formatted(.currency(code: currency.uppercased())
             .precision(.fractionLength(priceCents % 100 == 0 ? 0 : 2)))
@@ -42,8 +40,6 @@ private enum OurosKeychain {
         guard OurosCredentialContext.current.permitsProductionStorage else {
             throw OurosCredentialStorageError.developmentRequiresExplicitStore
         }
-        // Release app identity is verified without querying an account item.
-        // An ad-hoc/development app cannot provoke a Keychain permission dialog.
         var code: SecCode?
         var requirement: SecRequirement?
         let rule = #"identifier "com.fleetconsole.app" and anchor apple generic and certificate leaf[subject.OU] = "47R2YVAFA2""#
@@ -92,9 +88,6 @@ private struct ProductionOurosCredentialStore: OurosCredentialStore {
     func clear() throws { try OurosKeychain.clear() }
 }
 
-/// `useKeychain: false` isolates a billing instance from production storage
-/// entirely: credentials live in memory only, so captures and tests can connect
-/// without touching the Keychain or its permission dialogs.
 @MainActor
 private final class TransientOurosCredentialStore: OurosCredentialStore {
     private var credential: OurosCredential?
@@ -121,7 +114,6 @@ enum OurosFailure: Error {
 @Observable @MainActor
 final class OurosBilling {
     private(set) var available = false
-    /// The catalog as last loaded; empty until a load succeeds.
     private(set) var offers: [OurosOffer] = []
     private(set) var membership: OurosMembership?
     private(set) var busy = false
@@ -236,8 +228,6 @@ final class OurosBilling {
         return data
     }
 
-    /// The existing Ouros Agent gateway rechecks account entitlement and reserves
-    /// usage on POST. Fleet's multi-device membership does not authorize inference.
     func investigate(starter: String, validateObservation: @MainActor () -> Bool) async throws -> String {
         if let issue = credentialStorageIssue { throw InvestigationGatewayError.refused(issue) }
         guard signedIn, let accountSession = credential?.token else {
@@ -272,10 +262,9 @@ final class OurosBilling {
         guard validateObservation() else {
             throw InvestigationGatewayError.refused("The selected observation became stale or its process changed while verifying access. Select it again.")
         }
-        try Task.checkCancellation() // Closing/stopping during catalog lookup must not dispatch paid work.
+        try Task.checkCancellation()
         let payload = try InvestigationGatewayPayload.make(model: model.id, starter: starter)
         let operationID = UUID().uuidString
-        // Persist before dispatch. Never retry an ambiguous paid operation, even after relaunch.
         unconfirmedInvestigationID = operationID
         operationDefaults.set(operationID, forKey: Self.pendingInvestigationKey)
         guard operationDefaults.synchronize() else {
@@ -303,12 +292,10 @@ final class OurosBilling {
             if status == 401 { handle(OurosFailure.signIn) }
             throw InvestigationGatewayError.refused("The Ouros gateway refused this investigation: " + InvestigationRequest.label(code) + ". No local agent was started.")
         } catch {
-            // Failure after dispatch may already have incurred usage. No blind replay.
             throw InvestigationGatewayError.uncertain(operationID)
         }
     }
 
-    /// Explicit acknowledgement only; never resends the old request.
     func acknowledgeUnconfirmedInvestigation() {
         guard !busy else { return }
         clearUnconfirmedInvestigation()
@@ -319,8 +306,6 @@ final class OurosBilling {
         operationDefaults.removeObject(forKey: Self.pendingInvestigationKey)
     }
 
-    /// Automatic refresh follows an account connection; unsigned-in requests
-    /// require an explicit billing action such as Refresh.
     func refresh(userInitiated: Bool = false) async {
         guard !busy, userInitiated || signedIn else { return }
         busy = true; defer { busy = false }
@@ -401,7 +386,6 @@ final class OurosBilling {
 
     func cancelConnection() { connectionTask?.cancel(); connectionTask = nil }
 
-    /// The cloud agent, when the catalog offers it to this account.
     var cloudAgentOffer: OurosOffer? { offers.first { $0.id == OurosOffer.cloudAgentID } }
 
     func subscribe() async {
@@ -409,8 +393,6 @@ final class OurosBilling {
         await subscribe(offerID: "fleet-console-multi-device")
     }
 
-    /// Checkout for one catalog offer. Each offer keeps its own idempotency key,
-    /// so starting a second purchase can never resume the first one's session.
     func subscribe(offerID: String) async {
         guard signedIn, !busy, offers.contains(where: { $0.id == offerID }) else { return }
         busy = true; defer { busy = false }
@@ -419,8 +401,6 @@ final class OurosBilling {
             let keyName = multiDevice
                 ? "fleetconsole.ouros.checkout.\(membership?.accountID ?? "")"
                 : "fleetconsole.ouros.checkout.\(offerID).\(membership?.accountID ?? "")"
-            // The in-memory key belongs to the multi-device checkout alone; any
-            // other offer reads and writes only its own stored key.
             let operationKey = (multiDevice ? checkoutKey : nil)
                 ?? UserDefaults.standard.string(forKey: keyName) ?? UUID().uuidString
             if multiDevice { checkoutKey = operationKey }

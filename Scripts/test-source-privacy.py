@@ -121,10 +121,10 @@ class SourcePrivacyTests(unittest.TestCase):
                 continue
             path = ROOT / relative
             if not path.is_file():
-                continue  # A tracked deletion is not in the current deliverable.
+                continue
             data = path.read_bytes()
             if b"\0" in data:
-                continue  # Binary assets are outside this source-text check.
+                continue
             try:
                 text = data.decode("utf-8")
             except UnicodeDecodeError:

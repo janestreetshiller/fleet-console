@@ -2,8 +2,6 @@ import SwiftUI
 import Foundation
 import Observation
 
-/// A warm shell, bounded dedicated agent PTYs and a separate output-only investigation.
-/// Agent launches never type into a shell or a previously running interactive agent.
 @Observable
 @MainActor
 final class TerminalPanel: PTYBackedSurface {
@@ -49,7 +47,6 @@ final class TerminalPanel: PTYBackedSurface {
     private var showingDetails = false
     private var confirmingStop = false
 
-    /// Starting is an explicit operator handoff. Refuse before touching any live PTY.
     @discardableResult
     func startAgent(_ request: TerminalAgentRequest) -> Bool {
         guard agents.count < Self.maximumAgentSessions,
@@ -57,7 +54,6 @@ final class TerminalPanel: PTYBackedSurface {
         let agent = TerminalAgentSession(request: request)
         agents.append(agent)
         selection = .agent(agent.id)
-        // The destination header must be measured before this fresh PTY inherits a grid.
         agent.pty.ensureRunning(request.launch)
         agent.pty.focusTerminal()
         return true
@@ -75,7 +71,6 @@ final class TerminalPanel: PTYBackedSurface {
         session.focusTerminal()
     }
 
-    /// Only the app-owned foreground agent child is stopped, never a managed service.
     func stopSelectedAgent() {
         guard let id = selectedAgent?.id else { return }
         stopAgent(id: id)
@@ -88,13 +83,12 @@ final class TerminalPanel: PTYBackedSurface {
     @discardableResult
     func closeSelectedAgent() -> Bool {
         guard let agent = selectedAgent, agent.pty.phase != .running, agent.pty.phase != .stopping else { return false }
-        agent.pty.terminate() // Also cancels a launch still waiting for geometry.
+        agent.pty.terminate()
         agents.removeAll { $0.id == agent.id }
         select(.shell)
         return true
     }
 
-    /// Account-funded requests stay output-only; neither output nor tokens enter a PTY child.
     func investigate(_ starter: String, billing: OurosBilling, validation: @escaping @MainActor () -> Bool) -> Bool {
         guard !investigationBusy else { return false }
         let fresh = PTYSession(refusesBelowMinimum: false)
@@ -138,7 +132,6 @@ final class TerminalPanel: PTYBackedSurface {
     }
 
     func activate(context: ToolContext) {
-        // Selection/navigation cannot retarget or kill an agent or the background shell.
         guard selection == .shell else { session.focusTerminal(); return }
         let dir = ToolBinary.usableDirectory(context.workingDirectory)
         currentContext = context
@@ -147,8 +140,6 @@ final class TerminalPanel: PTYBackedSurface {
             return
         }
         shellMultiplexer = tmux
-        // A changed selection must not restart an interactive shell or its jobs.
-        // The directory is used only when creating a new server session.
         shellSession.ensureRunning(makeLaunch(tmux: tmux, dir: dir))
         shellSession.focusTerminal()
     }
@@ -158,18 +149,17 @@ final class TerminalPanel: PTYBackedSurface {
         session.settle(grid)
     }
 
-    func deactivate() {} // Warm PTYs survive a panel toggle, not a window close.
+    func deactivate() {}
 
     func windowReopened() {
         if selection == .shell { activate(context: currentContext) }
-        else { session.focusTerminal() } // Ended agents never rerun automatically.
+        else { session.focusTerminal() }
     }
 
     func windowClosed() {
-        // Include never-displayed and deferred sessions, whose host has no window observer yet.
         shellSession.terminate()
         agents.forEach { $0.stop() }
-        cancelInvestigation() // Keep any dispatched operation identity; never replay it.
+        cancelInvestigation()
     }
 
     func makeView() -> AnyView {
@@ -198,8 +188,6 @@ final class TerminalPanel: PTYBackedSurface {
 
     private func measuredChrome(_ height: CGFloat) {
         chromeHeight = height
-        // A new PTY needs an emission even when its grid equals the previously
-        // settled one (including a rapid switch that cancels an intervening resize).
         layoutRevision += 1
     }
 
@@ -259,7 +247,6 @@ final class TerminalPanel: PTYBackedSurface {
         .font(ConsoleFont.caption)
     }
 
-    /// Shared with native surface acceptance tests; the popover renders this exact view.
     var agentDetails: some View {
         ScrollView {
             if let agent = selectedAgent {
@@ -294,7 +281,6 @@ final class TerminalPanel: PTYBackedSurface {
         .frame(width: ConsoleToolMetrics.panelIdeal, height: ConsoleToolMetrics.panelIdeal)
     }
 
-    /// Generic commands are accepted only in Shell; never inject them into an agent TUI.
     @discardableResult
     func run(_ commandLine: String) -> Bool {
         guard selection == .shell, let tmux = shellMultiplexer else { return false }
@@ -312,7 +298,6 @@ final class TerminalPanel: PTYBackedSurface {
     }
 }
 
-/// Observation must happen in a SwiftUI body, not once when makeView constructs an AnyView.
 private struct TerminalSurfaceView: View {
     @Bindable var panel: TerminalPanel
 

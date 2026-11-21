@@ -1,9 +1,3 @@
-//! Design tokens from `design/tokens.json`, the one source for the terminal
-//! palette, the GPUI theme and `design/tokens.css`.
-//!
-//! The JSON is compiled into the binary and parsed once. A test renders the
-//! CSS from the same file and fails when `design/tokens.css` has drifted;
-//! `FLEET_WRITE_TOKENS=1` rewrites it instead.
 
 use crate::thresholds::Level;
 use serde::Deserialize;
@@ -19,7 +13,6 @@ pub struct Rgb {
 }
 
 impl Rgb {
-    /// `0xRRGGBB`, the form `gpui::rgb` takes.
     pub fn hex(self) -> u32 {
         (u32::from(self.r) << 16) | (u32::from(self.g) << 8) | u32::from(self.b)
     }
@@ -63,7 +56,6 @@ pub struct Palette {
 }
 
 impl Palette {
-    /// The design package's band colors: dark green, bright green, amber, red.
     pub fn level(&self, level: Level) -> Rgb {
         match level {
             Level::Normal => self.dark,
@@ -74,8 +66,6 @@ impl Palette {
     }
 }
 
-/// ANSI 16-color indices for terminals without truecolor or 256 colors.
-/// `None` means the terminal's own default foreground or background.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Ansi16 {
@@ -128,15 +118,8 @@ pub struct Tokens {
     pub font: Font,
     pub grid: Grid,
     pub thresholds: Thresholds,
-    /// The dark terminal palette from the design package.
     pub phosphor: Palette,
-    /// The light appearance for the GPUI window, contrast-checked against
-    /// `bg` (see the tests below).
     pub paper: Palette,
-    /// The dark glass appearance for the GPUI window: a near-black substrate
-    /// with a vibrant level ramp. The bands stay a heat ladder — green,
-    /// yellow, orange, red — so the words normal, elevated, warning and
-    /// critical keep naming the same hues.
     pub fog: Palette,
     pub ansi16: Ansi16,
 }
@@ -146,7 +129,6 @@ pub fn tokens() -> &'static Tokens {
     TOKENS.get_or_init(|| serde_json::from_str(SOURCE).expect("design/tokens.json is valid; see theme tests"))
 }
 
-/// `design/tokens.css`, rendered from the tokens.
 pub fn render_css(tokens: &Tokens) -> String {
     let p = &tokens.phosphor;
     let l = &tokens.paper;

@@ -1,7 +1,5 @@
 import Foundation
 
-/// One encoder/decoder pair shared by the daemon, the CLI and the app so wire
-/// formats can never drift (dates are always epoch seconds).
 public enum Codec {
     public static let encoder: JSONEncoder = {
         let e = JSONEncoder()

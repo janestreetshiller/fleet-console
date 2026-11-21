@@ -1,21 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Module: Processes — the machine's process table as a first-class citizen.
-//
-// A native `Table` with column sorting, a scope filter, and a contextual menu
-// per row. The action policy is the threat model, rendered honestly:
-//
-//   * Managed services are signalled *through the controller* (stop, restart,
-//     kill) — the app never calls kill(2) itself, so the PID-reuse guard and
-//     the audit event both come for free.
-//   * Everything else gets read-only verbs — Sample, Copy PID, Reveal in
-//     Activity Monitor — plus Claim, which files the process under an owner and
-//     a lease without granting anyone the right to signal it. That slot used to
-//     hold a permanently disabled "Kill Process" carrying the rule in its
-//     tooltip; a control no state can enable is dead chrome however good its
-//     explanation, and the rule is better stated by what the menu does.
-
 struct ProcessModule: View {
     @Bindable var model: AppModel
     @Bindable var console: ConsoleModel
@@ -25,10 +10,6 @@ struct ProcessModule: View {
         KeyPathComparator(\.cpuPercent, order: .reverse)
     ]
 
-    /// pid → owning service id, rebuilt when either side changes. A process is
-    /// "managed" when its pid *or its process group* matches a live service
-    /// record — helpers of `npm run dev` belong to the service that started
-    /// them, same rule the supervisor uses.
     private var managedByPID: [Int32: String] {
         var map: [Int32: String] = [:]
         for row in model.activeServices {
@@ -41,9 +22,6 @@ struct ProcessModule: View {
     private var filtered: [ProcessRow] {
         var rows = model.processes.rows
 
-        // A premium scope without a licence silently widens to `all` rather
-        // than rendering an empty table under a locked label. The subtitle
-        // says what happened, so the fallback is stated, not hidden.
         let scope = console.processScope
         let effectiveScope: ConsoleModel.ProcessScope =
             scope.isPremium && !model.license.isUnlocked(.advancedHeatmapFilters) ? .all : scope
@@ -70,7 +48,6 @@ struct ProcessModule: View {
             }
         }
 
-        // KeyPathComparator application: later comparators break earlier ties.
         for comparator in sortOrder.reversed() {
             rows = rows.sorted(using: comparator)
         }
@@ -121,11 +98,6 @@ struct ProcessModule: View {
                     Text(ConsoleFmt.cpuPercent(row.cpuPercent))
                         .font(ConsoleFont.mono(.callout))
                         .monospacedDigit()
-                        // Rule 8: a tone hue used as text on the window
-                        // background is the fill colour doing the ink's job.
-                        // `ink` is the same hue moved toward the label colour by
-                        // the solved minimum that clears AA — which matters most
-                        // here, on the one column whose colour *is* the reading.
                         .foregroundStyle(cpuTone(row).ink)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
@@ -140,12 +112,6 @@ struct ProcessModule: View {
                 }
                 .width(min: 70, ideal: 84, max: 110)
 
-                // A process with no ports gets the em dash, drawn — not painted
-                // in `Color.clear`, which is what this cell used to do. That
-                // renders nothing while still handing VoiceOver a "—" to read,
-                // so the column was blank to the eye and dashed to the ear, and
-                // an empty cell in a table is ambiguous between "no ports" and
-                // "not sampled yet". Rule 4: a fact renders, and says what it is.
                 TableColumn("Ports", value: \.ports.count) { row in
                     Text(row.ports.isEmpty ? "—" : ConsoleFmt.ports(row.ports))
                         .font(ConsoleFont.mono(.caption))
@@ -186,19 +152,9 @@ struct ProcessModule: View {
                 model.investigate(.process(row, model: model)); return .handled
             }
             .tableStyle(.inset(alternatesRowBackgrounds: true))
-            // The table sits on the page like every other surface: without
-            // this it paints AppKit's own table background over the field and
-            // the module reads as a panel dropped on top of the window rather
-            // than as part of it.
             .scrollContentBackground(.hidden)
             }
         }
-        // Deferred to the next runloop tick: `.onAppear` fires while the table
-        // is still inside its first NSTableView delegate pass, and any observed
-        // state touched here re-enters the delegate mid-reload (macOS logs the
-        // "reentrant operation in its NSTableView delegate" warning there, and
-        // will assert on it). Sampling from a fresh tick keeps the delegate
-        // callback read-only.
         .onAppear {
             Task { @MainActor in model.processes.sample() }
         }
@@ -212,19 +168,12 @@ struct ProcessModule: View {
             }
             Picker("Scope", selection: $console.processScope) {
                 ForEach(ConsoleModel.ProcessScope.allCases) { scope in
-                    // Premium scopes are labelled, not locked away: a paywalled
-                    // segment you cannot see is a feature you cannot buy. The
-                    // picker still lets the selection land on it — the module
-                    // applies `all` and says why, which is the same honesty the
-                    // Sensors card uses.
                     Text(scope.isPremium && !model.license.isUnlocked(.advancedHeatmapFilters)
                          ? "\(scope.rawValue) ◊" : scope.rawValue)
                         .tag(scope)
                 }
             }
             .pickerStyle(.menu)
-            // Four scopes need enough intrinsic room to preserve their labels;
-            // when the tool rail is open, 340pt truncates “Heavyweight”.
             .frame(maxWidth: 180)
             .accessibilityLabel("Process filter")
         }
@@ -233,8 +182,6 @@ struct ProcessModule: View {
     private func cpuTone(_ row: ProcessRow) -> StatusTone {
         SystemThresholds.cpuActivity(percent: row.cpuPercent)
     }
-
-    // MARK: - Context menu
 
     @ViewBuilder
     private func contextMenu(for row: ProcessRow, request: InvestigationRequest) -> some View {
@@ -250,8 +197,6 @@ struct ProcessModule: View {
 
     @ViewBuilder
     private func managedMenu(row: ProcessRow, service: ServiceRecord) -> some View {
-        // Claimed and launched records are both "managed", and the menu has to say
-        // which: the verbs below exist for one and are refused for the other.
         Text(service.claimed
              ? "Claimed by controller — “\(service.friendlyName)” · not signallable"
              : "Managed by controller — “\(service.friendlyName)”")
@@ -273,18 +218,6 @@ struct ProcessModule: View {
 
     @ViewBuilder
     private func unmanagedMenu(row: ProcessRow) -> some View {
-        // This slot held `Button("Kill Process") {}.disabled(true)` — an empty
-        // closure behind a permanent `disabled`, with the rule in its tooltip.
-        // No state enabled it, which makes it precisely the dead chrome the
-        // design audit already forbids for the Full Screen menu item: a control
-        // you can read, cannot press, and will never be able to press.
-        //
-        // What replaces it is not a shorter menu but the verb that does exist
-        // for a process the controller did not start. Claiming files it under an
-        // owner, a purpose and a lease so it is supervised and reported on — and
-        // it still cannot be signalled, so the rule the disabled button was
-        // explaining is intact and is now enforced by what the menu *does*
-        // rather than by a sentence about what it does not.
         Button("Claim…") { model.claim(pid: row.pid, name: row.name) }
             .help("File this process under an owner, a purpose and a lease so it is "
                   + "supervised instead of merely listed. The controller still will not "
@@ -303,19 +236,12 @@ struct ProcessModule: View {
     }
 }
 
-// MARK: - Name cell
-
 struct ProcessNameCell: View {
     let row: ProcessRow
     let managed: Bool
 
     var body: some View {
         HStack(spacing: 8) {
-            // The application's own icon when this process is a bundled app, and
-            // the runtime symbol when it is not. `startSignature` is passed for
-            // the same reason every signal path re-reads it: pids are recycled,
-            // and a cache keyed on the number alone would eventually draw a dead
-            // app's icon beside a live process's name.
             AppGlyph(symbol: Iconography.runtime(command: row.name,
                                                  commandLine: row.commandLine,
                                                  hasPorts: !row.ports.isEmpty),
@@ -338,17 +264,12 @@ struct ProcessNameCell: View {
     }
 }
 
-// MARK: - Actions
-
 enum ProcessActions {
     static func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    /// `/usr/bin/sample` on the pid for one second, written next to the app's
-    /// own logs and revealed in Finder. Read-only: sampling observes a process,
-    /// it does not signal one.
     static func sample(_ row: ProcessRow) {
         let pid = row.pid
         let name = row.name

@@ -1,5 +1,3 @@
-//! Binary entry: `fleet-agent serve` (MCP stdio), `fleet-agent ask "…"`,
-//! `fleet-agent meter` (read/total the ledger), `fleet-agent self-check`.
 
 use fleet_agent::engine::{self, EngineConfig, HttpModelClient, ModelClient};
 use fleet_agent::meter::{self, MeterRecord, TurnUsage};
@@ -47,9 +45,6 @@ fn cmd_serve() -> ExitCode {
     let socket = default_socket_path();
     let mut client = fleet_agent::connect_controller(&socket);
     if client.is_none() {
-        // Fail closed but keep serving: the host sees per-call errors naming
-        // the socket, which is the contract. A server that refuses to start
-        // leaves the host with no tools/list at all.
         eprintln!(
             "fleet-agent: fleetd socket {} not reachable — tools/call will fail closed until the controller is up",
             socket.display()
@@ -116,13 +111,11 @@ fn cmd_ask(rest: &[String]) -> ExitCode {
     let presentation = ProposalPresentation::for_stream(json, std::io::stdout().is_terminal());
     if presentation.terminal {
         print!("{}", presentation.started());
-        // The status must reach the PTY while the request is still running.
         let _ = std::io::stdout().flush();
     }
     let result = engine::ask_once(&mut model, &mut dispatcher, &question, &config);
     match result {
         Ok(turn) => {
-            // Meter the turn: one signed record appended per ask.
             let ledger = std::env::var("FLEET_AGENT_LEDGER")
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|_| default_ledger_path());
@@ -169,8 +162,6 @@ fn proposal_error(json: bool, error: &str) -> ExitCode {
     ExitCode::FAILURE
 }
 
-/// File transport keeps the full request out of the shell's command echo. The
-/// same byte limit applies to inline questions and files, without truncation.
 fn proposal_question(rest: &[String]) -> Result<String, String> {
     let mut inline = Vec::new();
     let mut prompt_file = None;
@@ -201,8 +192,6 @@ fn proposal_question(rest: &[String]) -> Result<String, String> {
         return Err("use either --prompt-file or an inline question, not both".into());
     }
     use std::os::unix::fs::OpenOptionsExt;
-    // The package targets Darwin and Linux; opening a FIFO must not wait for a
-    // writer before we can reject it. O_NONBLOCK does not alter regular files.
     #[cfg(target_os = "macos")]
     const NONBLOCK: i32 = 0x0004;
     #[cfg(not(target_os = "macos"))]
@@ -233,8 +222,6 @@ fn proposal_question(rest: &[String]) -> Result<String, String> {
         .map_err(|error| format!("prompt file {path} is not valid UTF-8: {error}"))
 }
 
-/// Only Fleet Agent's own labels are styled. Reply/error content and terminal
-/// control sequences pass through unchanged; machine-readable output stays raw.
 struct ProposalPresentation {
     terminal: bool,
     emphasis: bool,

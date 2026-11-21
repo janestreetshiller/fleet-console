@@ -1,11 +1,3 @@
-//! The quick view: the Mac popover's information in the phosphor system.
-//!
-//! Header: logo, "FleetConsole", the running-service count, a button that
-//! opens the full window, an Agents button that opens it on the Agents view,
-//! and a More menu (Refresh, Open window, Quit). Four columns: CPU and
-//! Memory dials, Disk as a 5 by 4 block grid, Network as download and upload
-//! rates with bars. Opened from the status item it is a popover that closes
-//! when it loses focus; opened with `--quick` it is an ordinary window.
 
 use crate::app::{self, Hub};
 use crate::palette::Colors;

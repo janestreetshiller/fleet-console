@@ -1,11 +1,6 @@
 import XCTest
 @testable import FleetCore
 
-/// `FleetConfig` is hand-edited, so its decoding contract is a real contract: a
-/// key from a later version must not make the file undecodable, and a key you
-/// delete must fall back rather than fail the load. The `ui` block added that
-/// contract three levels deep, which is three more places for a `decode` to have
-/// been written where a `decodeIfPresent` was meant.
 final class ConfigTests: XCTestCase {
 
     private func decode(_ json: String) throws -> FleetConfig {
@@ -22,8 +17,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertNil(config.ui.consoles.vlan)
     }
 
-    /// The whole point of the nested `decodeIfPresent` chain: naming one field
-    /// must not reset its siblings to zero.
     func testPartialUIBlockKeepsSiblingDefaults() throws {
         let config = try decode("""
         {"ui": {"sections": {"processes": false}}}
@@ -41,14 +34,7 @@ final class ConfigTests: XCTestCase {
         XCTAssertTrue(config.ui.sections.services)
     }
 
-    /// A hand-edited `0` would mean "run `ps -Ao` over every process on the
-    /// machine in a tight loop". The floors are the reason `clamped*` exists
-    /// rather than the raw value being read at the call site.
     func testIntervalsAreClamped() throws {
-        // `routingRefreshSec` is in the payload deliberately: it was a real key
-        // until it turned out to control nothing, and a config.json written
-        // before it was removed has to keep loading rather than throwing on an
-        // unrecognised field.
         let config = try decode("""
         {"ui": {"intervals": {"networkRefreshSec": 0, "processSampleSec": -5,
                               "routingRefreshSec": 0.001}}}
@@ -65,8 +51,6 @@ final class ConfigTests: XCTestCase {
         XCTAssertEqual(config.ui.intervals.clampedProcessSample, 30)
     }
 
-    /// Round-tripping matters because the controller rewrites this file: a field
-    /// that encodes but does not decode would be silently reset on every save.
     func testRoundTrip() throws {
         var original = FleetConfig()
         original.ui.features.allowProcessTermination = true
@@ -80,10 +64,6 @@ final class ConfigTests: XCTestCase {
     }
 }
 
-/// The declared-segment block. This is the only place in the config where a
-/// human asserts something the host cannot observe, so its decoding has to be as
-/// forgiving as the rest — and its `name` has to survive a missing key, because
-/// a segment with no name would render a blank tag.
 extension ConfigTests {
     func testSegmentsDefaultToEmpty() throws {
         XCTAssertTrue(try decode("{}").networkSegments.isEmpty,

@@ -1,13 +1,3 @@
-//! The controller snapshot, typed.
-//!
-//! `fleet-proto` keeps the snapshot as opaque JSON so a half-modelled record
-//! cannot silently drop fields on the conformance path. The clients need typed
-//! access, so this module models exactly the fields they render, decoded the way
-//! Swift's `Codec` writes them: dates are epoch seconds, absent optionals are
-//! `None`, and keys keep Swift's spelling (`serviceID`, `memMB`, `leaseTTLSec`).
-//! Unknown enum values decode to `Unknown` so a newer controller does not take
-//! the whole client down; a missing required field is a decode error that the
-//! client reports, never a default.
 
 use serde::Deserialize;
 
@@ -37,13 +27,10 @@ pub struct Snapshot {
 }
 
 impl Snapshot {
-    /// Everything not finished, including an expired lease still being reported.
     pub fn active_services(&self) -> impl Iterator<Item = &ServiceRecord> {
         self.services.iter().filter(|s| !s.state.is_terminal())
     }
 
-    /// Actually up. This is what a count worded "running" shows, matching
-    /// `Snapshot.runningServices` in Swift.
     pub fn running_service_count(&self) -> usize {
         self.services
             .iter()
@@ -99,8 +86,6 @@ impl ServiceState {
         )
     }
 
-    /// The word a row shows. `running` without a health check is unverified,
-    /// which is what the Swift app calls it too.
     pub fn label(self) -> &'static str {
         match self {
             Self::Starting => "starting",
@@ -119,7 +104,6 @@ impl ServiceState {
     }
 }
 
-/// Four separate facts. Never collapse them into one boolean.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 pub struct Evidence {
     #[serde(rename = "processExists", default)]
@@ -232,7 +216,6 @@ impl ServiceRecord {
         &self.id[..end]
     }
 
-    /// Observed listeners when a scan found any, otherwise what was declared.
     pub fn effective_ports(&self) -> &[i64] {
         if self.evidence.listening_ports.is_empty() {
             &self.declared_ports
@@ -241,9 +224,6 @@ impl ServiceRecord {
         }
     }
 
-    /// A claimed process is visible, not signallable. The controller refuses
-    /// stop, restart, pause and kill for it; the clients disable those controls
-    /// with the same reason instead of sending a request that will fail.
     pub fn signal_refusal(&self) -> Option<String> {
         self.claimed.then(|| {
             format!(
@@ -295,7 +275,6 @@ pub struct ServiceEvent {
     #[serde(rename = "serviceName", default)]
     pub service_name: Option<String>,
     pub ts: f64,
-    /// Kept as the raw Swift case name; the clients show it, nothing branches on it.
     pub kind: String,
     #[serde(default)]
     pub detail: String,
@@ -384,8 +363,6 @@ pub struct AgentSession {
 }
 
 impl AgentSession {
-    /// The project folder's last component, never the full path: the full
-    /// path carries a home directory and does not belong on screen captures.
     pub fn project_name(&self) -> Option<&str> {
         self.project
             .as_deref()
@@ -478,8 +455,6 @@ pub enum DeviceHealth {
     Unknown,
 }
 
-/// A linked device. Host and address fields exist on the wire; they are not
-/// modelled because neither client displays them.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 pub struct DeviceRecord {
     pub id: String,
@@ -499,8 +474,6 @@ pub struct DeviceRecord {
 }
 
 impl DeviceRecord {
-    /// Same rule as `DeviceRecord.health` in Swift: reachability is claimed only
-    /// when a probe succeeded, and no completed probe is unknown, not down.
     pub fn health(&self) -> DeviceHealth {
         if self.evidence.is_self {
             return DeviceHealth::Reachable;
@@ -535,7 +508,6 @@ pub struct LogChunk {
     pub truncated: bool,
 }
 
-/// Decode the opaque snapshot `fleet-proto` returns.
 pub fn decode_snapshot(value: serde_json::Value) -> Result<Snapshot, String> {
     serde_json::from_value(value).map_err(|e| format!("snapshot did not decode: {e}"))
 }

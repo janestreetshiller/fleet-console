@@ -1,16 +1,7 @@
-//! What the full window is showing and what a key or click does.
-//!
-//! A pure state machine over `Dashboard`: `handle_key` and the request
-//! helpers return `Effect`s, and the window applies them (submit to the
-//! controller, post a notice, quit). Keeping GPUI out of this module is what
-//! lets the keyboard, selection and confirmation rules be tested against
-//! fixtures.
 
 use fleet_ui_core::controller::{Action, LogStream};
 use fleet_ui_core::views::{Control, Dashboard, ServiceRow, APPROVE_REPLY, DENY_REPLY};
 
-/// Lease renewal requested by `n` in the Services view, matching the
-/// `fleetctl renew <id> --lease 30m` example in docs/AGENTS.md.
 pub const RENEW_SECONDS: f64 = 1_800.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -21,8 +12,6 @@ pub enum View {
     Agents,
     Storage,
     Attention,
-    /// The relational map: controller, devices, services, agents, processes
-    /// and volumes as one graph.
     Map,
 }
 
@@ -41,7 +30,6 @@ impl View {
         Self::ALL.iter().position(|v| *v == self).unwrap_or(0)
     }
 
-    /// The `1` to `7` key that selects it.
     pub fn number(self) -> usize {
         self.index() + 1
     }
@@ -64,7 +52,6 @@ impl View {
             .and_then(|i| Self::ALL.get(i).copied())
     }
 
-    /// `1` to `6` or a view name, case-insensitive.
     pub fn parse(text: &str) -> Option<Self> {
         if let Ok(number) = text.parse::<usize>() {
             return Self::from_number(number);
@@ -76,7 +63,6 @@ impl View {
     }
 }
 
-/// A key as the state machine sees it. The window maps GPUI keystrokes here.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Key {
     Char(char),
@@ -84,7 +70,6 @@ pub enum Key {
     Down,
     Enter,
     Escape,
-    /// `cmd-q` or `ctrl-q`.
     Quit,
 }
 
@@ -140,7 +125,6 @@ impl ServiceCommand {
     }
 }
 
-/// A destructive action waiting for the operator to confirm it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Confirmation {
     pub action: Action,
@@ -153,15 +137,12 @@ pub enum Effect {
     Submit(Action),
     Notice(String),
     Quit,
-    /// Bring this row of this view into the visible part of its list.
     Reveal(View, usize),
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
 struct Selection {
     index: usize,
-    /// A stable identity for the selected row, so a list that reorders or
-    /// grows between polls keeps the same row selected.
     key: Option<String>,
 }
 
@@ -169,7 +150,6 @@ struct Selection {
 pub struct UiState {
     pub view: View,
     selections: [Selection; 7],
-    /// `enter` expands the selected tile, process, service or volume.
     pub inspecting: bool,
     pub confirm: Option<Confirmation>,
 }
@@ -191,7 +171,6 @@ impl UiState {
         self.view = view;
     }
 
-    /// The selected row of `view` in this dashboard, if the list has rows.
     pub fn selected(&self, view: View, dash: &Dashboard) -> Option<usize> {
         let keys = row_keys(view, dash);
         if keys.is_empty() {
@@ -228,8 +207,6 @@ impl UiState {
         }
     }
 
-    /// The selected service row, from the Services view or from a selected
-    /// Attention report that names a service.
     pub fn selected_service<'a>(&self, dash: &'a Dashboard) -> Option<&'a ServiceRow> {
         match self.view {
             View::Services => self
@@ -328,11 +305,7 @@ impl UiState {
                     row.title, row.available
                 ))]
             }
-            // Process lines, volumes and transcript lines show everything
-            // they have inline; there is nothing more to expand.
             View::Agents | View::Processes | View::Storage => Vec::new(),
-            // A map node's inspector is drawn beside the graph; `enter`
-            // opens and closes it over the selected node.
             View::Overview | View::Services | View::Map => {
                 if self.selected(self.view, dash).is_some() {
                     self.inspecting = !self.inspecting;
@@ -358,9 +331,6 @@ impl UiState {
         }
     }
 
-    /// Ask for a service action. A refused control becomes a notice with the
-    /// refusal reason; a destructive action opens the confirmation step; any
-    /// other action is submitted.
     pub fn request(
         &mut self,
         command: ServiceCommand,
@@ -405,7 +375,6 @@ impl UiState {
         }
     }
 
-    /// Approve or deny an agent's open question.
     pub fn answer(&mut self, message_id: i64, approve: bool, dash: &Dashboard) -> Vec<Effect> {
         let question = dash
             .agents
@@ -430,8 +399,6 @@ impl UiState {
         }
     }
 
-    /// When the Agents view has never had a selection, start on the first
-    /// open question so `y` and `n` act on it without moving first.
     pub fn prefer_open_question(&mut self, dash: &Dashboard) {
         if self.selections[View::Agents.index()].key.is_none() {
             if let Some(index) = first_open_question(dash) {
@@ -471,7 +438,6 @@ pub fn question_key(message_id: i64) -> String {
     format!("question-{message_id}")
 }
 
-/// Stable identities for the rows of a view, in display order.
 pub fn row_keys(view: View, dash: &Dashboard) -> Vec<String> {
     match view {
         View::Overview => dash.cluster.tiles.iter().map(|t| t.id.clone()).collect(),
@@ -506,8 +472,6 @@ pub fn row_keys(view: View, dash: &Dashboard) -> Vec<String> {
     }
 }
 
-/// The question to select when the Agents view opens: the first one still
-/// waiting, so `y` and `n` act on it without moving first.
 pub fn first_open_question(dash: &Dashboard) -> Option<usize> {
     dash.agents
         .transcript
@@ -611,7 +575,6 @@ mod tests {
         assert_eq!(confirm.action, Action::Stop { service_id: id.clone() });
         assert!(confirm.prompt.starts_with("Stop render-studio?"));
 
-        // Keys other than confirm or cancel do nothing while the step is open.
         assert!(state.handle_key(Key::Char('2'), &dash).is_empty());
         assert_eq!(state.view, View::Services);
 
@@ -752,8 +715,6 @@ mod tests {
             .unwrap();
         let message_id = dash.attention[index].message_id.unwrap();
         state.select(View::Attention, index, &dash);
-        // The fixture question also names a service; open the question by
-        // removing that link, as for an agent asking without a service.
         let mut dash = dash;
         dash.attention[index].service_id = None;
         state.handle_key(Key::Enter, &dash);

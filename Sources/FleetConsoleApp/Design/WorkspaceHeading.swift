@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// Page identity is distinct from card headings and supporting observations.
-/// Keep the system type ramp and allow the explanation to wrap at narrow widths.
 struct WorkspaceHeading: View {
     let title: String
     let detail: String

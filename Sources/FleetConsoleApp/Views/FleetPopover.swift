@@ -2,7 +2,6 @@ import AppKit
 import SwiftUI
 import FleetCore
 
-/// Legacy section routes retained for menu commands; details now open in the dashboard.
 enum FleetSection: String, CaseIterable, Identifiable {
     case quickView = "Quick View"
     case services = "Services"
@@ -58,7 +57,6 @@ struct FleetPopover: View {
             .padding(.bottom, 4)
             QuickView(model: model)
         }
-        // The meters determine the dropdown height; never offer a tall body frame.
         .fixedSize(horizontal: false, vertical: true)
         .frame(width: FleetMetrics.popoverWidth)
         .sketchSubstrate(seed: 0.37, grainSeed: 23, ground: false)
@@ -80,8 +78,6 @@ struct FleetPopover: View {
     }
 }
 
-/// One Agent menu for the four meters. A label on every instrument repeated
-/// the same word across the dropdown.
 private struct AgentMenuButton: NSViewRepresentable {
     var investigate: (String) -> Void
 
@@ -133,9 +129,6 @@ private struct AgentMenuButton: NSViewRepresentable {
     }
 }
 
-/// Pull-down with the bezel and the hover plate turned off. SwiftUI's
-/// borderless menu button still draws a hit-box border while the pointer is
-/// over it, and that border stays up in the menu-bar dropdown.
 private struct ConfigurationMenuButton: NSViewRepresentable {
     var refresh: () -> Void
     var editConfiguration: () -> Void
@@ -194,7 +187,6 @@ private struct ConfigurationMenuButton: NSViewRepresentable {
                 item.target = self
                 menu.addItem(item)
             }
-            // Non-flipped view: y = 0 is the button's bottom edge, so the menu opens downward.
             menu.popUp(positioning: nil, at: NSPoint(x: 0, y: 0), in: sender)
         }
 
@@ -205,8 +197,6 @@ private struct ConfigurationMenuButton: NSViewRepresentable {
     }
 }
 
-/// Template image, tint on hover, no bezel. `showsBorderOnlyWhileMouseInside`
-/// is the plate the dropdown was keeping around this control.
 private final class HoverButton: NSButton {
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

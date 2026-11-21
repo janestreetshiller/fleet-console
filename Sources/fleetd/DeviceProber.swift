@@ -1,8 +1,6 @@
 import Foundation
 import FleetCore
 
-/// Reachability probes for the machines you care about. Three independent pillars
-/// (ICMP, TCP, Tailscale's own view) so the UI never has to guess what "online" means.
 enum DeviceProber {
 
     static func probeAll(config: FleetConfig,
@@ -36,7 +34,6 @@ enum DeviceProber {
         }
 
         if device.isSelf {
-            // No point pinging ourselves: presence of this process is the evidence.
             record.metrics = SessionScanner.localMetrics()
             record.localIP = primaryLocalIPv4()
             evidence.icmpOK = true
@@ -64,12 +61,6 @@ enum DeviceProber {
         if evidence.reachable == true, let host = device.sshHost ?? target, !device.isSelf {
             record.metrics = SessionScanner.remoteMetrics(sshHost: host)
         }
-        // Two independent sources for the same column, both read-only and both
-        // opt-in: that machine's own controller (`remoteQuery`, needs fleetctl
-        // installed there) and services declared here and matched over SSH
-        // (`services`, needs nothing installed there). A host can use either or
-        // both — intel runs a Buzz relay and an opencode server and has no
-        // fleetctl, which is precisely the case the second one exists for.
         if evidence.reachable == true {
             var services: [ServiceRecord] = []
             var errors: [String] = []
@@ -94,14 +85,6 @@ enum DeviceProber {
         return record
     }
 
-    /// Multi-device, read-only, over SSH.
-    ///
-    /// The obvious design — have each controller listen on the tailnet — is
-    /// deliberately rejected: "no network listener, ever" is what makes the local
-    /// socket's peer-uid check sufficient, and it is the reason there is nothing to
-    /// scan or reach from another host. So instead we *shell out* to the other
-    /// machine's own fleetctl over the SSH trust you already have, read its JSON,
-    /// and render it as read-only. FleetConsole never controls a remote process.
     static func fetchRemoteServices(device: FleetConfig.DeviceConfig,
                                     target: String?) -> (services: [ServiceRecord], error: String?) {
         guard let host = device.sshHost ?? target else {
@@ -109,7 +92,7 @@ enum DeviceProber {
         }
         let remoteCommand = device.remoteFleetctl ?? "fleetctl"
         let result = Shell.run("/usr/bin/ssh",
-                               ["-o", "BatchMode=yes",           // never prompt for a password
+                               ["-o", "BatchMode=yes",
                                 "-o", "ConnectTimeout=4",
                                 "-o", "StrictHostKeyChecking=accept-new",
                                 host, "\(remoteCommand) list --json"],
@@ -124,35 +107,14 @@ enum DeviceProber {
               let snapshot = try? Codec.decode(Snapshot.self, from: data) else {
             return ([], "could not parse the remote snapshot")
         }
-        // Cap what a remote machine can put into our snapshot.
         return (Array(snapshot.activeServices.prefix(25)), nil)
     }
 
-    /// Declared services on another machine, matched over SSH.
-    ///
-    /// One round trip per device, not one per service: the remote dumps its
-    /// process table and its listener table once, and the matching happens here
-    /// in Swift against the same rule `Reconciler.externalServices` uses for the
-    /// local machine — command-line substring first, declared port second. Two
-    /// declared services on one host cost one `ssh`.
-    ///
-    /// Everything it produces is `claimed`. That is not a label: it is the flag
-    /// every signal path in `Controller` consults, so a record describing a
-    /// process on another machine cannot be stopped, restarted or reaped from
-    /// here even by a future caller that forgets these are remote. The rule the
-    /// app already had — the controller signals only what it started — turns out
-    /// to be exactly the rule remote services need.
     static func fetchDeclaredServices(device: FleetConfig.DeviceConfig,
                                       target: String?) -> (services: [ServiceRecord], error: String?) {
         guard !device.services.isEmpty else { return ([], nil) }
         guard let host = device.sshHost ?? target else { return ([], "no ssh host configured") }
 
-        // `lsof` is run without -u: the declared service may belong to a
-        // different account on that machine than the one we log in as, and a
-        // listener we cannot attribute is still a listener we can report.
-        // Failures inside the remote command are swallowed there rather than
-        // failing the whole probe — a machine without lsof still gets its
-        // process table read.
         let remote = "ps -axww -o pid=,pgid=,lstart=,args= 2>/dev/null; "
             + "echo '\(Self.sectionMarker)'; "
             + "lsof -nP -iTCP -sTCP:LISTEN 2>/dev/null | awk 'NR>1 {print $2, $9}'"
@@ -169,19 +131,6 @@ enum DeviceProber {
             return ([], message)
         }
 
-        // Split on the **last** marker, not the first.
-        //
-        // The probe sees itself: the remote `zsh -c …` running this very command
-        // is in the process table it dumps, and its argv contains the marker
-        // verbatim. Splitting on the first occurrence therefore cut the output
-        // inside the `ps` section — the real ports section ended up buried in
-        // the tail with a few hundred process lines in front of it, and every
-        // declared service came back with no ports at all. It looked like `lsof`
-        // had failed remotely; nothing had failed but the parse.
-        //
-        // Any marker has this problem, including a random nonce, because the
-        // marker is always part of the command that gets listed. The last
-        // occurrence is the `echo`, always — so that is the seam.
         let marker = Self.sectionMarker
         let processText: String
         let portText: String
@@ -209,8 +158,6 @@ enum DeviceProber {
         return (records, nil)
     }
 
-    /// Separates the process table from the listener table in one round trip.
-    /// See `fetchDeclaredServices` for why it is matched from the end.
     private static let sectionMarker = "---FLEET-PORTS---"
 
     private struct RemoteProcess {
@@ -220,15 +167,9 @@ enum DeviceProber {
         var commandLine: String
     }
 
-    /// `pid pgid <lstart, 5 fields> args…`. `lstart` is a fixed five-token date
-    /// in the C locale, which is what makes this splittable without a regex.
     private static func parseRemoteProcesses(_ text: String) -> [RemoteProcess] {
         var result: [RemoteProcess] = []
         for line in text.split(separator: "\n") {
-            // Skip the probe's own shell. Its argv contains the marker and the
-            // whole remote command, so it can otherwise satisfy a declared
-            // `match` by quoting it — a service would appear "running" on the
-            // evidence of us having asked whether it was running.
             guard !line.contains(Self.sectionMarker) else { continue }
             let fields = line.split(separator: " ", omittingEmptySubsequences: true)
             guard fields.count > 8, let pid = Int32(fields[0]), let pgid = Int32(fields[1]) else { continue }
@@ -252,12 +193,6 @@ enum DeviceProber {
         return result.mapValues { Array(Set($0)).sorted() }
     }
 
-    /// A declared remote service as a `ServiceRecord`, so it renders through the
-    /// same inspector, the same evidence chips and the same row primitives as
-    /// everything else. A service that is declared and *not* running still
-    /// produces a record — absent from the list would be indistinguishable from
-    /// "not declared", and the whole point of declaring it is to notice when it
-    /// stops.
     private static func remoteRecord(declared: FleetConfig.KnownService,
                                      device: FleetConfig.DeviceConfig,
                                      match: RemoteProcess?,
@@ -281,18 +216,15 @@ enum DeviceProber {
                                listeningPorts: ports,
                                portScanRan: true,
                                checkedAt: Date()))
-        // Read-only across the mesh, enforced by the same flag a local claim uses.
         record.claimed = true
         record.claimedAt = Date()
         return record
     }
 
-    /// Uses /sbin/ping rather than a raw ICMP socket: no entitlement, no privilege.
     static func ping(_ host: String, timeoutSec: Int = 2) -> (ok: Bool, rttMs: Double?) {
         let result = Shell.run("/sbin/ping", ["-c", "1", "-W", "1200", "-t", "\(timeoutSec)", "-n", "-q", host],
                                timeout: TimeInterval(timeoutSec) + 2)
         guard result.succeeded else { return (false, nil) }
-        // round-trip min/avg/max/stddev = 1.234/1.234/1.234/0.000 ms
         guard let line = result.stdout.split(separator: "\n").first(where: { $0.contains("round-trip") }),
               let stats = line.split(separator: "=").last?.trimmingCharacters(in: .whitespaces),
               let avg = stats.split(separator: "/").dropFirst().first,
@@ -320,7 +252,6 @@ enum DeviceProber {
             if ip.hasPrefix("127.") { continue }
             addresses[name] = ip
         }
-        // Prefer wired, then Wi-Fi, then anything that is not the tailnet interface.
         for candidate in ["en0", "en1", "en2"] {
             if let ip = addresses[candidate], !ip.hasPrefix("100.") { return ip }
         }

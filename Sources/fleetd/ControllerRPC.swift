@@ -1,15 +1,7 @@
 import Foundation
 import FleetCore
 
-// The wire protocol. Split from Controller.swift so the state machine and the
-// switch that dispatches into it are not the same file.
-//
-// The cost: the members reached for below are `internal` rather than `private`.
-// fleetd is a seven-file executable, so that is module-private either way.
-
 extension Controller {
-
-    // MARK: - Connection handling
 
     func handleConnection(_ conn: SocketConnection) {
         defer {
@@ -38,7 +30,7 @@ extension Controller {
                 queue.sync { subscribers[ObjectIdentifier(conn)] = conn }
                 let snapshot = queue.sync { makeSnapshot() }
                 try? conn.writeJSON(RPCResponse(ok: true, snapshot: snapshot))
-                continue    // further pushes come from broadcastSnapshot()
+                continue
             }
 
             let response = handle(request)
@@ -50,13 +42,6 @@ extension Controller {
         }
     }
 
-    // MARK: - Answer shapes
-    //
-    // Three shapes cover every verb. A mutating verb that forgets its broadcast
-    // leaves every open dashboard stale until the next supervisor tick, so the
-    // broadcast belongs in the shape rather than in ten copies of it.
-
-    /// Anything that throws answers with the error's own description.
     private func answering(_ build: () throws -> RPCResponse) -> RPCResponse {
         do {
             return try build()
@@ -65,8 +50,6 @@ extension Controller {
         }
     }
 
-    /// On the state queue, broadcast, answer with the record. Every verb that
-    /// changes one service.
     private func answeringWithRecord(_ body: () throws -> ServiceRecord) -> RPCResponse {
         answering {
             let record = try queue.sync(execute: body)
@@ -75,8 +58,6 @@ extension Controller {
         }
     }
 
-    /// On the state queue, broadcast, answer with a fresh snapshot. Every verb
-    /// that changes the fleet rather than one service.
     private func answeringWithSnapshot(_ body: () throws -> Void) -> RPCResponse {
         answering {
             try queue.sync(execute: body)
@@ -84,8 +65,6 @@ extension Controller {
             return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
         }
     }
-
-    // MARK: - Dispatch
 
     func handle(_ request: RPCRequest) -> RPCResponse {
         switch request.op {
@@ -124,8 +103,6 @@ extension Controller {
 
         case .restart:
             guard let id = request.serviceID else { return .failure("restart requires a service id") }
-            // Not `answeringWithRecord`: `restart` is stop-then-relaunch and owns
-            // its own queue hops, so it must not be wrapped in another `sync`.
             return answering {
                 let record = try self.restart(id, reason: request.reason ?? "requested by operator")
                 broadcastSnapshot()
@@ -135,8 +112,6 @@ extension Controller {
         case .events:
             return answering {
                 let events = try queue.sync { () -> [ServiceEvent] in
-                    // An unknown id must fail loudly. Silently widening to the global
-                    // log would answer a question nobody asked.
                     let resolved = try request.serviceID.map { try self.resolveID($0) }
                     return try self.registry.events(serviceID: resolved,
                                                     limit: min(request.limit ?? 200, 2000))
@@ -159,8 +134,6 @@ extension Controller {
                   !target.trimmingCharacters(in: .whitespaces).isEmpty else {
                 return .failure("claim requires an unmanaged process id or a pid")
             }
-            // Captured off the state queue and passed in, so the verification and
-            // the record are built from one table rather than two moments.
             let table = ProcessTable.capture()
             return answeringWithRecord {
                 try self.claim(unmanagedID: target,
@@ -176,7 +149,6 @@ extension Controller {
             return answeringWithSnapshot { self.runReconcile(table: table) }
 
         case .refreshDevices:
-            // No broadcast: `probeDevices` pushes its own once the probe lands.
             probeDevices()
             return RPCResponse(ok: true, snapshot: queue.sync { makeSnapshot() })
 
@@ -246,8 +218,6 @@ extension Controller {
             }
 
         case .markSeen:
-            // Answers bare: the caller knows which ids it marked, and the
-            // dashboards get the change by broadcast.
             return answering {
                 try queue.sync {
                     let ids: [Int64]
@@ -267,8 +237,6 @@ extension Controller {
                   !command.trimmingCharacters(in: .whitespaces).isEmpty else {
                 return .failure("ignoreCommand requires a command name")
             }
-            // Its own catch, for its own message: "could not update config" says
-            // the allow-list was not written; an error from inside save() does not.
             do {
                 try queue.sync {
                     guard !self.config.ignoredListenerCommands.contains(command) else { return }
@@ -284,8 +252,6 @@ extension Controller {
             }
 
         case .prune:
-            // Terminal service rows only. The event log is append-only and is
-            // never touched by this — the audit trail outlives the records.
             let age = request.ttlSec ?? 3600
             return answeringWithSnapshot {
                 try self.registry.pruneTerminated(olderThan: age)

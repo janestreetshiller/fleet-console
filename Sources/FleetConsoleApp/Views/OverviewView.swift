@@ -1,10 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Compact primitives shared by both menu-bar surfaces. The fixed row height is
-// what lets either popover promise not to scroll.
-
-/// Fixed-height single-line row.
 struct CompactRow: View {
     let icon: String
     let tone: StatusTone
@@ -12,13 +8,8 @@ struct CompactRow: View {
     let subtitle: String
     var trailing: String = ""
     var badge: StatusTone?
-    /// When this row stands for a running process, the pid and its start
-    /// signature — which is what lets the row draw the application's own icon
-    /// instead of `icon`. Both nil is the ordinary case and changes nothing.
     var pid: Int32?
     var startSignature: String?
-    /// A tool name from `AppIcon.declaredBundleIdentifiers`, for a CLI agent
-    /// that has a desktop app installed to borrow an icon from.
     var agentTool: String?
 
     var body: some View {
@@ -76,7 +67,6 @@ struct StatTile: View {
     }
 }
 
-/// Uppercased header used inside the compact surfaces.
 struct CompactHeader: View {
     let title: String
     var trailing: String?
@@ -98,7 +88,6 @@ struct CompactHeader: View {
     }
 }
 
-/// "+ N more…" — overflow is stated, never hidden behind a scroll edge.
 struct OverflowLine: View {
     let count: Int
     let action: () -> Void
@@ -130,7 +119,6 @@ struct EmptyLine: View {
     }
 }
 
-/// Shared popover chrome: the header strip.
 struct PopoverHeader<Trailing: View>: View {
     let title: String
     let symbol: String

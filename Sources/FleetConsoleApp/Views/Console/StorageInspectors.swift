@@ -1,14 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Inspector: one volume, or one breakdown segment.
-//
-// A volume gets capacity arithmetic, purgeable accounting, file-system facts
-// and its local APFS snapshots. A segment gets its byte count and — more
-// important — its *basis*: measured where, or arithmetic of what. The honesty
-// rules apply to colours too: "System & Other" is the one segment that is
-// openly a subtraction, and it says so in its own inspector.
-
 struct VolumeInspector: View {
     @Bindable var model: AppModel
     let volumeID: String
@@ -17,8 +9,6 @@ struct VolumeInspector: View {
         model.breakdown.volumes.first { $0.id == volumeID }
     }
 
-    /// A segment id that is not a mount path means the user tapped a bar
-    /// segment or legend chip — route to the segment inspector instead.
     private var segment: BreakdownSegment? {
         model.breakdown.breakdown.segments.first { $0.id == volumeID }
     }
@@ -46,8 +36,6 @@ struct VolumeInspector: View {
             if let volume { model.breakdown.loadSnapshots(for: volume) }
         }
     }
-
-    // MARK: Volume
 
     @ViewBuilder
     private func volumeContent(_ volume: VolumeInfo) -> some View {
@@ -113,8 +101,6 @@ struct VolumeInspector: View {
                             height: ConsoleMetrics.chartSecondaryHeight)
         }
     }
-
-    // MARK: Segment
 
     @ViewBuilder
     private func segmentContent(_ segment: BreakdownSegment) -> some View {

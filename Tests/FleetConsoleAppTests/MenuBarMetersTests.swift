@@ -30,14 +30,10 @@ struct MenuBarMetersTests {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
         if !NSApp.isRunning { NSApp.finishLaunching() }
-        // SwiftUI builds its accessibility tree only for a client that asks;
-        // the other UI suites switch it on the same way.
         _ = NSApp.perform(NSSelectorFromString("accessibilitySetValue:forAttribute:"),
                           with: NSNumber(value: true), with: "AXEnhancedUserInterface")
         let model = AppModel()
         let host = NSHostingView(rootView: FleetPopover(model: model, openDashboard: {}))
-        // In a window, ordered in off-screen: the accessibility tree of a
-        // hosting view that has never been in one is not reliably populated.
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: FleetMetrics.popoverWidth, height: 600),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.contentView = host

@@ -2,17 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// The administration half of the Network tab: routing, resolvers, interfaces,
-/// and the verbs that go with them.
-///
-/// The existing rows answer *what am I attached to* — Wi-Fi, wire, Tailscale,
-/// VPN. This answers the two questions you ask next when something is wrong:
-/// **where do my packets go** and **who do I ask for names**. Both were missing
-/// entirely, which meant the surface could tell you the Wi-Fi was associated and
-/// could not tell you the gateway had stopped answering.
-///
-/// Every verb here is read-only or clipboard-only, and the diagnostics run off
-/// the main actor with a hard deadline — see `NetworkActions`.
 struct NetworkAdminSection: View {
     @Bindable var model: AppModel
     @Binding var expanded: String?
@@ -36,10 +25,6 @@ struct NetworkAdminSection: View {
                 }
             }
 
-            // Segments render only when a source has told us about some. No
-            // source registered → no header, no empty state, no row. See
-            // `VLANSource` for why an empty state would be a claim we cannot
-            // make.
             if VLANRegistry.shared.isAvailable {
                 segmentSection
             }
@@ -61,8 +46,6 @@ struct NetworkAdminSection: View {
         return shown == total ? "\(total)" : "\(shown) of \(total)"
     }
 
-    // MARK: - Gateway
-
     private var gatewayRow: some View {
         let gateway = routing.defaultGatewayIPv4 ?? routing.defaultGatewayIPv6
         return DisclosureRow(id: "gateway", expanded: $expanded) {
@@ -73,11 +56,6 @@ struct NetworkAdminSection: View {
                           inlineSubtitle: true)
         } detail: {
             VStack(alignment: .leading, spacing: 3) {
-                // Every default route, with the one in use marked. A machine on
-                // two networks at once has two answers to "where do my packets
-                // go", and listing only the winner hides the fact that there is
-                // a second — which is the first thing you want to know when the
-                // winner stops working.
                 if routing.routes.isEmpty {
                     KeyValue(key: "Routes", value: "no default route")
                 } else {
@@ -92,9 +70,6 @@ struct NetworkAdminSection: View {
                 if let subnet = routing.gatewayInterface?.subnet {
                     KeyValue(key: "Subnet", value: subnet.cidr, monospaced: true)
                 }
-                // "As of", not "Checked": the snapshot is only republished when
-                // its content changes, so this is when the picture was
-                // established. See `RoutingStatus.sameContent(as:)`.
                 KeyValue(key: "As of", value: Fmt.relative(routing.checkedAt))
 
                 if let gateway {
@@ -116,8 +91,6 @@ struct NetworkAdminSection: View {
         }
     }
 
-    // MARK: - DNS
-
     private var dnsRow: some View {
         DisclosureRow(id: "dns", expanded: $expanded) {
             FleetRowLabel(icon: "character.book.closed",
@@ -132,12 +105,6 @@ struct NetworkAdminSection: View {
                 } else {
                     ForEach(Array(routing.resolvers.enumerated()), id: \.offset) { index, server in
                         KeyValue(key: index == 0 ? "Primary" : "Resolver \(index + 1)",
-                                 // `100.100.100.100` is Tailscale's MagicDNS and
-                                 // nothing else — a fixed address the daemon
-                                 // installs. Saying so turns a resolver nobody
-                                 // recognises into the one fact that explains
-                                 // why name resolution still works on a segment
-                                 // whose own DNS is unreachable.
                                  value: server + (isMagicDNS(server) ? "  (Tailscale MagicDNS)" : ""),
                                  monospaced: true)
                     }
@@ -162,13 +129,9 @@ struct NetworkAdminSection: View {
         }
     }
 
-    /// Tailscale's resolver addresses, both families. Fixed values the daemon
-    /// installs, so this is recognition rather than a heuristic.
     private func isMagicDNS(_ server: String) -> Bool {
         server == "100.100.100.100" || server.lowercased().hasPrefix("fd7a:115c:a1e0:")
     }
-
-    // MARK: - Interfaces
 
     private func interfaceRow(_ interface: NetworkInterface) -> some View {
         DisclosureRow(id: "if-\(interface.bsdName)", expanded: $expanded) {
@@ -177,17 +140,6 @@ struct NetworkAdminSection: View {
                           title: interface.displayName,
                           subtitle: interfaceSubtitle(interface),
                           inlineSubtitle: true) {
-                // Segment membership is an **identity**, not a status, so the
-                // tag is `.neutral` and never takes a tone hue: "which segment
-                // am I on" has no good/bad axis, and routing it through
-                // `StatusTone` would make one VLAN green and another amber for
-                // no reason a reader could reconstruct.
-                //
-                // The label is only ever drawn from something that was told to
-                // us — the host's own 802.1Q tag, or a segment a `VLANSource`
-                // named. It is never inferred from an address: 10.10.40.0/24
-                // looks like VLAN 40 and reading the third octet is right on one
-                // network and confidently wrong on the next.
                 if let label = vlanLabel(interface) {
                     Tag(text: label, tone: .neutral)
                 }
@@ -203,9 +155,6 @@ struct NetworkAdminSection: View {
                 if let subnet = interface.subnet {
                     KeyValue(key: "Subnet", value: subnet.cidr, monospaced: true)
                 }
-                // One v6 address, not the six a modern Mac holds: the rest are
-                // temporary privacy addresses that rotate, and listing them
-                // turns a diagnostic row into a wall.
                 if let v6 = interface.routableIPv6.first ?? interface.ipv6.first {
                     KeyValue(key: "IPv6", value: v6, monospaced: true)
                 }
@@ -228,9 +177,6 @@ struct NetworkAdminSection: View {
                 if let segment = interface.segment {
                     KeyValue(key: "Segment", value: segment.name)
                     if let tag = segment.vlanTag, interface.vlanTag == nil {
-                        // Said explicitly, because it is the one number on this
-                        // row that did not come off the wire. On an access port
-                        // the switch strips the tag; this is a declaration.
                         KeyValue(key: "VLAN tag", value: "\(tag) (not carried on this link)")
                     }
                     if let cidr = segment.cidr {
@@ -239,9 +185,6 @@ struct NetworkAdminSection: View {
                     if let purpose = segment.purpose {
                         KeyValue(key: "Purpose", value: purpose)
                     }
-                    // Provenance travels with the claim, the same argument
-                    // `EvidenceChips` makes about health: a segment on screen
-                    // can always be traced to whoever said so.
                     if let source = VLANRegistry.shared.sourceName {
                         KeyValue(key: "Named by", value: source)
                     }
@@ -258,17 +201,6 @@ struct NetworkAdminSection: View {
         }
     }
 
-    /// The four states, in one place.
-    ///
-    /// 1. Host has an 802.1Q sub-interface → the tag, read off `ifconfig`.
-    ///    Both facts when a source also named it: `VLAN 40 · Guest`.
-    /// 2. A source named the segment for an untagged interface → the segment's
-    ///    own tag if it declared one, otherwise just the name. This is the
-    ///    access-port case, where the switch strips the tag before the frame
-    ///    reaches the NIC and the host has no tag of its own to show.
-    /// 3. Untagged and unnamed → **nil**. No badge, no placeholder. The subnet
-    ///    in the subtitle is the honest artifact and it is already there.
-    /// 4. Nothing → nil.
     private func vlanLabel(_ interface: NetworkInterface) -> String? {
         let tag = interface.vlanTag ?? interface.segment?.vlanTag
         switch (tag, interface.segment?.name) {
@@ -279,24 +211,6 @@ struct NetworkAdminSection: View {
         }
     }
 
-    /// The subtitle competes for width against a `Tag` that pins its own size,
-    /// so it is what truncates. Two drafts lost something that mattered — the
-    /// first ate the device name, the second ate the word *secondary* — and both
-    /// were symptoms of putting four facts in a 380pt row behind an icon.
-    ///
-    /// The fix is separation rather than abbreviation. **Which interface is the
-    /// path in use is the routing row's question**, and the routing row already
-    /// answers it twice: its summary names the winning interface, and its
-    /// expanded detail lists every default route with the one in use marked.
-    /// Restating it on each interface was a third copy competing for the width
-    /// that the address needs.
-    ///
-    /// What is left is what an interface row is for: where it is, and what it is
-    /// on. Address and prefix are one token in CIDR form — `10.10.40.12/24`
-    /// rather than `10.10.40.12 · /24`, shorter and how anyone would write it —
-    /// and `en1` is dropped when a segment name is already carrying the row's
-    /// identity, since a BSD device name is the least interesting thing on a row
-    /// that says *Guest*. It stays in the expanded detail.
     private func interfaceSubtitle(_ interface: NetworkInterface) -> String {
         var parts: [String] = []
         if let address = interface.primaryAddress {
@@ -309,9 +223,6 @@ struct NetworkAdminSection: View {
         return parts.joined(separator: " · ")
     }
 
-    // MARK: - Segments
-
-    /// Only reachable when `VLANRegistry.shared.isAvailable`.
     private var segmentSection: some View {
         VStack(alignment: .leading, spacing: 0) {
             CompactHeader(title: "Segments",
@@ -327,13 +238,6 @@ struct NetworkAdminSection: View {
         }
     }
 
-    // MARK: - Diagnostic output
-
-    /// The result of the last ping or traceroute, in place.
-    ///
-    /// Monospaced and scrollable rather than a sheet: the output is columns, and
-    /// a popover that opens a window to show four lines of text has lost the
-    /// argument for being a popover.
     private func diagnosticOutput(_ outcome: NetworkActions.Outcome) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
@@ -348,11 +252,6 @@ struct NetworkAdminSection: View {
                 }
                 IconButton(symbol: "xmark", help: "Dismiss") { actions.clearOutcome() }
             }
-            // Both axes, and clipped. `fixedSize` gives the text its full
-            // intrinsic height, so a horizontal-only ScrollView never clipped the
-            // vertical overflow — `maxHeight` bounded the frame while the content
-            // drew straight through it and over the rest of the popover. Four
-            // lines of ping never reached the bound; a support bundle is hundreds.
             ScrollView([.horizontal, .vertical]) {
                 Text(outcome.output.isEmpty ? "(no output)" : outcome.output)
                     .font(FleetFont.mono(10))
@@ -373,11 +272,6 @@ struct NetworkAdminSection: View {
     }
 }
 
-/// The admin rows plus their footer, with the disclosure state owned locally.
-///
-/// Exists so `SurfaceRenderer` can capture this section on its own — inside the
-/// Connections tab it lives below a scroll fold a still capture cannot reach.
-/// It is the shipping views, composed, not a second drawing of them.
 struct NetworkAdminPreview: View {
     @Bindable var model: AppModel
     @State private var expanded: String?
@@ -392,20 +286,6 @@ struct NetworkAdminPreview: View {
     }
 }
 
-// MARK: - Footer
-
-/// The admin-console footer, and the shape the VLAN console will take.
-///
-/// Two links, one mechanism. `AdminConsole` is an enum rather than a pair of
-/// hard-coded buttons precisely so the VLAN case is a `case` and a config key,
-/// not a second footer with its own layout: adding it later means giving the
-/// enum a third case and giving `Consoles` a third field.
-///
-/// The network console's URL **resolves** rather than being stored: with nothing
-/// in config it is `http://<default gateway>`, which is the router admin page on
-/// essentially every home and small-office network, and needs no setup. With no
-/// gateway there is no URL, so the button is absent — the capability rule applied
-/// to a link.
 enum AdminConsole: String, CaseIterable, Identifiable {
     case network
     case vlan
@@ -426,7 +306,6 @@ enum AdminConsole: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Configured URL first, then whatever the case can derive on its own.
     @MainActor
     func url(settings: Settings, routing: RoutingStatus) -> URL? {
         let configured: String?
@@ -441,16 +320,10 @@ enum AdminConsole: String, CaseIterable, Identifiable {
             guard let gateway = routing.defaultGatewayIPv4 else { return nil }
             return URL(string: "http://\(gateway)")
         case .vlan:
-            // Nothing to derive. A VLAN console is a controller somebody runs;
-            // this machine cannot guess its address, so with no config key and
-            // no registered source the entry does not render at all.
             return nil
         }
     }
 
-    /// Whether this entry appears. `vlan` additionally requires a registered
-    /// source, so a stray config key alone cannot conjure a VLAN section that
-    /// has no data behind it.
     @MainActor
     func isAvailable(settings: Settings, routing: RoutingStatus) -> Bool {
         guard url(settings: settings, routing: routing) != nil else { return false }

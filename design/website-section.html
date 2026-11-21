@@ -8,7 +8,6 @@ html{scroll-behavior:smooth}
 body{margin:0;background:#000;color:#fff;font:16px/1.55 "Geist","Helvetica Neue",Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .mono{font-family:var(--fc-font)}
 a{color:inherit}
-/* nav */
 nav{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;max-width:1240px;margin:0 auto;padding:30px 28px}
 .brand{display:flex;align-items:center;gap:12px;font-size:22px;text-decoration:none;letter-spacing:-.01em}
 .brand img{height:30px}
@@ -19,7 +18,6 @@ nav{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:ce
 .pill:hover,.pill:focus-visible{background:var(--fc-bright);outline:none}
 .ghost{color:#d8d8d8;text-decoration:none}
 @media(max-width:860px){.links{display:none}}
-/* hero */
 .hero{position:relative;min-height:min(100vh,860px);overflow:hidden;display:flex;flex-direction:column;justify-content:center}
 #scene{position:absolute;inset:0;width:100%;height:100%;display:block}
 .veil{position:absolute;inset:0;background:linear-gradient(90deg,#000 0%,rgba(0,0,0,.85) 34%,rgba(0,0,0,0) 62%),linear-gradient(0deg,#000 0%,rgba(0,0,0,0) 30%);pointer-events:none}
@@ -31,7 +29,6 @@ h1 em{font-style:normal;color:var(--fc-bright)}
 .stats{position:relative;z-index:2;max-width:1240px;width:100%;margin:0 auto;padding:40px 28px 56px;display:flex;gap:clamp(28px,6vw,90px);flex-wrap:wrap}
 .stats b{display:block;font-weight:400;font-size:clamp(34px,4.4vw,52px);letter-spacing:-.03em;line-height:1.1}
 .stats span{color:#8f9f8f;font-size:15px}
-/* sections */
 .sec{max-width:1240px;margin:0 auto;padding:110px 28px 20px}
 .sec h2{font-weight:400;font-size:clamp(34px,5vw,64px);line-height:1.04;letter-spacing:-.03em;margin:0 0 18px;max-width:14em}
 .sec h2 em{font-style:normal;color:var(--fc-bright)}
@@ -100,7 +97,6 @@ function draw(){
  const cxm=cols*.74;
  for(let c=0;c<cols;c++){
   const g=ground(c),sway=still?0:Math.sin(t*.6+c*.4)*.6;
-  // terrain columns, gauge-like: bright cap, dithered body fading down
   for(let r=Math.floor(g+sway);r<rows;r++){
    const d=r-g,k=Math.max(0,1-d/(rows*.2));if(k<=0)continue;
    const dither=hash(c,r)<k*.9?1:0;if(!dither)continue;
@@ -108,7 +104,6 @@ function draw(){
    const col=d<1.5?[85,255,85]:mix([0,110,0],[0,170,0],hash(c,r+9));
    cx.fillStyle=`rgba(${col[0]},${col[1]},${col[2]},${a})`;cx.fillRect(c*CELL+G,r*CELL+G,CELL-G*2,CELL-G*2)}
  }
- // the F/C mark rising out of the field: cells light up in sequence
  const F=[[0,0],[1,0],[2,0],[3,0],[4,0],[0,1],[0,2],[0,3],[2,1],[2,2]],C=[[0,2],[1,2],[2,2],[3,2],[4,2],[0,3],[0,4],[0,5],[4,3],[4,4],[4,5],[1,5],[3,5]];
  const S=Math.max(CELL*2.4,Math.min(34,W/38)),ox=W*.62,oy=H*.18;
  const lit=still?99:(t*3)%34;
@@ -116,7 +111,6 @@ function draw(){
  let i=0;const ov=new Set(F.map(([r,c])=>r+","+c).filter(k=>C.some(([r,c])=>r+","+c===k)));
  F.forEach(([r,c])=>{cell(r,c,ov.has(r+","+c)?"rgba(220,255,220,A)":"rgba(85,255,85,A)",i++)});
  C.forEach(([r,c])=>{if(!ov.has(r+","+c))cell(r,c,"rgba(0,170,0,A)",i++)});
- // drifting motes, like pollen
  cx.fillStyle="rgba(120,255,120,.7)";
  motes.forEach(m=>{if(!still){m.y-=m.v;m.x+=Math.sin(t+m.p)*.01;if(m.y<0){m.y=rows*.9;m.x=Math.random()*cols}}
   cx.globalAlpha=.25+.5*Math.abs(Math.sin(t*.8+m.p));cx.fillRect(m.x*CELL,m.y*CELL,3,3)});

@@ -1,31 +1,4 @@
 #!/bin/bash
-# Derives Resources/yazi/theme-light.toml from theme-dark.toml.
-#
-# The Yazi surface is achromatic on purpose — see the header of theme-dark.toml:
-# colour in this app is a *status* vocabulary, and a file browser spending green
-# on "+x" two feet from a services list where green means verified is a second
-# meaning on the console's most loaded signal.
-#
-# But achromatic is not appearance-independent. The dark theme is a five-step
-# ramp built for a dark terminal background, and `PTYSurface.applyAppearance`
-# makes that background follow the system: in Light Mode the panel turned white
-# while Yazi went on painting #C8C9CD text and #55565A rules onto it — about
-# 1.3:1, which is not "low contrast", it is invisible.
-#
-# Both themes are therefore the same file with the ramp inverted, generated
-# rather than hand-maintained, because two hand-kept copies of a 240-line theme
-# is precisely the drift this repo counts everywhere else.
-#
-#   dark            light           role
-#   #F2F3F5   →     #16181C         ink    — the focused row, brightest/darkest
-#   #C8C9CD   →     #3C3E44         plain  — ordinary entries
-#   #86878C   →     #74767C         muted  — chrome, parent column, metadata
-#   #55565A   →     #B9BBC0         faint  — dividers and rules
-#   #0B0D11   →     #FFFFFF         page   — the reversed row's own text
-#
-# The reversal survives the inversion, which is the point: `hovered` stays
-# page-on-ink, so in dark mode it is a light row on a dark column and in light
-# mode a dark row on a light one. Either way exactly one row is high-contrast.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

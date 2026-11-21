@@ -1,10 +1,4 @@
 #!/bin/bash
-# Registers fleetd as a per-user launchd agent.
-#
-# This is the fallback path for unsigned local builds, where SMAppService cannot
-# register the bundled agent. It uses the same mechanism launchd would use either
-# way: a user LaunchAgent in ~/Library/LaunchAgents, loaded into the gui/$UID
-# domain. No sudo, no root, no system-wide daemon.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -60,10 +54,6 @@ launchctl bootstrap "gui/$(id -u)" "$PLIST"
 launchctl enable "gui/$(id -u)/$LABEL"
 launchctl kickstart -k "gui/$(id -u)/$LABEL"
 
-# The controller does its first reconcile sweep before it binds the socket, and
-# that sweep shells out to lsof/ps — measured at 1s on an idle machine but 39s
-# after a burst of restarts. A single `sleep 2` reports a healthy install as
-# broken, so poll until it answers.
 READY=0
 for _ in $(seq 1 45); do
     if "$(dirname "$FLEETD")/fleetctl" ping >/dev/null 2>&1; then

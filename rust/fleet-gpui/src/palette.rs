@@ -1,9 +1,3 @@
-//! Colors and font for the window, from `design/tokens.json` through
-//! `fleet_ui_core::theme`. Dark mode uses the glass fog palette by default —
-//! a translucent panel over the blurred window material with a vibrant level
-//! ramp — or the phosphor palette when `--theme phosphor` says so; light mode
-//! uses the paper palette. The window re-reads the choice when the system
-//! appearance changes.
 
 use fleet_ui_core::map::NodeKind;
 use fleet_ui_core::theme::{tokens, Palette, Rgb};
@@ -16,8 +10,6 @@ pub enum Appearance {
     Light,
 }
 
-/// Which dark palette the window uses. Fog is the default; phosphor stays
-/// available from the command line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DarkTheme {
     Fog,
@@ -41,7 +33,6 @@ impl DarkTheme {
     }
 }
 
-/// The dark theme the windows were opened with, set once at start-up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UiDarkTheme(pub DarkTheme);
 
@@ -53,9 +44,6 @@ fn dark_theme(cx: &gpui::App) -> DarkTheme {
         .unwrap_or(DarkTheme::Fog)
 }
 
-/// The window's background material. Only fog draws its chrome over the
-/// system blur; phosphor and paper need the plain backdrop because their
-/// fills are opaque, and a blur under them would only cost.
 pub fn window_background(cx: &gpui::App) -> WindowBackgroundAppearance {
     if dark_theme(cx) == DarkTheme::Fog {
         WindowBackgroundAppearance::Blurred
@@ -95,39 +83,27 @@ pub struct Colors {
     pub selected_text: Hsla,
 }
 
-/// The translucent layered panel: the fog look. `Chrome` values are alphas
-/// layered over the window's blurred background material; every one stays
-/// behind opaque text, so no value or reason is drawn translucent.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass;
 
 impl Glass {
-    /// The window root: mostly transparent so the blurred material reads as
-    /// fog behind the chrome.
     pub fn window(&self, bg: Hsla) -> Hsla {
         bg.opacity(0.78)
     }
-    /// Cards and panels.
     pub fn panel(&self, panel: Hsla) -> Hsla {
         panel.opacity(0.62)
     }
-    /// The soft glow ring behind a node. Always behind the node plate.
     pub fn glow(&self, accent: Hsla) -> Hsla {
         accent.opacity(0.16)
     }
-    /// Edge strokes on the map; the faint route lines between nodes.
     pub fn edge(&self, line: Hsla) -> Hsla {
         line.opacity(0.7)
     }
-    /// A filled swatch in the legend or a badge plate.
     pub fn swatch(&self, accent: Hsla) -> Hsla {
         accent.opacity(0.22)
     }
 }
 
-/// Vibrant category colors for the relational map, one per node kind. They
-/// label nothing on their own: every surface also carries the kind's word, in
-/// the inspector, the legend or the node label itself.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MapAccents {
     pub controller: Hsla,
@@ -149,8 +125,6 @@ impl MapAccents {
                 process: rgb(0x55d58a).into(),
                 volume: rgb(0xf480bc).into(),
             },
-            // The paper appearance has its own accents, slightly deeper so
-            // they hold on the light substrate.
             Appearance::Light => Self {
                 controller: rgb(0xd97706).into(),
                 device: rgb(0x2563eb).into(),
@@ -162,7 +136,6 @@ impl MapAccents {
         }
     }
 
-    /// The accent of a node kind, for the renderer that walks nodes by kind.
     pub fn map_accent(self, kind: NodeKind) -> Hsla {
         match kind {
             NodeKind::Controller => self.controller,
@@ -207,21 +180,16 @@ impl Colors {
         Self::for_app(appearance, cx)
     }
 
-    /// The window root: translucent over the blurred material in the fog
-    /// theme, opaque elsewhere.
     pub fn window_fill(&self) -> Hsla {
         self.glass()
             .map(|g| g.window(self.bg))
             .unwrap_or(self.bg)
     }
 
-    /// Panel and card fills.
     pub fn panel_fill(&self) -> Hsla {
         self.glass().map(|g| g.panel(self.panel)).unwrap_or(self.panel)
     }
 
-    /// Whether the window's background material is up: only the fog theme is
-    /// translucent over the blurred window; phosphor and paper draw opaque.
     pub fn glass(&self) -> Option<Glass> {
         if self.appearance == Appearance::Dark && self.dark_theme == DarkTheme::Fog {
             Some(Glass)
@@ -230,7 +198,6 @@ impl Colors {
         }
     }
 
-    /// The band color for a lit segment.
     pub fn level(&self, level: Level) -> Hsla {
         let p = self.palette();
         color(p.level(level))
@@ -243,8 +210,6 @@ impl Colors {
         }
     }
 
-    /// Text color for a value in a band: ordinary text until warning, then
-    /// amber and red. The band's word is always shown next to it.
     pub fn level_text(&self, level: Option<Level>) -> Hsla {
         match level {
             Some(Level::Warning) => self.warn,
@@ -253,7 +218,6 @@ impl Colors {
         }
     }
 
-    /// Border color for something whose worst band is `level`.
     pub fn level_border(&self, level: Option<Level>) -> Hsla {
         match level {
             Some(Level::Warning) => self.warn,
@@ -263,8 +227,6 @@ impl Colors {
     }
 }
 
-/// Monospace families in preference order: the design font first, then the
-/// common system monospace families on macOS and Linux.
 pub const FONT_CANDIDATES: &[&str] = &[
     "Geist Mono",
     "SF Mono",
@@ -278,9 +240,6 @@ pub const FONT_CANDIDATES: &[&str] = &[
     "Courier New",
 ];
 
-/// The first candidate the system has. When none is installed, fall back to
-/// the platform's usual monospace family name and let GPUI's own fallback
-/// stack resolve it.
 pub fn choose_font(available: &[String]) -> &'static str {
     FONT_CANDIDATES
         .iter()

@@ -1,7 +1,3 @@
-//! OS-agnostic telemetry provider and hardware capability abstraction.
-//!
-//! Abstracts system metric collection behind an OS-independent `TelemetryProvider`
-//! trait, replacing macOS-exclusive assumptions with configurable hardware profiles.
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -149,14 +145,12 @@ impl fmt::Display for TelemetryError {
 
 impl std::error::Error for TelemetryError {}
 
-/// Abstract, cross-platform telemetry provider.
 pub trait TelemetryProvider: Send + Sync {
     fn hardware_profile(&self) -> &HardwareProfile;
     fn sample(&mut self) -> Result<TelemetrySnapshot, TelemetryError>;
     fn refresh(&mut self) -> Result<(), TelemetryError>;
 }
 
-/// Portable telemetry provider backed by `sysinfo`.
 pub struct SysinfoTelemetryProvider {
     profile: HardwareProfile,
     sys: sysinfo::System,
@@ -304,7 +298,6 @@ impl TelemetryProvider for SysinfoTelemetryProvider {
     }
 }
 
-/// Deterministic mock telemetry provider for tests and simulation.
 pub struct SimulatedTelemetryProvider {
     pub profile: HardwareProfile,
     pub current_snapshot: TelemetrySnapshot,

@@ -1,50 +1,28 @@
 import Foundation
 
-/// User-editable configuration. Written with defaults on first daemon start.
-/// The allow-list of "boring" listeners lives here, so adding one is an explicit,
-/// reviewable act (threat model T4).
 public struct FleetConfig: Codable, Sendable {
     public var supervisorTickSec: Double
     public var reconcileIntervalSec: Double
     public var deviceProbeIntervalSec: Double
-    /// Leases longer than this are clamped. Prevents "effectively forever".
     public var maxLeaseSec: Double
     public var defaultLeaseSec: Double
-    /// Grace period between SIGTERM and SIGKILL.
     public var stopGraceSec: Double
-    /// Evidence older than tick * this factor renders as "unknown (stale)".
     public var staleTickFactor: Double
-    /// How long a newly discovered unmanaged process stays in "Needs attention".
-    /// After this it is still listed as Unmanaged, but it stops being an alert:
-    /// a listener that has been up for hours is furniture, not an incident.
     public var unmanagedGraceSec: Double
-    /// How long a crashed service stays in "Needs attention".
     public var crashAttentionSec: Double
 
-    /// Commands whose listeners are expected and are not flagged as unmanaged.
     public var ignoredListenerCommands: [String]
-    /// Ports that are never flagged (e.g. system services you accept).
     public var ignoredPorts: [Int]
-    /// Listeners at or above this port are treated as ephemeral and not flagged.
-    /// The dynamic range is where short-lived helpers land; each one that appears
-    /// and vanishes would otherwise write a `becameUnmanaged` event and briefly
-    /// raise an alert for something nobody can act on. Set to 0 to flag everything.
     public var ephemeralPortFloor: Int
-    /// Argv substrings that make a *non-listening* process look like a dev server.
     public var devServerPatterns: [String]
 
-    /// Your own long-running tools. Anything matching one of these is shown as a
-    /// named local tool instead of being flagged as an unmanaged process.
     public var knownServices: [KnownService]
 
     public struct KnownService: Codable, Sendable, Identifiable {
         public var id: String
         public var name: String
-        /// Matched against the full command line, case-insensitively.
         public var match: String
-        /// Ports it is expected to listen on; also used for matching.
         public var ports: [Int]
-        /// Opened when you click the row.
         public var url: String?
         public var symbol: String?
 
@@ -69,25 +47,14 @@ public struct FleetConfig: Codable, Sendable {
         }
     }
 
-    /// What the app shows, how often it looks, and which guarded verbs are
-    /// unlocked. Every field has a default that makes the app correct with no
-    /// config file at all — the block exists so a section can be turned *off*,
-    /// not so it can be turned on.
     public var ui: UIConfig
 
-    /// Zero setup by default. Each nested struct decodes field-by-field with a
-    /// fallback, the same contract as `FleetConfig` itself: a key from a later
-    /// version must not make the file undecodable, and a key you delete must
-    /// fall back rather than fail the load.
     public struct UIConfig: Codable, Sendable {
         public var sections: Sections
         public var intervals: Intervals
         public var features: Features
         public var consoles: Consoles
 
-        /// Which surfaces render. A section switched off is *absent*, not
-        /// greyed: a control you can see and cannot use is the same dead chrome
-        /// rule 10 bans from the menus.
         public struct Sections: Codable, Sendable {
             public var services: Bool
             public var agents: Bool
@@ -118,28 +85,6 @@ public struct FleetConfig: Codable, Sendable {
             }
         }
 
-        /// Cadences, clamped on read. A zero or negative interval in a
-        /// hand-edited file would otherwise mean "sample continuously", which
-        /// is a `ps -Ao` over every process on the machine in a tight loop.
-        /// Two cadences, because the app runs two samplers.
-        ///
-        /// There was a third — `routingRefreshSec`, default 30 — and it was read
-        /// by nothing. It was documented in README.md, clamped here and asserted
-        /// by a test, which is three places agreeing about a knob that turned
-        /// nothing: routing is captured *inside* `NetworkMonitor.refresh()`, in
-        /// the same pass and off the same `readHardwarePorts()` as every other
-        /// probe, so it has always run on `networkRefreshSec`.
-        ///
-        /// Removed rather than wired up, and that is the interesting half. A
-        /// separate timer would mean a second overlapping probe pass forking its
-        /// own `netstat`, `ifconfig` and `scutil` and re-reading the hardware
-        /// ports that `RoutingProbe.capture` already takes as an argument —
-        /// paying twice to make the picture *less* coherent, since the gateway
-        /// and the Wi-Fi state it is read against would then come from two
-        /// different moments. The single pass is the right design; the config key
-        /// was describing one that was never built. An existing config.json with
-        /// the key still loads — unknown keys are ignored — and now says nothing
-        /// instead of saying something false.
         public struct Intervals: Codable, Sendable {
             public var networkRefreshSec: Double
             public var processSampleSec: Double
@@ -157,38 +102,13 @@ public struct FleetConfig: Codable, Sendable {
                 processSampleSec = try c.decodeIfPresent(Double.self, forKey: .processSampleSec) ?? d.processSampleSec
             }
 
-            /// The floors are not taste. `ps -Ao` over every process costs far
-            /// more than reading a Mach counter, and `netstat -rn` plus
-            /// `scutil --dns` fork two more; below these a "refresh" is just a
-            /// second copy of the previous one still running.
             public var clampedNetworkRefresh: Double { max(5, networkRefreshSec) }
             public var clampedProcessSample: Double { max(2, processSampleSec) }
         }
 
-        /// Verbs that stay locked until you say otherwise.
         public struct Features: Codable, Sendable {
-            /// Unlocks **End Process** on the Processes surface.
-            ///
-            /// Off by default, and off is the honest default: FleetConsole's
-            /// standing rule is that the *controller* never signals a process it
-            /// did not start, because a recycled PID must never be hit. This
-            /// flag does not weaken that rule — the controller still refuses.
-            /// It unlocks a separate, narrower thing: a signal **you** send, to
-            /// a process **you** own, from a row you are looking at, after the
-            /// app has re-read the process's start signature and confirmed the
-            /// PID is still the one the row was drawn from. Three gates, all of
-            /// which have to hold; this is the one you control.
             public var allowProcessTermination: Bool
 
-            /// Shows what each agent cost you today in the Agents section.
-            ///
-            /// Off until the figures have been checked against a provider's own
-            /// bill on this machine. The prices are a table written down in
-            /// `AgentPricing` rather than fetched, so the first thing a wrong
-            /// entry does is put a confident, wrong number on screen — and a
-            /// spend figure nobody has verified is worse than no figure, because
-            /// it will be believed. Turn it on once, deliberately, after
-            /// comparing a day.
             public var showAgentSpend: Bool
 
             public init(allowProcessTermination: Bool = false, showAgentSpend: Bool = false) {
@@ -206,17 +126,6 @@ public struct FleetConfig: Codable, Sendable {
             }
         }
 
-        /// Where the "open the admin console" footers point.
-        ///
-        /// `network` is `nil` by default and *resolves* to `http://<default
-        /// gateway>` at render time, so the footer works on first launch with no
-        /// configuration and without this file inventing a URL it cannot know.
-        /// A machine with no default route has no gateway, so the footer does
-        /// not render — that is the capability rule, applied to a link.
-        ///
-        /// `vlan` is the documented seam for the VLAN admin console. It is
-        /// `nil` here and there is no VLAN source registered, so nothing in the
-        /// UI mentions VLAN segments today. See `VLANSource`.
         public struct Consoles: Codable, Sendable {
             public var network: String?
             public var vlan: String?
@@ -253,30 +162,11 @@ public struct FleetConfig: Codable, Sendable {
         }
     }
 
-    /// The VLAN segments this fleet is divided into, as **you** declare them.
-    ///
-    /// This exists because of a gap the host cannot close on its own. A Mac on a
-    /// trunk port reads its own 802.1Q tag off `ifconfig`; a Mac on an access
-    /// port — which is almost every Mac — never sees a tag at all, because the
-    /// switch strips it before the frame reaches the NIC. All the host gets is a
-    /// subnet and a gateway.
-    ///
-    /// FleetConsole will not bridge that gap by guessing. `10.10.40.0/24` looks
-    /// like VLAN 40 and an app that infers it is right on your network and wrong
-    /// on anyone who numbered theirs differently. But *you* know, and saying so
-    /// here is an assertion with an author, which is a different thing from a
-    /// heuristic — the same distinction `ignoredListenerCommands` draws.
-    ///
-    /// Empty by default. Nothing renders until something is declared.
     public var networkSegments: [SegmentConfig]
 
     public struct SegmentConfig: Codable, Sendable, Identifiable {
-        /// 802.1Q tag. Optional, because a segment can be a subnet you have
-        /// separated without giving it a number.
         public var tag: Int?
         public var name: String
-        /// The subnet, in CIDR. This is what matches a host interface on an
-        /// access port, where there is no tag to match on.
         public var cidr: String?
         public var gateway: String?
         public var purpose: String?
@@ -311,32 +201,11 @@ public struct FleetConfig: Codable, Sendable {
         public var localHost: String?
         public var tailscaleHost: String?
         public var probePort: Int?
-        /// Set for the machine FleetConsole itself runs on.
         public var isSelf: Bool
-        /// Opt-in: fetch that machine's managed services read-only over SSH.
-        /// Off by default — it runs a command on another host.
         public var remoteQuery: Bool
-        /// `user@host` for SSH; falls back to the probe target.
         public var sshHost: String?
-        /// Path to fleetctl on that machine, if it is not on the default PATH.
         public var remoteFleetctl: String?
 
-        /// Services declared to be running *on that machine*, matched over SSH.
-        ///
-        /// `knownServices` is the same idea for this machine, and it cannot be
-        /// used here: it matches the local process table. The two services that
-        /// motivated this — a Buzz relay and an opencode server on another Mac —
-        /// are reachable by none of the mechanisms that existed. The relay makes
-        /// an *outbound* WebSocket connection and never listens, so there is no
-        /// port to probe; the opencode server listens on the remote's loopback,
-        /// so its port is unreachable from here by construction; and the
-        /// `remoteQuery` path needs that machine to have `fleetctl` installed,
-        /// which it does not.
-        ///
-        /// So: declare them, and match them over the SSH trust you already have.
-        /// Read-only, like everything else across the mesh — the records these
-        /// produce are marked `claimed`, which is what makes them unsignallable
-        /// rather than merely undisplayed as controls.
         public var services: [KnownService]
 
         public init(id: String, name: String, model: String = "", localHost: String? = nil,
@@ -408,9 +277,6 @@ public struct FleetConfig: Codable, Sendable {
         self.devices = devices
     }
 
-    /// Hand-written and hand-edited: a key added in a later version must not make
-    /// the whole file undecodable, and a key you delete must fall back to the
-    /// default rather than failing the load.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let d = FleetConfig()
@@ -442,7 +308,6 @@ public struct FleetConfig: Codable, Sendable {
         "syncthing", "node_exporter", "sshd", "smbd", "cupsd", "mDNSResponder",
     ]
 
-    /// Inventory entries are explicit user configuration; fresh installs start empty.
     public static let defaultKnownServices: [KnownService] = []
 
     public static let defaultDevServerPatterns: [String] = [
@@ -452,7 +317,6 @@ public struct FleetConfig: Codable, Sendable {
         "pnpm dev", "streamlit", "jupyter", "fastapi", "ollama serve",
     ]
 
-    /// Only this machine is present until the user explicitly links a device.
     public static func makeDefault(selfHostName: String?, selfTailscaleName: String?) -> FleetConfig {
         var cfg = FleetConfig()
         cfg.devices = [DeviceConfig(id: "self", name: selfHostName ?? "This Mac",
@@ -478,8 +342,6 @@ public struct FleetConfig: Codable, Sendable {
                                                ofItemAtPath: FleetPaths.config.path)
     }
 
-    /// Loads config, creating it from defaults if missing. Never throws: a broken
-    /// config must not stop the controller from reaping leaked processes.
     public static func loadOrCreate(selfHostName: String?, selfTailscaleName: String?) -> (FleetConfig, String?) {
         do {
             return (try load(), nil)

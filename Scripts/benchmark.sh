@@ -1,9 +1,4 @@
 #!/bin/bash
-# Live native-window verification, using optimized code and real host probes.
-# Usage: Scripts/benchmark.sh [seconds=60] [output-directory]
-# Optional: FLEET_BENCHMARK_CPU_BUDGET limits percent of ONE core, not the host.
-# The window stays offscreen. RUSAGE_SELF excludes collector subprocesses and
-# WindowServer; this is not a composited on-screen rendering or idle benchmark.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SECONDS_ARG="${1:-60}"
@@ -14,8 +9,6 @@ mkdir -p "$OUTPUT_DIR"
 FLAGS=(--disable-index-store -Xswiftc -disable-cmo -Xswiftc -DFLEET_SURFACE_RENDERER)
 swift build -c release "${FLAGS[@]}"
 BIN="$(swift build -c release "${FLAGS[@]}" --show-bin-path)"
-# A successful producer exit is not evidence. Give each invocation an empty,
-# exclusive directory so no previous receipt/screenshots can satisfy this gate.
 EVIDENCE_DIR="$(mktemp -d "$OUTPUT_DIR/run.XXXXXX")"
 "$BIN/FleetConsoleApp" --verify-live "$EVIDENCE_DIR" "$SECONDS_ARG"
 python3 - "$EVIDENCE_DIR/receipt.json" "$CPU_BUDGET" <<'PY'

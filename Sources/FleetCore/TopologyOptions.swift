@@ -1,6 +1,5 @@
 import Foundation
 
-/// Strict read-only command options; a boolean flag never consumes an operand.
 public struct TopologyOptions: Sendable, Equatable {
     public var owner: String?
     public var snapshotPath: String?

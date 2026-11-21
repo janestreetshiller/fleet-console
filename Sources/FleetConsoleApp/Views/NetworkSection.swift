@@ -2,8 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-/// Network rows, built on the shared FleetKit primitives so an interface row and
-/// a service row are recognisably the same kind of object.
 struct NetworkSection: View {
     @Bindable var model: AppModel
     @State private var expanded: String?
@@ -17,8 +15,6 @@ struct NetworkSection: View {
             tailscaleRow
         }
     }
-
-    // MARK: - Ethernet
 
     private var ethernetRow: some View {
         let status = network.ethernet
@@ -44,8 +40,6 @@ struct NetworkSection: View {
             }
         }
     }
-
-    // MARK: - Wi-Fi
 
     private var wifiRow: some View {
         let status = network.wifi
@@ -95,8 +89,6 @@ struct NetworkSection: View {
             }
         }
     }
-
-    // MARK: - Tailscale
 
     private var tailscaleRow: some View {
         let status = network.tailscale
@@ -150,7 +142,7 @@ struct NetworkSection: View {
 }
 
 struct SignalBars: View {
-    let level: Int   // 0…4
+    let level: Int
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 1.5) {

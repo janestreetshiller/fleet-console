@@ -1,29 +1,7 @@
-# FleetConsole's Yazi surface — white and grey, nothing else.
-#
-# Yazi's stock theme colours by file type: green executables, magenta archives,
-# cyan links, a dozen hues down the column. That is a legible scheme in a
-# full-window file manager and the wrong one here. In this app colour is a status
-# vocabulary — `StatusTone` spends green, amber and red on healthy, degraded and
-# failing, and every surface honours that. A file browser spending the same green
-# on "this file has +x" puts a second, unrelated meaning on the console's most
-# loaded signal, two feet from a services list where green means verified.
-#
-# So the file column is achromatic and attention is carried by *weight and
-# reversal* instead: the hovered row is the only high-contrast thing on screen.
-
-# One ramp, four steps. Named here rather than repeated, because the whole point
-# is that no fifth value quietly appears.
-#   ink    #F2F3F5  the focused row
-#   plain  #C8C9CD  ordinary entries
-#   muted  #86878C  directories' chrome, parent column, metadata
-#   faint  #55565A  dividers and rules
 
 [mgr]
 cwd = { fg = "#86878C" }
 
-# Reversed, not tinted. This is the "focus attention to a specific path" rule:
-# one row is inverted, everything else is flat, and the eye has exactly one place
-# to land no matter how long the listing is.
 hovered = { fg = "#0B0D11", bg = "#F2F3F5", bold = true }
 preview_hovered = { fg = "#0B0D11", bg = "#C8C9CD" }
 
@@ -39,8 +17,6 @@ count_copied = { fg = "#0B0D11", bg = "#C8C9CD" }
 count_cut = { fg = "#0B0D11", bg = "#86878C" }
 count_selected = { fg = "#0B0D11", bg = "#F2F3F5" }
 
-# The dividers, fixed rather than inherited. One glyph, one weight, one colour,
-# dim enough to read as structure instead of as content.
 border_symbol = "│"
 border_style = { fg = "#55565A" }
 
@@ -118,14 +94,7 @@ desc = { fg = "#86878C" }
 hovered = { fg = "#0B0D11", bg = "#F2F3F5" }
 footer = { fg = "#86878C" }
 
-# One rule per structural distinction, and no rule that encodes a *status*.
-# Directories read brightest because they are the thing you navigate; everything
-# else is one step down; unreadable entries drop to muted so a permission problem
-# is still visible without spending a hue on it.
 [filetype]
-#
-# `url`, not `name`: a filetype rule matches on url or mime and is rejected at
-# parse time otherwise — the same rule [open] enforces.
 rules = [
 	{ url = "*/", fg = "#F2F3F5" },
 	{ url = "*", is = "orphan", fg = "#86878C", italic = true },
@@ -134,19 +103,6 @@ rules = [
 	{ url = "*", fg = "#C8C9CD" },
 ]
 
-# Icons.
-#
-# `[filetype]` colours the *name*; the glyph in front of it is coloured by these
-# rules, which are a separate set with their own `fg`. Leaving them at Yazi's
-# defaults left an orange Rust glyph and a blue TOML glyph in a column that is
-# otherwise achromatic — the exact thing this theme exists to prevent. Declaring
-# `[icon]` replaces the default set outright, so the set below is deliberately
-# a working operator's set rather than an exhaustive one: the file kinds that
-# actually appear next to a supervised service.
-#
-# Every glyph is a Nerd Font codepoint. `TerminalFont` resolves a Nerd Font for
-# the panel and falls back to SF Mono when none is installed — in that case these
-# render as tofu, which is why the panel says so rather than pretending.
 [icon]
 
 dirs = [
@@ -178,7 +134,6 @@ files = [
 ]
 
 exts = [
-	# Code
 	{ name = "swift", text = "" },
 	{ name = "rs", text = "" },
 	{ name = "py", text = "" },
@@ -194,7 +149,6 @@ exts = [
 	{ name = "bash", text = "" },
 	{ name = "zsh", text = "" },
 	{ name = "metal", text = "" },
-	# Config and data
 	{ name = "toml", text = "" },
 	{ name = "json", text = "" },
 	{ name = "yaml", text = "" },
@@ -203,13 +157,11 @@ exts = [
 	{ name = "sqlite3", text = "" },
 	{ name = "db", text = "" },
 	{ name = "env", text = "" },
-	# Operational — what a supervised service leaves behind
 	{ name = "log", text = "" },
 	{ name = "out", text = "" },
 	{ name = "err", text = "" },
 	{ name = "sock", text = "" },
 	{ name = "pid", text = "" },
-	# Docs and media
 	{ name = "md", text = "" },
 	{ name = "txt", text = "" },
 	{ name = "pdf", text = "" },
@@ -219,15 +171,12 @@ exts = [
 	{ name = "svg", text = "" },
 	{ name = "icns", text = "" },
 	{ name = "gguf", text = "" },
-	# Archives
 	{ name = "zip", text = "" },
 	{ name = "gz", text = "" },
 	{ name = "tar", text = "" },
 	{ name = "dmg", text = "" },
 ]
 
-# The fallbacks, in order. `conds` is consulted last, so these catch everything
-# the lists above do not name.
 conds = [
 	{ if = "orphan", text = "" },
 	{ if = "link", text = "" },

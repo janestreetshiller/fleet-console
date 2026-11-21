@@ -2,8 +2,6 @@ import Foundation
 import Darwin
 import FleetCore
 
-/// Application-level health checks. Deliberately separate from liveness: a pid that
-/// exists and a port that listens prove nothing about the app behind them.
 enum HealthChecker {
 
     struct Outcome {
@@ -37,8 +35,6 @@ enum HealthChecker {
         return (host.isEmpty ? "127.0.0.1" : host, port)
     }
 
-    /// Delegates to the shared probe in FleetCore so the app's connection checks
-    /// and the daemon's health checks cannot drift apart.
     static func tcpConnect(host: String, port: Int, timeout: TimeInterval) -> Outcome {
         let result = TCPProbe.connect(host: host, port: port, timeout: timeout)
         return Outcome(passed: result.ok, detail: result.detail, latencyMs: result.latencyMs)
@@ -73,9 +69,6 @@ enum HealthChecker {
         }
         task.resume()
         if semaphore.wait(timeout: .now() + timeout + 1) == .timedOut {
-            // Settle before cancelling: `cancel()` completes the task with a
-            // cancellation error, which would otherwise overwrite the timeout and
-            // report our own cancel as the server's fault.
             settled.settle(Outcome(passed: false,
                                    detail: "GET \(url.absoluteString) timed out",
                                    latencyMs: elapsed(start)))
@@ -85,11 +78,6 @@ enum HealthChecker {
         return settled.resolved(or: Outcome(passed: false, detail: "no response", latencyMs: elapsed(start)))
     }
 
-    /// A verdict written from two threads that must only be decided once.
-    ///
-    /// The completion handler and the timeout branch are not mutually exclusive —
-    /// cancelling a timed-out task fires the handler after the timeout has already
-    /// decided. First writer wins, so the check reports why it actually stopped.
     private final class SettledOutcome: @unchecked Sendable {
         private let lock = NSLock()
         private var value: Outcome?

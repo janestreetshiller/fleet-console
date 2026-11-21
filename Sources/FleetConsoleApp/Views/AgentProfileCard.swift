@@ -1,14 +1,6 @@
 import SwiftUI
 import FleetCore
 
-/// One agent's profile.
-///
-/// The first version showed only "N services · said Xm ago", which is blank for
-/// any agent that is not running something *right now* — which is most of them,
-/// most of the time. An agent that launched fourteen services this morning and
-/// left two of them running is not "0 services"; that is the single most
-/// important thing to know about it. So the card always shows: what it is doing,
-/// what it has done, where it works, and what it last said.
 struct AgentProfileCard: View {
     let profile: AgentProfile
     @Bindable var model: AppModel
@@ -16,9 +8,6 @@ struct AgentProfileCard: View {
 
     private var isExpanded: Bool { expanded == profile.id }
 
-    /// `nil` when the feature is off or nothing has been sampled yet. A
-    /// snapshot whose `amountUSD` is nil is a different thing entirely — the
-    /// agent exists and could not be priced — and the detail says so.
     private var spend: AgentCostSnapshot? {
         guard model.settings.features.showAgentSpend else { return nil }
         return model.agentCost.snapshot(for: profile.id)
@@ -67,8 +56,6 @@ struct AgentProfileCard: View {
         .padding(.vertical, 3)
     }
 
-    // MARK: - Header
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: FleetMetrics.rowGap) {
@@ -82,8 +69,6 @@ struct AgentProfileCard: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                         Tag(text: statusWord, tone: tone)
-                        // Knowns only. An agent nobody can price says so in its
-                        // detail rather than putting a caveat in the title row.
                         if let amount = spend?.amountUSD {
                             Text(Fmt.money(amount))
                                 .font(FleetFont.mono(10))
@@ -132,8 +117,6 @@ struct AgentProfileCard: View {
         }
     }
 
-    // MARK: - Detail
-
     private var detail: some View {
         VStack(alignment: .leading, spacing: 6) {
             if profile.running > 0 {
@@ -150,10 +133,6 @@ struct AgentProfileCard: View {
 
             if let spend {
                 group("Cost today") {
-                    // The unknown is spelled out rather than shown as a zero,
-                    // and the source line is what makes it actionable: a tool
-                    // that publishes nothing is not the same as one whose log
-                    // would not open.
                     KeyValue(key: "Spend",
                              value: spend.amountUSD.map(Fmt.money) ?? "Unknown",
                              monospaced: spend.isKnown)
@@ -272,7 +251,6 @@ struct AgentProfileCard: View {
     }
 }
 
-/// Compact labelled number used across the agent profile header.
 struct MiniStat: View {
     let value: String
     let label: String

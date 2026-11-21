@@ -2,8 +2,6 @@ import CoreGraphics
 import Foundation
 import FleetCore
 
-/// Observational projection only. Detected sessions and registry ownership have
-/// independent provenance; proximity on the canvas never establishes ownership.
 struct AwarenessGraph {
     enum Kind: Equatable { case machine, project, session, owner, service, process, listener }
 
@@ -20,7 +18,6 @@ struct AwarenessGraph {
         var symbol: String
         var cpuPercent: Double?
         var memoryMB: Double?
-        /// Card center in world coordinates, not its top-left corner.
         var position: CGPoint
         var size: CGSize
     }
@@ -107,8 +104,6 @@ struct AwarenessGraph {
                 let parent = queue[index]
                 index += 1
                 for child in children[parent.pid] ?? [] where associated.insert(child.pid).inserted {
-                    // Walk the actual closure so omitted descendants cannot be
-                    // silently relabelled as unassociated high-load context.
                     queue.append((root: parent.root, pid: child.pid))
                     if counts[parent.root, default: 0] < 12 && descendants < 48 {
                         displayedProcesses.insert(child.pid)
@@ -119,8 +114,6 @@ struct AwarenessGraph {
                 }
             }
         }
-        // A small context sample balances CPU and resident memory, not a table
-        // of the entire inventory. These rows carry no inferred agent owner.
         let remaining = rows.filter { !associated.contains($0.pid) }
         let cpu = remaining.sorted {
             let a = validMetric($0.cpuPercent) ?? 0, b = validMetric($1.cpuPercent) ?? 0
@@ -156,7 +149,7 @@ struct AwarenessGraph {
                 case .service: kind = .service; symbol = "gearshape.2"; size = CGSize(width: 210, height: 100)
                 case .process: kind = .process; symbol = "terminal"; size = CGSize(width: 170, height: 60)
                 case .listener: kind = .listener; symbol = "network"; size = CGSize(width: 130, height: 60)
-                case .session: continue // Detected sessions come only from the actual session source.
+                case .session: continue
                 }
                 if !registryFresh && (kind == .process || kind == .listener) { continue }
                 nodes.append(Node(id: "registry:" + node.id, kind: kind, title: node.title,
@@ -183,8 +176,6 @@ struct AwarenessGraph {
                               subtitle: "Agent and process observations unavailable", symbol: "desktopcomputer",
                               position: .zero, size: CGSize(width: 180, height: 84)))
         }
-        // Sessions get the budget first. Secondary detail never evicts an
-        // observed agent; every edge is pruned to the selected endpoints.
         nodes = nodes.enumerated().sorted {
             let a = $0.element.kind == .session ? 0 : 1
             let b = $1.element.kind == .session ? 0 : 1
@@ -199,10 +190,6 @@ struct AwarenessGraph {
                               observedAt: processCapturedAt ?? topology?.generatedAt)
     }
 
-    // MARK: - Stable world placement
-
-    /// A finite identity-seeded packing pass, never a force simulation. Only
-    /// identities, card geometry and observed relationships affect placement.
     private static func layout(nodes: [Node], edges: [Edge], directoryAnchors: [String: CGPoint]) -> (nodes: [Node], bounds: CGRect) {
         guard !nodes.isEmpty else { return ([], .zero) }
         var index = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
@@ -223,9 +210,6 @@ struct AwarenessGraph {
         var placed = Set<String>()
         var occupied: [CGRect] = []
         var bounds = CGRect.null
-        // Place primary project/session geometry before optional process context,
-        // so a changing high-load sample cannot displace the agent clusters.
-        // A missing root in cyclic input gets a deterministic independent anchor.
         var queue = roots
         while placed.count < index.count {
             if queue.isEmpty, let next = ordered.first(where: { !placed.contains($0) }) { queue.append(next) }
@@ -281,12 +265,9 @@ struct AwarenessGraph {
             let rect = frame(candidate, size).insetBy(dx: -18, dy: -18)
             if !occupied.contains(where: { $0.intersects(rect) }) { return candidate }
         }
-        // Guaranteed non-overlap even for adversarial hash collisions; bounded
-        // search and at most 120 cards keep this off the normal path.
         return CGPoint(x: (occupied.map(\.maxX).max() ?? preferred.x) + size.width / 2 + 36, y: preferred.y)
     }
 
-    /// Unlike Swift.Hasher this is deliberately stable across launches.
     private static func stableHash(_ value: String) -> UInt64 {
         value.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { ($0 ^ UInt64($1)) &* 1_099_511_628_211 }
     }

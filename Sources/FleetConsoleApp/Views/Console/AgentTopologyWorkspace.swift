@@ -1,8 +1,6 @@
 import SwiftUI
 import FleetCore
 
-/// Fixed ownership lanes. Nothing moves unless the controller supplies new data;
-/// session detection stays separate from registered ownership.
 struct AgentTopologyWorkspace: View {
     let model: AppModel
     let console: ConsoleModel

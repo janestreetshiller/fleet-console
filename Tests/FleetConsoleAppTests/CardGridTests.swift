@@ -46,8 +46,6 @@ struct CardGridTests {
     @Test("Nested scroll content stays scrollable inside a short chrome panel")
     @MainActor
     func shortPanelScrolls() throws {
-        // The terminal panel at its shortest workable height: its emulator
-        // view must remain reachable, not clipped out of the viewport.
         let surface = TerminalPanel()
         surface.activate(context: ToolContext())
         let hosting = NSHostingView(rootView: surface.makeView()
@@ -60,8 +58,6 @@ struct CardGridTests {
         settle(hosting)
         let scrolls = scrollViews(in: hosting)
         #expect(!scrolls.isEmpty || hosting.subviews.isEmpty == false)
-        // The body must have something to show: a live surface always renders
-        // a view hierarchy rather than nothing.
         #expect(!hosting.subviews.isEmpty)
     }
 
@@ -139,7 +135,7 @@ struct CardGridTests {
                 #expect(frame.size == largest.size)
                 #expect(frame.minX >= 0)
                 #expect(frame.maxX <= width)
-                #expect(frame.height >= 236) // Largest 210-point content plus card insets.
+                #expect(frame.height >= 236)
             }
             let ordered = (0..<count).compactMap { frames["\($0)"] }
             for (index, frame) in ordered.enumerated() {

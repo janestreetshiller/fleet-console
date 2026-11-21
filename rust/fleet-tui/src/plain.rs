@@ -1,8 +1,3 @@
-//! Line mode for screen readers and logs: no alternate screen, no box
-//! drawing, no block glyphs, no color. Each view prints as sentences. The
-//! view reprints when a fact a person would act on changes (a phase, a state,
-//! a count, a band), at most every five seconds, or when asked; drifting
-//! numbers alone do not trigger a reprint. Commands are read one per line.
 
 use crate::app::{View, RENEW_SECONDS};
 use crate::content::{self, clean, speak, spoken_gauge};
@@ -19,8 +14,6 @@ use std::time::{Duration, Instant};
 pub const MIN_REPRINT: Duration = Duration::from_secs(5);
 const LOG_LINES: usize = 20;
 
-/// Full text, or the reprint key: the same sentences without values that
-/// drift between samples (percentages, sizes, rates, ages).
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Full,
@@ -36,7 +29,6 @@ impl Out {
     fn line(&mut self, text: impl Into<String>) {
         self.lines.push(text.into());
     }
-    /// A drifting value: kept in full text, dropped from the reprint key.
     fn v(&self, text: impl Into<String>) -> String {
         match self.mode {
             Mode::Full => text.into(),
@@ -124,7 +116,6 @@ pub fn view_lines(view: View, dash: &Dashboard, mode: Mode) -> Vec<String> {
     out.lines
 }
 
-/// Header and one view, as printed.
 pub fn render(view: View, dash: &Dashboard, mode: Mode) -> Vec<String> {
     let mut lines = header(dash, mode);
     lines.extend(view_lines(view, dash, mode));
@@ -249,7 +240,6 @@ fn processes(out: &mut Out, dash: &Dashboard) {
         out.line(note.clone());
     }
     if out.mode == Mode::Key {
-        // The tree reorders by CPU every sample; only its roots are facts.
         for l in p.lines.iter().filter(|l| l.depth == 0 && l.role != fleet_ui_core::views::ProcessRole::Other) {
             out.line(format!("  {}, {}", clean(&l.name), l.tag.as_deref().unwrap_or("")));
         }
@@ -490,7 +480,6 @@ pub fn help() -> Vec<String> {
     ]
 }
 
-/// Resolve a service by exact name, full id or id prefix.
 pub fn find_service<'a>(dash: &'a Dashboard, needle: &str) -> Result<&'a ServiceRow, String> {
     let needle = needle.trim();
     if needle.is_empty() {
@@ -518,14 +507,12 @@ pub fn find_service<'a>(dash: &'a Dashboard, needle: &str) -> Result<&'a Service
     }
 }
 
-/// What a typed line asks for.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Request {
     View(View),
     Print,
     Help,
     Quit,
-    /// Text to print, nothing to send.
     Say(Vec<String>),
     Confirm { action: Action, prompt: String },
     Send(Action),
@@ -668,7 +655,6 @@ pub fn print_once(source: &Source, settings: &Settings, views: &[View]) {
     emit(&lines);
 }
 
-/// The interactive line loop. Returns the process exit code.
 pub fn run(source: &Source, settings: &Settings, start: View, rx: &Receiver<Msg>) -> i32 {
     let mut view = start;
     let mut dash = source.dashboard(settings);
@@ -730,7 +716,6 @@ pub fn run(source: &Source, settings: &Settings, start: View, rx: &Receiver<Msg>
                     },
                 }
             }
-            // Without input the client keeps reporting changes, like a monitor.
             Ok(Msg::Eof) => {}
             Ok(Msg::Wake) | Ok(Msg::Event(_)) | Ok(Msg::InputError(_)) => {}
             Err(RecvTimeoutError::Timeout) => {}
@@ -806,7 +791,6 @@ mod tests {
     use fleet_ui_core::fixtures::Scenario;
 
     fn is_drawing(c: char) -> bool {
-        // Box drawing, block elements and geometric shapes.
         ('\u{2500}'..='\u{25FF}').contains(&c)
     }
 

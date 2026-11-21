@@ -1,14 +1,6 @@
 import SwiftUI
 import FleetCore
 
-/// The Network tab: every segment at once, one tile each, no scrolling.
-///
-/// This tab was the full administration list — internet, three links, routing,
-/// resolvers, overlays, local fabric, devices, listeners — as disclosure rows a
-/// screen and a half tall inside a 300pt menu. You scrolled to learn whether
-/// the VPN was up. Each segment is one tile now, carrying the one reading worth
-/// a glance; the rows, their probes and the admin consoles are one click away
-/// in Details, which is where reading at length belongs.
 struct NetworkGlance: View {
     @Bindable var model: AppModel
     @State private var showingDetails = false
@@ -43,8 +35,6 @@ struct NetworkGlance: View {
         .padding(.vertical, 12)
         .sheet(isPresented: $showingDetails) { NetworkDetailsSheet(model: model) }
     }
-
-    // MARK: Tiles
 
     private var internet: some View {
         let status = net.internet
@@ -140,7 +130,6 @@ struct NetworkGlance: View {
     }
 }
 
-/// One segment: what it is and its one reading. The whole tile opens Details.
 struct NetworkTile: View {
     let title: String
     let symbol: String
@@ -181,7 +170,6 @@ struct NetworkTile: View {
     }
 }
 
-/// The full network rows, probes and admin consoles, at reading length.
 struct NetworkDetailsSheet: View {
     @Bindable var model: AppModel
     @Environment(\.dismiss) private var dismiss

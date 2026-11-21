@@ -1,8 +1,3 @@
-//! The 50/70/90 percent bands from the design package.
-//!
-//! Dark green to 50, bright green 50 to 70, amber 70 to 90, red above 90. Color
-//! is never the only signal: every band has a word, and a tile's word comes from
-//! its worst measured gauge.
 
 use crate::observe::Metric;
 
@@ -27,7 +22,6 @@ impl Level {
         }
     }
 
-    /// `None` when the metric was not measured: an unmeasured gauge has no band.
     pub fn for_metric(metric: Metric) -> Option<Self> {
         metric.value().map(Self::for_percent)
     }
@@ -42,14 +36,12 @@ impl Level {
     }
 }
 
-/// The text state a node tile carries next to its border color.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeState {
     Healthy,
     Pressure,
     Critical,
     Offline,
-    /// Reachable, but it reported no measurements to judge.
     Unmeasured,
 }
 
@@ -78,8 +70,6 @@ impl NodeState {
     }
 }
 
-/// Lit cells for a segmented gauge, and the band of each lit cell. Segment i
-/// is colored by its own position, so a 95% bar shows all four bands.
 pub fn segments(metric: Metric, count: usize) -> Vec<Option<Level>> {
     let lit = metric
         .fraction()

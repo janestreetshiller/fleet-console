@@ -1,4 +1,3 @@
-//! macOS specifics.
 
 use super::{run_bounded, Capability, StatusArea, Support, Volume};
 use crate::observe::{Metric, Reason};
@@ -56,8 +55,6 @@ pub(super) fn primary_volume(volumes: &[Volume]) -> Option<&Volume> {
         .or_else(|| volumes.iter().find(|v| v.mount == "/"))
 }
 
-/// Wi-Fi and wired links are `en*`. Tunnels (`utun*`), AirDrop (`awdl*`) and
-/// bridges are excluded, matching the Swift app's physical-interface rule.
 pub(super) fn is_physical_interface(name: &str) -> bool {
     name.starts_with("en")
 }

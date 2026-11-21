@@ -2,25 +2,6 @@ import SwiftUI
 import AppKit
 import FleetCore
 
-// The first-launch welcome.
-//
-// One window, shown once: a menu-bar app that opens a console window on first
-// launch has buried its own premise — the app *is* the menu-bar item, and the
-// welcome exists to say that, show what the console looks like, and get out of
-// the way. The pitch is one sentence, then a live RetroGauge sweep — the
-// instrument a new user has not met yet, doing the one thing that sells it.
-//
-// Shown once, persisted in UserDefaults. The animation can be skipped at any
-// time (the button works from the first frame, and Escape dismisses), and the
-// *option to suppress the welcome entirely* is premium — the onboarding is
-// part of what a trial evaluates. See FleetCore/License.swift.
-//
-// Colour and type: every visible value is a token — ConsoleColor, ConsoleFont,
-// ConsoleMetrics, StatusTone. The audit's job is to keep it that way.
-
-/// First-launch state. Kept in one tiny type because three places need the
-/// same answer: the delegate (should it open), the view (did it already), and
-/// the menu (reset for support calls).
 @MainActor
 enum WelcomeState {
     static let defaults = UserDefaults.standard
@@ -31,9 +12,6 @@ enum WelcomeState {
         set { defaults.set(newValue, forKey: shownKey) }
     }
 
-    /// Whether the welcome should appear for this launch. Reading it *marks*
-    /// the welcome as shown, so it is called exactly once, by the delegate —
-    /// a flag that two call sites both check is a welcome that appears twice.
     static func consumePending() -> Bool {
         defer { hasShown = true }
         return !hasShown
@@ -42,13 +20,6 @@ enum WelcomeState {
     static func reset() { hasShown = false }
 }
 
-// MARK: - Window controller
-
-/// The welcome's AppKit shell: a titled, hidden-titlebar window whose close
-/// button and the view's own dismiss are the same exit. `isReleasedWhenClosed
-/// = false` so the controller can hand the window back on replay without
-/// rebuilding it, and `windowWillClose` nils the reference so a closed window
-/// is never re-shown as a live one.
 @MainActor
 final class WelcomeWindowController: NSObject, NSWindowDelegate {
     private let model: AppModel
@@ -88,22 +59,15 @@ final class WelcomeWindowController: NSObject, NSWindowDelegate {
         window = nil
     }
 
-    // The window's close button and the view's own dismiss are the same exit;
-    // without this the AppKit close would strand the controller's reference.
     func windowWillClose(_ notification: Notification) {
         window = nil
     }
 }
 
-// MARK: - View
-
 struct WelcomeView: View {
     @Bindable var model: AppModel
     let dismiss: () -> Void
 
-    /// The skip option is the premium feature; the *Skip button* below is not
-    /// — skipping one showing and suppressing the welcome for every launch are
-    /// different asks, and only the second is gated.
     @AppStorage("fleetconsole.skipWelcome") private var skipWelcome = false
 
     var body: some View {
@@ -116,7 +80,6 @@ struct WelcomeView: View {
         }
         .frame(width: 560, height: 420)
         .sketchSubstrate(seed: 0.61, grainSeed: 61)
-        // Escape dismisses; the animation's own skip affordance is the button.
         .onExitCommand { dismiss() }
 
     }

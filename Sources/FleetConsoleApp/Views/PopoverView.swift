@@ -1,8 +1,6 @@
 import SwiftUI
 import FleetCore
 
-// Services starts with the service rows. Verdict/count chrome lives in the shell;
-// evidence, provenance and safe actions stay with the record they describe.
 struct ServicesContent: View {
     @Bindable var model: AppModel
     var openDashboard: () -> Void
@@ -26,8 +24,6 @@ struct ServicesContent: View {
         .actionErrorAlert(model: model)
     }
 }
-
-// MARK: - Shared alerts
 
 extension View {
     func destructiveActionAlert(_ action: Binding<DestructiveAction?>, model: AppModel) -> some View {
@@ -55,8 +51,6 @@ extension View {
         }
     }
 }
-
-// MARK: - Shared pieces
 
 struct ControllerDownBanner: View {
     let model: AppModel
@@ -134,12 +128,6 @@ struct AttentionRow: View {
     }
 }
 
-
-/// Your own long-running tools, declared in config.json. These are not managed by
-/// the controller and never will be — but they are yours, so they get a name, a
-/// port and an uptime here instead of appearing as anonymous unmanaged processes.
-/// That is the point of the section: it is what the tools' own menu-bar apps were
-/// telling you, in one place.
 struct LocalToolsSection: View {
     @Bindable var model: AppModel
 

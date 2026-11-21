@@ -4,7 +4,6 @@ import Observation
 import Charts
 import FleetCore
 
-/// Legacy operations stay intact, grouped under one destination.
 struct OperationsWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
@@ -75,7 +74,6 @@ struct ProcessWorkspace: View {
     }
 }
 
-/// A bounded ego graph: only observed parent/child links, never inferred causal edges.
 struct ProcessRelationsView: View {
     let model: AppModel
     let console: ConsoleModel
@@ -165,7 +163,6 @@ struct ProcessRelationsView: View {
     }
 }
 
-/// The main workspace is the agent-awareness map and directory substrate.
 struct OverviewWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
@@ -176,8 +173,6 @@ struct OverviewWorkspace: View {
     }
 }
 
-/// Area is resident memory and colour is CPU. Search matches the process table:
-/// name or command line. Tiles still open the heaviest process.
 private struct ConsolidatedProcessMap: View {
     let model: AppModel
     @Bindable var console: ConsoleModel
@@ -236,14 +231,10 @@ private struct ConsolidatedProcessMap: View {
     }
 }
 
-/// CPU interval selection joins only real retained process observations by timestamp.
 struct TrendsWorkspace: View {
     let model: AppModel
     let console: ConsoleModel
-    /// The overview page already scrolls. A nested scroll traps the interval chart.
     var scrolls = true
-    /// The instrument graphs are the page above this chart. The sheet is the
-    /// standalone entry, used only when this workspace is the whole column.
     var showsInstruments = true
     @State private var selection: ClosedRange<Date>?
     @State private var instruments = false

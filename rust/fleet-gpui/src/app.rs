@@ -1,13 +1,3 @@
-//! The running application: one `Hub` entity that owns the feeds and the
-//! latest `Built` dashboard, the quick view and full window that observe it,
-//! the application actions and menus, and the status-area item.
-//!
-//! Idle cost: the hub waits on a channel that `fleet-ui-core`'s controller
-//! and telemetry threads signal after each change, plus a one-second timer
-//! for staleness. On either, it compares a cheap fingerprint (generation
-//! counters, phases at the current time); only when that changed does it
-//! rebuild the dashboard, and only when the dashboard differs does it notify
-//! the windows, which then re-render. There is no animation loop.
 
 use crate::cli::Options;
 use crate::feeds::{Built, Feeds, Fingerprint, STALENESS_CHECK};
@@ -31,8 +21,6 @@ use std::time::{Duration, Instant};
 
 actions!(fleet_console, [Quit, OpenWindow, OpenQuickView, Refresh]);
 
-/// Client-side notices (refusals before anything reached the controller)
-/// kept for the activity strip.
 pub const NOTICE_LIMIT: usize = 6;
 
 pub const FULL_SIZE: (f32, f32) = (1180.0, 780.0);
@@ -45,8 +33,6 @@ pub struct Hub {
     pub built: Arc<Built>,
     fingerprint: Fingerprint,
     pub notices: VecDeque<String>,
-    /// Why there is no status-area item, shown in the windows. `None` when
-    /// the item exists or the check has not finished.
     pub status_note: Option<String>,
     _watch: Option<Task<()>>,
 }
@@ -86,9 +72,6 @@ impl Hub {
         }
     }
 
-    /// Send an action to the controller. A refusal before the socket (read
-    /// only, queue full, fixture mode) becomes a notice; anything sent shows
-    /// up in the dashboard's activity as pending, then as its outcome.
     pub fn submit(&mut self, action: Action, cx: &mut Context<Self>) {
         match self.feeds.submit(action.clone()) {
             Ok(_) => self.update_if_changed(cx),
@@ -134,7 +117,6 @@ async fn watch(
         } else {
             timer.await;
         }
-        // Clear before reading so a change after this point sends a new wake.
         pending.store(false, Ordering::Release);
         if this.update(cx, |hub, cx| hub.update_if_changed(cx)).is_err() {
             return;
@@ -142,19 +124,13 @@ async fn watch(
     }
 }
 
-/// Open windows and the status item, kept as a global so actions and the
-/// status item can find them.
 pub struct Windows {
     pub hub: Entity<Hub>,
     pub quick: Option<WindowHandle<QuickView>>,
     pub full: Option<WindowHandle<FullView>>,
-    /// The size requested with `--window-size`, used for the first window.
     first_size: Option<(f32, f32)>,
     initial_view: View,
     item: Option<status_item::Item>,
-    /// When the popover last closed because it lost focus. A status-item
-    /// click that arrives right after is the same click that took focus
-    /// away, and toggles the popover closed rather than reopening it.
     popover_closed_at: Option<Instant>,
 }
 
@@ -166,7 +142,6 @@ impl Windows {
     }
 }
 
-/// The `--window-size` size for the first window opened, then the default.
 fn take_size(cx: &mut App, default: (f32, f32)) -> (f32, f32) {
     if !cx.has_global::<Windows>() {
         return default;
@@ -177,7 +152,6 @@ fn take_size(cx: &mut App, default: (f32, f32)) -> (f32, f32) {
         .unwrap_or(default)
 }
 
-/// Open the full window, or bring it forward on `view`.
 pub fn open_full(view: Option<View>, cx: &mut App) {
     let (hub, existing, initial) = {
         let w = cx.global::<Windows>();
@@ -221,8 +195,6 @@ pub fn open_full(view: Option<View>, cx: &mut App) {
     }
 }
 
-/// Open the quick view as an ordinary window, or as a popover under the
-/// status item when one exists and `anchor` is known.
 pub fn open_quick(anchor: Option<Anchor>, cx: &mut App) {
     let (hub, existing) = {
         let w = cx.global::<Windows>();
@@ -293,15 +265,12 @@ pub fn open_quick(anchor: Option<Anchor>, cx: &mut App) {
     }
 }
 
-/// Called by the quick view when its popover loses focus.
 pub fn popover_closed(cx: &mut App) {
     if cx.has_global::<Windows>() {
         cx.global_mut::<Windows>().popover_closed_at = Some(Instant::now());
     }
 }
 
-/// A click on the status item: open the quick view under it, bring it
-/// forward, or close it if it is already in front.
 fn toggle_quick_from_status_item(cx: &mut App) {
     let (existing, recently_closed, anchor) = {
         let w = cx.global::<Windows>();
@@ -331,7 +300,6 @@ fn toggle_quick_from_status_item(cx: &mut App) {
     open_quick(anchor, cx);
 }
 
-/// The quick view, as a popover when the status item exists.
 fn show_quick(cx: &mut App) {
     let anchor = cx
         .global::<Windows>()
@@ -350,7 +318,6 @@ pub fn run(options: Options) {
     Application::new().run(move |cx: &mut App| {
         let font = crate::palette::choose_font(&cx.text_system().all_font_names());
         cx.set_global(UiFont(font.into()));
-        // The dark palette every window opens with, picked once at start-up.
         cx.set_global(crate::palette::UiDarkTheme(options.theme));
 
         cx.bind_keys([
@@ -372,8 +339,6 @@ pub fn run(options: Options) {
             ],
         }]);
 
-        // Wake the hub from the background threads. The flag coalesces bursts
-        // so at most one wake waits in the channel.
         let (tx, rx) = unbounded::<()>();
         let pending = Arc::new(AtomicBool::new(false));
         let wake: fleet_ui_core::controller::Wake = {
@@ -399,8 +364,6 @@ pub fn run(options: Options) {
             popover_closed_at: None,
         });
 
-        // Without a status item, closing the last window ends the client; with
-        // one, the client stays in the menu bar.
         cx.on_window_closed(move |cx| {
             if !has_item && cx.windows().is_empty() {
                 cx.quit();
@@ -416,8 +379,6 @@ pub fn run(options: Options) {
     });
 }
 
-/// Create the status-area item where the platform supports it, and record
-/// why not otherwise.
 fn install_status_item(hub: &Entity<Hub>, cx: &mut App) -> Option<status_item::Item> {
     match status_item::Item::install() {
         Ok((item, mut clicks)) => {
@@ -436,7 +397,6 @@ fn install_status_item(hub: &Entity<Hub>, cx: &mut App) -> Option<status_item::I
             None
         }
         Err(status_item::Unavailable::Probe) => {
-            // The Linux check asks the session bus; run it off the main thread.
             let hub = hub.downgrade();
             let probe = cx
                 .background_executor()

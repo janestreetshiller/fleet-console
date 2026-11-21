@@ -1,4 +1,3 @@
-//! `fleet-gpui`: the FleetConsole desktop client. See `--help`.
 
 use fleet_gpui::cli::{self, Command};
 

@@ -1,11 +1,3 @@
-//! Ouros-X brain adapter compatibility and bridge module.
-//!
-//! Ingests:
-//! - Agent task graphs and state machine transitions
-//! - Context memory allocation vs system RAM
-//! - Token budgets and consumption velocity
-//! - Decision logs and rationales
-//! - Unmanaged service triggers
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -111,7 +103,7 @@ pub struct AgentTaskNode {
 pub struct AgentTaskEdge {
     pub source_task_id: String,
     pub target_task_id: String,
-    pub relation: String, // "Subagent", "Dependency", "IpcChannel", "DataFlow"
+    pub relation: String,
     pub throughput_messages_sec: f32,
 }
 
@@ -132,7 +124,6 @@ impl Default for AgentTaskGraph {
     }
 }
 
-/// Ingestion interface for communicating with the Ouros-X brain adapter.
 pub trait OurosAdapter: Send + Sync {
     fn poll_task_graph(&mut self) -> Result<AgentTaskGraph, String>;
     fn trigger_remediation(
@@ -143,7 +134,6 @@ pub trait OurosAdapter: Send + Sync {
     fn stream_logs(&self, agent_id: &str) -> Vec<String>;
 }
 
-/// Standard bridge module maintaining active state from Ouros-X runtime.
 pub struct OurosBrainBridge {
     active_graph: AgentTaskGraph,
     log_cache: HashMap<String, Vec<String>>,

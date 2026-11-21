@@ -1,11 +1,3 @@
-//! `--identity` and `--verify`.
-//!
-//! `--identity` is static: it reads nothing and says what this build is.
-//! `--verify` performs one real controller read and two telemetry samples
-//! (CPU use and network rates are differences, so the first sample alone has
-//! none), then reports what was observed. Anything it did not exercise, such
-//! as drawing a window or creating the status-area item, is listed as not
-//! checked rather than implied.
 
 use crate::cli::Options;
 use crate::feeds::controller_config;
@@ -57,7 +49,6 @@ fn support(s: Support) -> &'static str {
     }
 }
 
-/// What one verification run observed.
 pub struct Observed<'a> {
     pub controller: &'a Feed<fleet_ui_core::model::Snapshot>,
     pub controller_stale_after: Duration,
@@ -69,8 +60,6 @@ pub struct Observed<'a> {
     pub status_area: &'a StatusArea,
 }
 
-/// Fold an observed controller feed and telemetry sample into the report.
-/// Separate from the I/O so the wording can be tested with fixtures.
 pub fn report(observed: Observed<'_>) -> Value {
     let Observed {
         controller,
@@ -156,15 +145,12 @@ pub fn report(observed: Observed<'_>) -> Value {
     })
 }
 
-/// Read the controller once and sample telemetry twice, one second apart.
 pub fn run(options: &Options) -> Value {
     let config = controller_config(options);
     let socket_label = display_path(&config.socket);
     let stale_after = config.stale_after();
     let deadline = Instant::now() + config.request_timeout + Duration::from_secs(2);
     let (tx, rx) = std::sync::mpsc::channel::<()>();
-    // The poller's first read starts immediately and runs while telemetry is
-    // sampled on this thread.
     let controller = Controller::spawn(
         config.clone(),
         Arc::new(move || {
