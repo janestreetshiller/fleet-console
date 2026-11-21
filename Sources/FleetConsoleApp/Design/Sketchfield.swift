@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 
+// Shared native surfaces and the FleetConsole mark.
 enum SketchMetrics {
     static let hairline: CGFloat = 1
     static let markStroke: CGFloat = 1.6
@@ -16,6 +17,7 @@ enum SketchInk {
 }
 
 extension View {
+    // Retains the existing surface API; AppKit supplies the appearance colors.
     func sketchSubstrate(seed: Double = 0, grainSeed: UInt64 = 7,
                          ground: Bool = true) -> some View {
         modifier(NativeAccessibilityBehavior())
@@ -30,6 +32,7 @@ extension View {
     }
 }
 
+/// Honor the system motion setting at every window and popover root.
 private struct NativeAccessibilityBehavior: ViewModifier {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -64,6 +67,7 @@ struct PlateSurface: ViewModifier {
 }
 
 extension View {
+    // Labels belong in the content hierarchy rather than a tiny border legend.
     func plate(_ label: String? = nil,
                corner: CGFloat = ConsoleMetrics.cardCorner,
                padding: CGFloat = ConsoleMetrics.cardPadding) -> some View {
@@ -71,9 +75,25 @@ extension View {
     }
 }
 
+// MARK: - The mark
+
+/// The FleetConsole mark: one continuous stroke, the pen-down dot it started
+/// from, and the construction circle it was struck against.
+///
+/// The outgoing mark was a bordered plate holding the letters "FC" in a
+/// typewriter face, rotated two degrees to read as pressed. It was a stamp, and
+/// a stamp is a thing you apply to a page rather than a thing you draw on one.
+/// This is drawn: an F built from three strokes of a single path, sitting on the
+/// circle a compass would have laid down first — the construction line left in,
+/// which is the whole argument of the restyle in one 26pt glyph.
 struct FleetMark: View {
     var size: CGFloat = 22
+    /// Whether the construction circle is drawn. The menu bar gets the stroke
+    /// alone: at 14pt in a bar full of system glyphs, the circle is the
+    /// difference between a mark and a smudge.
     var construction = true
+    /// The stroke's ink. White on the app badge's dark plate, the sketch accent
+    /// on the paper.
     var ink: Color = SketchInk.accent
 
     var body: some View {
@@ -99,6 +119,7 @@ struct FleetMark: View {
                            style: StrokeStyle(lineWidth: SketchMetrics.markStroke * unit,
                                               lineCap: .round, lineJoin: .round))
 
+            // The pen-down dot: where the stroke began, left visible.
             context.fill(
                 Path(ellipseIn: CGRect(x: 7 * unit, y: 18 * unit, width: 3 * unit, height: 3 * unit)),
                 with: .color(ink))
