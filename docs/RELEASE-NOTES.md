@@ -2,10 +2,37 @@
 
 ## Unreleased
 
-- Keep the Rust lockfile on libc 0.2.189: GPUI 0.2.2's transitive
-  `xattr` 0.2.3 requires the Linux `ENOATTR` alias removed in libc 0.2.190.
-  Document how to run the existing phosphor GPUI companion and its platform
-  limits.
+## 1.3.0 — 2026-11-23
+
+- Terminal shells stay alive. Shell sessions run in a persistent tmux
+  server, so a shell and its running work survive closing the window and
+  opening a new panel.
+- Terminal sessions are agent-aware, with troubleshooting ranked by
+  evidence and clean teardown of agent sessions.
+- Monitoring and work are now one live view, and agent activity is the
+  main spatial workspace.
+- Directory roots are shown as a crystalline background in the console,
+  and the surface renderer and sketchfield were updated.
+- The dashboard visual hierarchy is clearer, and the Overview controls
+  sit in one toolbar row.
+- FleetConsole is an opaque Liquid Glass scene, and process toolbar
+  stacking is fixed.
+- Product details render in isolation, so one detail view cannot break
+  the rest of the render.
+- Spatial layout is faster: pairwise force work no longer does map
+  lookups in its inner loop.
+- Prebuilt delivery is integrated, with a prebuilt preparation and
+  verification path, core-update checks, and a legal native fixture
+  lifecycle. See `docs/PREBUILT-UPDATES.md`.
+- The GPUI companion runs on Linux again. Keep the Rust lockfile on libc
+  0.2.189: GPUI 0.2.2's transitive `xattr` 0.2.3 requires the Linux
+  `ENOATTR` alias removed in libc 0.2.190. How to run the existing
+  phosphor GPUI companion, its platform limits, and its optimized builds
+  are documented.
+- Machine-specific paths were removed from the published sources and
+  inspector defaults.
+
+App bundle: 1.3.0 (11), arm64.
 
 ## 1.2.0 — 2026-10-23
 
