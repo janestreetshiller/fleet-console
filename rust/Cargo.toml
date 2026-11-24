@@ -8,6 +8,7 @@ members = [
     "ouros-adapter",
     "fleet-spatial",
     "fleet-gpui",
+    "fleet-console",
     "fleet-ui-core",
     "fleet-tui",
 ]
