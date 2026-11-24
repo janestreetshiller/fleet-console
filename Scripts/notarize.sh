@@ -9,6 +9,9 @@ case "$OUTPUT_DIR" in
 esac
 exec python3 "$ROOT/Scripts/release-staging.py" notarize "$OUTPUT_DIR" "$ROOT"
 
+# PINNED NOTARY WORKER
+# The helper reads this section; it is unreachable via script CLI arguments.
+# All artifact operations use '.', never the replaceable supplied pathname.
 set -euo pipefail
 APP="."
 PROFILE="${FLEETCONSOLE_NOTARY_PROFILE:-FleetConsole}"
