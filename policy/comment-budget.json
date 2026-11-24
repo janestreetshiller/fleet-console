@@ -1,5 +1,5 @@
 {
-  "Package.swift": 0,
+  "Package.swift": 1,
   "Plugins/VerifyDesignCore/VerifyDesignCore.swift": 0,
   "Release/PublicPackage.swift": 0,
   "Resources/yazi/init.lua": 0,
@@ -21,7 +21,7 @@
   "Scripts/make-icon.sh": 0,
   "Scripts/make-yazi-light.sh": 0,
   "Scripts/measure-idle.sh": 0,
-  "Scripts/notarize.sh": 0,
+  "Scripts/notarize.sh": 3,
   "Scripts/package-dmg.sh": 0,
   "Scripts/prepare-prebuilt.py": 0,
   "Scripts/product-detail-sheet.sh": 0,
