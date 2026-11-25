@@ -1,11 +1,3 @@
-//! The Dashboard window and its six modules, in the Swift order with
-//! the Swift titles: Overview (Agent awareness), Processes, Storage,
-//! Services (Operations), Events, Launch Services (Plists). Data comes
-//! from the controller snapshot (fleet state), the local sampler
-//! (processes, disks), and the platform service manager (launchctl /
-//! systemctl --user). The spatial awareness map that Overview opens to
-//! in 1.3.0 is not built yet; Overview shows the agent-first summary
-//! the map is drawn from.
 
 use gpui::{
     div, px, rgb, Context, InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle,
@@ -61,7 +53,6 @@ impl Module {
     }
 }
 
-/// One row of the platform service manager's inventory.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LaunchRow {
     pub label: String,
@@ -69,9 +60,6 @@ pub struct LaunchRow {
     pub status: String,
 }
 
-/// Reads the platform service inventory: `launchctl list` on macOS,
-/// `systemctl --user list-units` on Linux. Runs on a worker thread;
-/// an unreadable manager yields an empty list, never an error surface.
 pub fn fetch_launch_services() -> Vec<LaunchRow> {
     #[cfg(target_os = "macos")]
     {

@@ -155,9 +155,6 @@ impl Shell {
     }
 }
 
-/// Opening the popover calls refresh-all and marks messages seen in the
-/// Swift build; the sampler already refreshes local probes continuously,
-/// so this sends the two daemon one-shots (markSeen, refreshDevices).
 fn popover_opened() {
     std::thread::spawn(|| {
         let _ = controller::send_one_shot(&fleet_proto::RpcRequest::new(
@@ -341,8 +338,6 @@ fn apply_connection(connected: bool, cx: &mut App) {
     push_dashboard(cx);
 }
 
-/// Opens the FleetConsole log folder in the platform file browser,
-/// creating it first so the action never fails on a missing folder.
 fn reveal_logs() {
     let home = std::env::var("HOME").unwrap_or_default();
     let dir = match std::env::var("FLEETCONSOLE_STATE_ROOT") {
@@ -378,8 +373,6 @@ fn apply_launch_services(rows: Vec<LaunchRow>, cx: &mut App) {
     push_dashboard(cx);
 }
 
-/// Opens the Dashboard on a module, or switches the open Dashboard to
-/// it. Opening also refreshes the launch-services inventory.
 fn open_dashboard(cx: &mut App, module: Module) {
     if let Some(handle) = cx.global::<Shell>().dashboard {
         let _ = handle.update(cx, |view, window, view_cx| {
@@ -440,7 +433,6 @@ fn request_launch_services(cx: &mut App) {
     });
 }
 
-/// Syncs the open Dashboard with the shell's current state.
 fn push_dashboard(cx: &mut App) {
     let Some(handle) = cx.global::<Shell>().dashboard else {
         return;
@@ -483,7 +475,6 @@ fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
     push_dashboard(cx);
 }
 
-/// Pushes the current meters + fleet state to the platform status item.
 fn push_shell_state(cx: &mut App) {
     let (meters, connected, view) = {
         let shell = cx.global::<Shell>();
@@ -860,9 +851,6 @@ mod mac_status {
         }
     }
 
-    /// Sets the button title as an attributed string so the alert suffix
-    /// carries the Swift tint (system red for `.bad`, system orange for
-    /// `.warn`); the meter text itself stays the default colour.
     unsafe fn set_attributed_title(
         button: id,
         title: &str,

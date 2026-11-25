@@ -1,11 +1,3 @@
-// Controller snapshot model and the fleet derivations the menubar and
-// popover render from. Field names and rules copy the Swift build:
-// `Sources/FleetCore/Snapshot.swift` (Snapshot, AttentionItem),
-// `Sources/FleetCore/Agents.swift` (AgentProfile, AgentMessage),
-// `Sources/FleetCore/Models.swift` (ServiceState, effectivePorts), and
-// `Sources/FleetConsoleApp/AppModel.swift` (fleetAlert, fleetStatusLine,
-// fleetTint, fleetTooltip) with `Sources/FleetCore/Formatting.swift`
-// (Fmt.duration, Fmt.relative, Fmt.ports).
 
 use serde::Deserialize;
 
@@ -49,7 +41,6 @@ pub struct Event {
     pub detail: String,
 }
 
-/// One service as the Dashboard's Operations module lists it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ServiceRow {
     pub id: String,
@@ -63,7 +54,6 @@ pub struct ServiceRow {
     pub purpose: String,
 }
 
-/// One event as the Dashboard's Events module lists it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct EventRow {
     pub seq: i64,
@@ -74,8 +64,6 @@ pub struct EventRow {
     pub when: String,
 }
 
-/// The Swift ServiceState label: never says "healthy" unless a health
-/// check actually passed.
 pub fn service_state_label(state: &str) -> String {
     match state {
         "starting" => "Starting",
@@ -94,7 +82,6 @@ pub fn service_state_label(state: &str) -> String {
     .to_string()
 }
 
-/// The Swift EventKind label and severity.
 pub fn event_kind_label(kind: &str) -> (String, bool) {
     let (label, is_bad) = match kind {
         "registered" => ("Registered", false),
@@ -263,8 +250,6 @@ pub struct ProfileLine {
     pub awaiting_reply: i64,
 }
 
-/// Everything the shell renders about the fleet, derived from one snapshot
-/// with the Swift rules. `now` is seconds since the Unix epoch.
 #[derive(Debug, Clone, PartialEq)]
 pub struct FleetView {
     pub alert: String,
@@ -580,8 +565,6 @@ impl FleetView {
         }
     }
 
-    /// Alert text as the disconnected shell shows it: the Swift menubar
-    /// alert is `Offline` whenever the controller is not connected.
     pub fn offline_alert() -> &'static str {
         "Offline"
     }

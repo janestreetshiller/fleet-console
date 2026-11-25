@@ -1,9 +1,3 @@
-// Controller connection: a dedicated thread that subscribes to fleetd over
-// its owner-only Unix socket and streams snapshots into the shell, with the
-// Swift reconnect policy (DaemonClient.swift): backoff starts at 0.5s,
-// doubles on each failure, and caps at 5s; a successful subscribe resets it.
-// One-shot requests (markSeen, refreshDevices, service actions) use short
-// separate connections, exactly like the Swift UnixSocketClient.send path.
 
 use futures::channel::mpsc::UnboundedSender;
 use std::io::{BufRead, BufReader, Write};
@@ -38,8 +32,6 @@ pub fn spawn(tx: UnboundedSender<ShellEvent>) {
     });
 }
 
-/// Runs one subscription until the stream ends or fails. Returns Ok(true)
-/// when the subscribe itself succeeded (so the caller resets the backoff).
 fn run_subscription(
     path: &std::path::Path,
     tx: &UnboundedSender<ShellEvent>,
@@ -80,8 +72,6 @@ fn run_subscription(
     }
 }
 
-/// Sends one request on a short-lived connection and returns the response.
-/// Used for fire-and-forget ops whose result the subscription will reflect.
 pub fn send_one_shot(request: &fleet_proto::RpcRequest) -> Result<fleet_proto::RpcResponse, ()> {
     let path = fleet_proto::default_socket_path();
     let mut client = fleet_proto::Client::connect(&path).map_err(|_| ())?;

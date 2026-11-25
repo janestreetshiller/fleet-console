@@ -45,9 +45,6 @@ fn percent_of(share: f64) -> Option<u32> {
     }
 }
 
-/// Memory pressure, from the same source the Swift build reads
-/// (`kern.memorystatus_vm_pressure_level` on macOS). The label strings
-/// are the Swift ones.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Pressure {
     Normal,
@@ -67,7 +64,6 @@ impl Pressure {
     }
 }
 
-/// One mounted disk, for the Dashboard's Storage module.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DiskRow {
     pub name: String,
@@ -76,7 +72,6 @@ pub struct DiskRow {
     pub available: u64,
 }
 
-/// One process, for the Dashboard's Processes module.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ProcRow {
     pub pid: u32,
@@ -85,8 +80,6 @@ pub struct ProcRow {
     pub mem_bytes: u64,
 }
 
-/// The top processes by CPU. The caller's `System` must have been
-/// refreshed at least once before, or every CPU reading is zero.
 pub fn collect_processes(system: &mut sysinfo::System) -> Vec<ProcRow> {
     system.refresh_processes(sysinfo::ProcessesToUpdate::All);
     let mut rows: Vec<ProcRow> = system
@@ -108,8 +101,6 @@ pub fn collect_processes(system: &mut sysinfo::System) -> Vec<ProcRow> {
     rows
 }
 
-/// One full set of local readings: the menubar meters plus everything
-/// the Quick View instruments need.
 #[derive(Debug, Clone)]
 pub struct Sample {
     pub meters: Meters,
@@ -124,7 +115,6 @@ pub struct Sample {
     pub disks: Vec<DiskRow>,
     pub net_down_bps: Option<f64>,
     pub net_up_bps: Option<f64>,
-    /// "{brand} · {core summary}", the CPU instrument's help text.
     pub cpu_help: String,
 }
 
@@ -241,8 +231,6 @@ fn disk_reading(disks: &sysinfo::Disks) -> (Option<f64>, u64, u64) {
     )
 }
 
-/// Physical-interface traffic only: loopback and the usual virtual
-/// interfaces are excluded, as the Swift counters exclude them.
 fn network_rates(networks: &sysinfo::Networks) -> (Option<f64>, Option<f64>) {
     let mut down: u64 = 0;
     let mut up: u64 = 0;

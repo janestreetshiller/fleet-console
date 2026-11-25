@@ -5,7 +5,7 @@ let package = Package(
     name: "FleetConsole",
     platforms: [.macOS(.v14)],
     dependencies: [
-        .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.15.0"),
+        .package(url: "https://github.com/janestreetshiller/SwiftTerm", from: "1.99.7"),
     ],
     targets: [
         .target(

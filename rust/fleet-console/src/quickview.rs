@@ -1,7 +1,3 @@
-//! The popover's Quick View strip: CPU and Memory retro gauges, the
-//! Disk cell grid, and the Network rate bars. Geometry, thresholds,
-//! tones, and formats copy the Swift Quick View (RetroGauge,
-//! SystemThresholds, SystemFmt) so the two builds read the same.
 
 use gpui::{
     canvas, div, point, px, relative, rgb, rgba, AppContext, Context, Hsla, IntoElement, Path,
@@ -49,8 +45,6 @@ pub fn memory_tone(share: f64, pressure: Pressure) -> Tone {
     }
 }
 
-/// The tone as a fill colour; `alpha_scale` applies the Swift stroke
-/// (0.75) and edge (0.35) strengths.
 pub fn tone_color(tone: Tone, alpha_scale: f32) -> Hsla {
     let mut hsla: Hsla = match tone {
         Tone::Good => rgb(0x34C759).into(),
@@ -78,8 +72,6 @@ pub fn fmt_percent(value: Option<f64>) -> String {
     }
 }
 
-/// ByteCountFormatter file style, close enough for readouts and help
-/// text: 1000-based units, one decimal under ten of a unit.
 pub fn fmt_bytes(bytes: u64) -> String {
     if bytes == 0 {
         return "0 bytes".to_string();
@@ -153,12 +145,10 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
             let cy: f32 =
                 f32::from(bounds.origin.y) + f32::from(bounds.size.height) / 2.0;
             let mut paths: Vec<(Path<Pixels>, Hsla)> = Vec::new();
-            // Face ring.
             paths.push((
                 arc_path(cx, cy, d / 2.0 - 1.0, 0.0, 360.0, 1.0),
                 rgba(0xFFFFFF2E).into(),
             ));
-            // Ticks: 40 steps, major every fifth.
             let outer = d / 2.0 - d * 0.09;
             for step in 0..=40 {
                 let major = step % 5 == 0;
@@ -186,7 +176,6 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
             let fraction = value.map(|share| share.clamp(0.0, 1.0)).unwrap_or(0.0) as f32;
             let arc_radius = d * 0.40;
             let arc_width = d * 0.075;
-            // Track.
             paths.push((
                 arc_path(
                     cx,
@@ -198,7 +187,6 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
                 ),
                 indicator_off(),
             ));
-            // Redline from 0.90.
             paths.push((
                 arc_path(
                     cx,
@@ -210,7 +198,6 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
                 ),
                 tone_color(Tone::Bad, 0.35),
             ));
-            // Value arc.
             if value.is_some() {
                 paths.push((
                     arc_path(
@@ -224,7 +211,6 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
                     tone_color(tone, 0.75),
                 ));
             }
-            // Needle.
             let angle = (SWEEP_START + SWEEP_DEGREES * fraction).to_radians();
             let (sin, cos) = angle.sin_cos();
             let rotate = |x: f32, y: f32| {
@@ -247,7 +233,6 @@ fn gauge_canvas(value: Option<f64>, tone: Tone) -> impl IntoElement {
                     rgb(0x636366).into()
                 },
             ));
-            // Hub.
             let hub_radius = d * 0.07;
             let mut hub = PathBuilder::fill();
             let steps = 32;
@@ -431,7 +416,6 @@ fn instrument(
     }
 }
 
-/// The whole Quick View strip, from the latest local sample.
 pub fn quick_view(sample: Option<&Sample>) -> impl IntoElement {
     let cpu_share = valid_share(sample.and_then(|s| s.cpu_share));
     let cpu_tone = cpu_share.map(utilization_tone).unwrap_or(Tone::Unknown);
