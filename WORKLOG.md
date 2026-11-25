@@ -56,23 +56,23 @@ Source build: FleetConsole 1.3.0, bundle version 11, arm64, `CFBundleShortVersio
 - [ ] Tooltip then shows `next lease expires <relative time>` when any agent profile has a lease expiry, then a network-fault line if one exists, then `fleetd up <duration>`.
 - [ ] Network-fault tooltip lines cover, in order: no internet, no Ethernet and no Wi-Fi link, Tailscale installed but not running, and N unreachable devices with their names.
 - [x] Accessibility label for the menubar button is `FleetConsole fleet — <tooltip with newlines replaced by commas>. <label value readings>` plus the alert text when present.
-- [ ] Left click toggles the popover; right click or Control-click shows the context menu instead; opening the popover calls refresh-all and marks messages seen.
+- [x] Left click toggles the popover; right click or Control-click shows the context menu instead; opening the popover calls refresh-all and marks messages seen.
 - [ ] Popover is an `NSPopover` with `.transient` behaviour, animation on, and preferred-content-size hosting.
 
 ### Right-click / context menu
 
-- [ ] Context menu item: Quick View (symbol `gauge.with.dots.needle.67percent`).
+- [x] Context menu item: Quick View (symbol `gauge.with.dots.needle.67percent`).
 - [ ] Context menu item: Needs Attention (symbol `exclamationmark.circle`, shortcut ⇧⌘H via the shared item).
 - [ ] Context menu item: Agents, titled `Agents — N awaiting your answer` when N is above zero, shown only when the Agents section is enabled in config; symbol `person.2`.
-- [ ] Context menu item: Open Dashboard, shortcut ⌘0.
-- [ ] Context menu section header `Monitor This Mac` with module items for Overview, Processes, and Storage only, each with its module symbol.
+- [x] Context menu item: Open Dashboard, shortcut ⌘0.
+- [x] Context menu section header `Monitor This Mac` with module items for Overview, Processes, and Storage only, each with its module symbol.
 - [ ] Context menu item: Network (the Connections section, titled Network).
-- [ ] Context menu section header `Background Work` with module items for Services, Events, and Launch Services.
+- [x] Context menu section header `Background Work` with module items for Services, Events, and Launch Services.
 - [ ] Context menu item: New Task… with shortcut ⌘N, opening the Task Composer window.
-- [ ] Context menu item: Find Background Processes, which triggers a reconcile sweep.
+- [x] Context menu item: Find Background Processes, which triggers a reconcile sweep.
 - [ ] Context menu items: Edit Configuration, Reveal Logs in Finder, and Replay Welcome.
 - [ ] Context menu section header `Help` with FleetConsole Guide and fleetctl Setup… items.
-- [ ] Context menu item: Quit FleetConsole with shortcut ⌘Q.
+- [x] Context menu item: Quit FleetConsole with shortcut ⌘Q.
 
 ### Popover and Quick View
 
@@ -288,3 +288,12 @@ Verified 2026-11-24: `cargo build` and `cargo test` pass on Linux. The debug bui
 ### GPUI rebuild — macOS verification addendum (2026-11-24)
 
 The macOS run owed by the controller and Quick View bites is now verified. OurDev accepted SSH again after its process table cleared; its checkout was reconciled (the uncommitted controller-bite files were identical to commit bd52bc6 and were replaced by a fast-forward pull; the pre-existing Package.swift and Package.resolved changes are not part of this rebuild and were left untouched). At commit 0b823eb: `cargo test -p fleet-console` passes on macOS, the release bundle builds with `scripts/build-macos-app.sh`, and the bundled app launched in the Aqua session showed the status item installed, `controller connected=true` against the live fleetd, the real fleet status `1 awaiting your answer` with alert `!1` derived from the live snapshot, and live meters (CPU 42-73%, RAM 34-36%, DISK 87% across the captured seconds). The instance was quit after the check; the installed Swift FleetConsole and its fleetd were not touched. Still unverified on macOS: a screenshot of the popover and Dashboard (SSH has no display-capture permission on this machine; both are screenshot-verified on Linux, and the macOS binary is the same code).
+
+
+### GPUI rebuild — context menu bite (2026-11-24)
+
+The right-click / tray context menu is built on both platforms with the same entries, in the parity order: the meters line (Linux), Quick View, Needs Attention, Agents (titled `Agents — N awaiting your answer` when the snapshot has unanswered mail), Open Dashboard, a `Monitor This Mac` header with Overview, Processes, and Storage, a `Background Work` header with Services, Events, and Launch Services, Find Background Processes, Reveal Logs, a `Help` header with FleetConsole Guide, and Quit FleetConsole. Every entry acts: Quick View toggles the popover, the destinations open the Dashboard on their module through a new `ShellEvent::ShowModule`, Find Background Processes sends the controller a `reconcile` one-shot, Reveal Logs opens the log folder (created first if missing), and the Guide opens the repo README. On macOS the menu is an NSMenu built at click time by the status-item bridge with a tag-dispatched selector; on Linux it is the ksni tray menu. Three new shell events carry the actions (`ShowModule`, `Reconcile`, `RevealLogs`, `OpenGuide` — four, counting the guide).
+
+Parity items checked off by this bite: the left-click / right-click item in the menubar section, and the context-menu items for Quick View, Open Dashboard, the `Monitor This Mac` section, the `Background Work` section, Find Background Processes, and Quit FleetConsole, all in this bite's commit. Not checked off: Needs Attention (its ⇧⌘H shared item is not wired yet), Agents (the config section gate is not in yet), Network (no Connections module yet), New Task… (no Task Composer yet), the Edit Configuration / Reveal Logs / Replay Welcome item (only Reveal Logs is in), and the Help section item (fleetctl Setup… is not in). The popover is still a GPUI PopUp window, not an NSPopover, so that menubar item stays open too.
+
+Verified 2026-11-24: builds and tests pass on Linux and macOS. On OurStation the running app's tray menu was read over D-Bus (`com.canonical.dbusmenu.GetLayout`) and listed every entry in order with the live meters line. On OurDev the rebuilt bundle launched in the Aqua session, installed the status item, and connected to the live fleetd with the same fleet status as before; the macOS menu itself cannot be driven from SSH on this machine (no assistive access), so its item list is verified by construction from the same source list the Linux menu was read from.

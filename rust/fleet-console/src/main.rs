@@ -50,6 +50,10 @@ pub enum ShellEvent {
     Snapshot(snapshot::Snapshot),
     Processes(Vec<sampler::ProcRow>),
     LaunchServices(Vec<LaunchRow>),
+    ShowModule(Module),
+    Reconcile,
+    RevealLogs,
+    OpenGuide,
 }
 
 pub struct PopoverView {
@@ -273,6 +277,31 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     return;
                 }
             }
+            ShellEvent::ShowModule(module) => {
+                if cx.update(|cx| open_dashboard(cx, module)).is_err() {
+                    return;
+                }
+            }
+            ShellEvent::Reconcile => {
+                let _ = controller::send_one_shot(&fleet_proto::RpcRequest::new(
+                    fleet_proto::RpcOp::Reconcile,
+                ));
+            }
+            ShellEvent::RevealLogs => {
+                reveal_logs();
+            }
+            ShellEvent::OpenGuide => {
+                if cx
+                    .update(|cx| {
+                        cx.open_url(
+                            "https://github.com/janestreetshiller/fleet-console#readme",
+                        )
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+            }
             ShellEvent::Quit => {
                 let _ = cx.update(|cx| cx.quit());
                 return;
@@ -310,6 +339,33 @@ fn apply_connection(connected: bool, cx: &mut App) {
     push_shell_state(cx);
     push_popover_status(cx);
     push_dashboard(cx);
+}
+
+/// Opens the FleetConsole log folder in the platform file browser,
+/// creating it first so the action never fails on a missing folder.
+fn reveal_logs() {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let dir = match std::env::var("FLEETCONSOLE_STATE_ROOT") {
+        Ok(root) if !root.is_empty() => {
+            std::path::PathBuf::from(root).join("logs")
+        }
+        _ if cfg!(target_os = "macos") => {
+            std::path::PathBuf::from(home).join("Library/Logs/FleetConsole")
+        }
+        _ => match std::env::var("XDG_STATE_HOME") {
+            Ok(state) if !state.is_empty() => {
+                std::path::PathBuf::from(state).join("fleetconsole/logs")
+            }
+            _ => std::path::PathBuf::from(home).join(".local/state/fleetconsole/logs"),
+        },
+    };
+    let _ = std::fs::create_dir_all(&dir);
+    let opener = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    let _ = std::process::Command::new(opener).arg(dir).spawn();
 }
 
 fn apply_processes(rows: Vec<sampler::ProcRow>, cx: &mut App) {
@@ -447,10 +503,15 @@ fn push_shell_state(cx: &mut App) {
             (true, Some(view)) => Some(view.tooltip.clone()),
             _ => None,
         };
+        let awaiting = match (&connected, &view) {
+            (true, Some(view)) => view.awaiting_reply_count,
+            _ => 0,
+        };
         let _ = tray.update(|tray: &mut linux_tray::FleetTray| {
             tray.meters = meters;
             tray.alert = alert;
             tray.fleet_tooltip = fleet_tooltip;
+            tray.awaiting = awaiting;
         });
     }
 }
@@ -694,7 +755,7 @@ mod mac_status {
                 msg_send![event, type]
             };
             if event_type == EVENT_RIGHT_MOUSE_UP {
-                show_quit_menu(_sender);
+                show_context_menu(_sender);
             } else {
                 send(ShellEvent::TogglePopover);
             }
@@ -705,20 +766,95 @@ mod mac_status {
         send(ShellEvent::Quit);
     }
 
-    unsafe fn show_quit_menu(sender: id) {
+    static CURRENT_AWAITING: Mutex<i64> = Mutex::new(0);
+
+    fn current_awaiting() -> i64 {
+        CURRENT_AWAITING.lock().map(|guard| *guard).unwrap_or(0)
+    }
+
+    extern "C" fn menu_clicked(_this: &Object, _cmd: Sel, sender: id) {
+        let tag: i64 = unsafe { msg_send![sender, tag] };
+        let event = match tag {
+            1 => ShellEvent::TogglePopover,
+            2 | 3 | 4 | 5 => ShellEvent::ShowModule(super::Module::Overview),
+            6 => ShellEvent::ShowModule(super::Module::Processes),
+            7 => ShellEvent::ShowModule(super::Module::Storage),
+            8 => ShellEvent::ShowModule(super::Module::Services),
+            9 => ShellEvent::ShowModule(super::Module::Events),
+            10 => ShellEvent::ShowModule(super::Module::LaunchServices),
+            11 => ShellEvent::Reconcile,
+            12 => ShellEvent::RevealLogs,
+            13 => ShellEvent::OpenGuide,
+            _ => return,
+        };
+        send(event);
+    }
+
+    unsafe fn add_menu_item(
+        menu: id,
+        target: id,
+        title: &str,
+        action: Sel,
+        tag: i64,
+        key: &str,
+        enabled: bool,
+    ) {
         unsafe {
-            let menu: id = msg_send![class!(NSMenu), alloc];
-            let menu: id = msg_send![menu, init];
             let item: id = msg_send![class!(NSMenuItem), alloc];
             let item: id = msg_send![
                 item,
-                initWithTitle: ns_string("Quit FleetConsole")
-                action: sel!(fleetQuitClicked:)
-                keyEquivalent: ns_string("q")
+                initWithTitle: ns_string(title)
+                action: action
+                keyEquivalent: ns_string(key)
             ];
-            let target: id = msg_send![target_class(), new];
             let _: () = msg_send![item, setTarget: target];
+            let _: () = msg_send![item, setTag: tag];
+            let _: () = msg_send![item, setEnabled: enabled];
             let _: () = msg_send![menu, addItem: item];
+        }
+    }
+
+    unsafe fn add_separator(menu: id) {
+        unsafe {
+            let separator: id = msg_send![class!(NSMenuItem), separatorItem];
+            let _: () = msg_send![menu, addItem: separator];
+        }
+    }
+
+    unsafe fn show_context_menu(sender: id) {
+        unsafe {
+            let menu: id = msg_send![class!(NSMenu), alloc];
+            let menu: id = msg_send![menu, init];
+            let target: id = msg_send![target_class(), new];
+            let action = sel!(fleetMenuClicked:);
+            add_menu_item(menu, target, "Quick View", action, 1, "", true);
+            add_menu_item(menu, target, "Needs Attention", action, 2, "", true);
+            let awaiting = current_awaiting();
+            let agents_title = if awaiting > 0 {
+                format!("Agents — {awaiting} awaiting your answer")
+            } else {
+                "Agents".to_string()
+            };
+            add_menu_item(menu, target, &agents_title, action, 3, "", true);
+            add_menu_item(menu, target, "Open Dashboard", action, 4, "0", true);
+            add_separator(menu);
+            add_menu_item(menu, target, "Monitor This Mac", action, 0, "", false);
+            add_menu_item(menu, target, "Overview", action, 5, "", true);
+            add_menu_item(menu, target, "Processes", action, 6, "", true);
+            add_menu_item(menu, target, "Storage", action, 7, "", true);
+            add_separator(menu);
+            add_menu_item(menu, target, "Background Work", action, 0, "", false);
+            add_menu_item(menu, target, "Services", action, 8, "", true);
+            add_menu_item(menu, target, "Events", action, 9, "", true);
+            add_menu_item(menu, target, "Launch Services", action, 10, "", true);
+            add_separator(menu);
+            add_menu_item(menu, target, "Find Background Processes", action, 11, "", true);
+            add_menu_item(menu, target, "Reveal Logs in Finder", action, 12, "", true);
+            add_separator(menu);
+            add_menu_item(menu, target, "Help", action, 0, "", false);
+            add_menu_item(menu, target, "FleetConsole Guide", action, 13, "", true);
+            add_separator(menu);
+            add_menu_item(menu, target, "Quit FleetConsole", sel!(fleetQuitClicked:), 0, "q", true);
             let _: () = msg_send![menu, popUpMenuPositioningItem: nil atLocation: NSPoint::new(0.0, 0.0) inView: sender];
             let _: () = msg_send![menu, release];
         }
@@ -783,6 +919,10 @@ mod mac_status {
                 decl.add_method(
                     sel!(fleetQuitClicked:),
                     quit_clicked as extern "C" fn(&Object, Sel, id),
+                );
+                decl.add_method(
+                    sel!(fleetMenuClicked:),
+                    menu_clicked as extern "C" fn(&Object, Sel, id),
                 );
             }
             decl.register()
@@ -855,6 +995,12 @@ mod mac_status {
             connected: bool,
             view: Option<&super::FleetView>,
         ) {
+            if let Ok(mut guard) = CURRENT_AWAITING.lock() {
+                *guard = match (connected, view) {
+                    (true, Some(view)) => view.awaiting_reply_count,
+                    _ => 0,
+                };
+            }
             unsafe {
                 let button: id = msg_send![self.item, button];
                 if button == nil {
@@ -970,6 +1116,27 @@ mod linux_tray {
         pub meters: Meters,
         pub alert: String,
         pub fleet_tooltip: Option<String>,
+        pub awaiting: i64,
+    }
+
+    fn entry(label: String, event: ShellEvent) -> MenuItem<FleetTray> {
+        StandardItem {
+            label,
+            activate: Box::new(move |tray: &mut FleetTray| {
+                let _ = tray.tx.unbounded_send(event.clone());
+            }),
+            ..Default::default()
+        }
+        .into()
+    }
+
+    fn header_item(label: &str) -> MenuItem<FleetTray> {
+        StandardItem {
+            label: label.into(),
+            enabled: false,
+            ..Default::default()
+        }
+        .into()
     }
 
     fn orange_pixmap() -> Vec<Icon> {
@@ -1020,6 +1187,12 @@ mod linux_tray {
             } else {
                 format!("{}  {}", self.meters.text(), self.alert)
             };
+            let agents_label = if self.awaiting > 0 {
+                format!("Agents — {} awaiting your answer", self.awaiting)
+            } else {
+                "Agents".to_string()
+            };
+            use super::Module;
             vec![
                 StandardItem {
                     label: meters_label,
@@ -1027,23 +1200,49 @@ mod linux_tray {
                     ..Default::default()
                 }
                 .into(),
-                StandardItem {
-                    label: "Open FleetConsole".into(),
-                    activate: Box::new(|tray: &mut Self| {
-                        let _ = tray.tx.unbounded_send(ShellEvent::TogglePopover);
-                    }),
-                    ..Default::default()
-                }
-                .into(),
+                entry("Quick View".into(), ShellEvent::TogglePopover),
+                entry(
+                    "Needs Attention".into(),
+                    ShellEvent::ShowModule(Module::Overview),
+                ),
+                entry(agents_label, ShellEvent::ShowModule(Module::Overview)),
+                entry(
+                    "Open Dashboard".into(),
+                    ShellEvent::ShowModule(Module::Overview),
+                ),
                 MenuItem::Separator,
-                StandardItem {
-                    label: "Quit FleetConsole".into(),
-                    activate: Box::new(|tray: &mut Self| {
-                        let _ = tray.tx.unbounded_send(ShellEvent::Quit);
-                    }),
-                    ..Default::default()
-                }
-                .into(),
+                header_item("Monitor This Mac"),
+                entry(
+                    "Overview".into(),
+                    ShellEvent::ShowModule(Module::Overview),
+                ),
+                entry(
+                    "Processes".into(),
+                    ShellEvent::ShowModule(Module::Processes),
+                ),
+                entry(
+                    "Storage".into(),
+                    ShellEvent::ShowModule(Module::Storage),
+                ),
+                MenuItem::Separator,
+                header_item("Background Work"),
+                entry(
+                    "Services".into(),
+                    ShellEvent::ShowModule(Module::Services),
+                ),
+                entry("Events".into(), ShellEvent::ShowModule(Module::Events)),
+                entry(
+                    "Launch Services".into(),
+                    ShellEvent::ShowModule(Module::LaunchServices),
+                ),
+                MenuItem::Separator,
+                entry("Find Background Processes".into(), ShellEvent::Reconcile),
+                entry("Reveal Logs".into(), ShellEvent::RevealLogs),
+                MenuItem::Separator,
+                header_item("Help"),
+                entry("FleetConsole Guide".into(), ShellEvent::OpenGuide),
+                MenuItem::Separator,
+                entry("Quit FleetConsole".into(), ShellEvent::Quit),
             ]
         }
     }
@@ -1055,6 +1254,7 @@ mod linux_tray {
             meters: Meters::default(),
             alert: String::new(),
             fleet_tooltip: None,
+            awaiting: 0,
         }
         .spawn()
             .map_err(|error| format!("StatusNotifierItem spawn failed: {error}"))
