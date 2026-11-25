@@ -9,6 +9,10 @@ use gpui::{
 #[cfg(target_os = "macos")]
 use gpui::{point, WindowKind};
 
+mod sampler;
+
+use sampler::Meters;
+
 actions!(fleet_console, [Quit]);
 
 pub const BUNDLE_ID: &str = "com.fleetconsole.app";
@@ -21,20 +25,23 @@ pub const POPOVER_SIZE: (f32, f32) = (360.0, 210.0);
 pub enum ShellEvent {
     TogglePopover,
     Quit,
+    Meters(Meters),
 }
 
-pub struct PopoverView;
+pub struct PopoverView {
+    meters: Meters,
+}
 
 impl Render for PopoverView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let meter = |label: &'static str| {
+        let meter = |label: &'static str, value: Option<u32>| {
             div()
                 .flex()
                 .flex_col()
                 .items_center()
                 .gap(px(2.0))
                 .child(div().text_size(px(10.0)).child(label))
-                .child(div().text_size(px(16.0)).child("—"))
+                .child(div().text_size(px(16.0)).child(sampler::value_text(value)))
         };
         div()
             .flex()
@@ -50,9 +57,9 @@ impl Render for PopoverView {
                     .flex()
                     .flex_row()
                     .justify_around()
-                    .child(meter("CPU"))
-                    .child(meter("RAM"))
-                    .child(meter("DISK")),
+                    .child(meter("CPU", self.meters.cpu))
+                    .child(meter("RAM", self.meters.ram))
+                    .child(meter("DISK", self.meters.disk)),
             )
             .child(
                 div()
@@ -75,6 +82,7 @@ impl Render for PopoverView {
 }
 
 pub struct Shell {
+    meters: Meters,
     popover: Option<WindowHandle<PopoverView>>,
     #[cfg(target_os = "macos")]
     _item: Option<mac_status::Item>,
@@ -101,6 +109,7 @@ fn toggle_popover(cx: &mut App) {
 }
 
 fn open_popover(cx: &mut App) {
+    let meters = cx.global::<Shell>().meters;
     let (w, h) = POPOVER_SIZE;
     #[cfg(target_os = "macos")]
     let anchored = cx
@@ -131,7 +140,7 @@ fn open_popover(cx: &mut App) {
             app_id: Some(BUNDLE_ID.into()),
             ..Default::default()
         };
-        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView)) {
+        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters })) {
             cx.global_mut::<Shell>().popover = Some(handle);
         }
         return;
@@ -150,7 +159,7 @@ fn open_popover(cx: &mut App) {
         app_id: Some(BUNDLE_ID.into()),
         ..Default::default()
     };
-    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView)) {
+    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters })) {
         cx.global_mut::<Shell>().popover = Some(handle);
     }
 }
@@ -163,11 +172,37 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     return;
                 }
             }
+            ShellEvent::Meters(meters) => {
+                if cx.update(|cx| apply_meters(meters, cx)).is_err() {
+                    return;
+                }
+            }
             ShellEvent::Quit => {
                 let _ = cx.update(|cx| cx.quit());
                 return;
             }
         }
+    }
+}
+
+fn apply_meters(meters: Meters, cx: &mut App) {
+    eprintln!("FleetConsole: meters {}", meters.text());
+    cx.global_mut::<Shell>().meters = meters;
+    #[cfg(target_os = "macos")]
+    if let Some(item) = &cx.global::<Shell>()._item {
+        item.set_meters(meters);
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(tray) = &cx.global::<Shell>()._tray {
+        let _ = tray.update(|tray: &mut linux_tray::FleetTray| tray.meters = meters);
+    }
+    if let Some(handle) = cx.global::<Shell>().popover {
+        let _ = handle.update(cx, |view, _, view_cx| {
+            if view.meters != meters {
+                view.meters = meters;
+                view_cx.notify();
+            }
+        });
     }
 }
 
@@ -232,6 +267,7 @@ fn main() {
         };
 
         cx.set_global(Shell {
+            meters: Meters::default(),
             popover: None,
             #[cfg(target_os = "macos")]
             _item: item,
@@ -242,6 +278,17 @@ fn main() {
         cx.spawn(async move |cx: &mut gpui::AsyncApp| forward_events(rx, cx).await)
             .detach();
 
+        std::thread::spawn(move || {
+            let mut sampler = sampler::Sampler::new();
+            loop {
+                let meters = sampler.sample();
+                if tx.unbounded_send(ShellEvent::Meters(meters)).is_err() {
+                    return;
+                }
+                std::thread::sleep(sampler::SAMPLE_INTERVAL);
+            }
+        });
+
         if open_popover_at_launch {
             toggle_popover(cx);
         }
@@ -250,7 +297,7 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 mod mac_status {
-    use super::{ShellEvent, METER_TEXT, STATUS_ITEM_AUTOSAVE_NAME, TOOLTIP_DISCONNECTED};
+    use super::{Meters, ShellEvent, METER_TEXT, STATUS_ITEM_AUTOSAVE_NAME, TOOLTIP_DISCONNECTED};
     use cocoa::base::{id, nil};
     use cocoa::foundation::{NSPoint, NSRect, NSString};
     use futures::channel::mpsc::UnboundedSender;
@@ -396,6 +443,20 @@ mod mac_status {
             }
         }
 
+        pub fn set_meters(&self, meters: Meters) {
+            unsafe {
+                let button: id = msg_send![self.item, button];
+                if button == nil {
+                    return;
+                }
+                let _: () = msg_send![button, setTitle: ns_string(&meters.text())];
+                let _: () = msg_send![
+                    button,
+                    setAccessibilityLabel: ns_string(&meters.accessibility())
+                ];
+            }
+        }
+
         pub fn anchor(&self) -> Option<super::Anchor> {
             unsafe {
                 let button: id = msg_send![self.item, button];
@@ -457,7 +518,7 @@ pub struct Anchor {
 
 #[cfg(target_os = "linux")]
 mod linux_tray {
-    use super::{ShellEvent, BUNDLE_ID, METER_TEXT, TOOLTIP_DISCONNECTED};
+    use super::{Meters, ShellEvent, BUNDLE_ID, TOOLTIP_DISCONNECTED};
     use futures::channel::mpsc::UnboundedSender;
     use ksni::menu::{MenuItem, StandardItem};
     use ksni::{Icon, ToolTip, Tray};
@@ -466,6 +527,7 @@ mod linux_tray {
 
     pub struct FleetTray {
         tx: UnboundedSender<ShellEvent>,
+        pub meters: Meters,
     }
 
     fn orange_pixmap() -> Vec<Icon> {
@@ -494,7 +556,7 @@ mod linux_tray {
         fn tool_tip(&self) -> ToolTip {
             ToolTip {
                 title: TOOLTIP_DISCONNECTED.into(),
-                description: METER_TEXT.into(),
+                description: self.meters.text(),
                 icon_name: String::new(),
                 icon_pixmap: Vec::new(),
             }
@@ -505,7 +567,7 @@ mod linux_tray {
         fn menu(&self) -> Vec<MenuItem<Self>> {
             vec![
                 StandardItem {
-                    label: METER_TEXT.into(),
+                    label: self.meters.text(),
                     enabled: false,
                     ..Default::default()
                 }
@@ -533,8 +595,11 @@ mod linux_tray {
 
     pub fn install(tx: UnboundedSender<ShellEvent>) -> Result<Handle, String> {
         use ksni::blocking::TrayMethods;
-        FleetTray { tx }
-            .spawn()
+        FleetTray {
+            tx,
+            meters: Meters::default(),
+        }
+        .spawn()
             .map_err(|error| format!("StatusNotifierItem spawn failed: {error}"))
     }
 }

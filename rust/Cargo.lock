@@ -1847,7 +1847,9 @@ dependencies = [
  "futures",
  "gpui",
  "ksni",
+ "libc",
  "objc",
+ "sysinfo",
 ]
 
 [[package]]
