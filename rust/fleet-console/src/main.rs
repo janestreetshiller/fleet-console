@@ -10,10 +10,11 @@ use gpui::{
 use gpui::{point, WindowKind};
 
 mod controller;
+mod quickview;
 mod sampler;
 mod snapshot;
 
-use sampler::Meters;
+use sampler::{Meters, Sample};
 use snapshot::FleetView;
 
 actions!(fleet_console, [Quit]);
@@ -22,52 +23,46 @@ pub const BUNDLE_ID: &str = "com.fleetconsole.app";
 pub const STATUS_ITEM_AUTOSAVE_NAME: &str = "com.fleetconsole.item.fleet";
 pub const METER_TEXT: &str = "CPU —   RAM —   DISK —";
 pub const TOOLTIP_DISCONNECTED: &str = "FleetConsole — controller not running";
-pub const POPOVER_SIZE: (f32, f32) = (360.0, 210.0);
+pub const POPOVER_SIZE: (f32, f32) = (480.0, 260.0);
 
 #[derive(Debug, Clone)]
 pub enum ShellEvent {
     TogglePopover,
     Quit,
-    Meters(Meters),
+    Sample(Sample),
     Connection(bool),
     Snapshot(snapshot::Snapshot),
 }
 
 pub struct PopoverView {
-    meters: Meters,
+    sample: Option<Sample>,
     status: String,
 }
 
 impl Render for PopoverView {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let meter = |label: &'static str, value: Option<u32>| {
-            div()
-                .flex()
-                .flex_col()
-                .items_center()
-                .gap(px(2.0))
-                .child(div().text_size(px(10.0)).child(label))
-                .child(div().text_size(px(16.0)).child(sampler::value_text(value)))
-        };
         div()
             .flex()
             .flex_col()
-            .gap(px(12.0))
+            .gap(px(10.0))
             .p(px(16.0))
             .size_full()
             .bg(gpui::rgb(0x1f1f1f))
             .text_color(gpui::rgb(0xffffff))
-            .child(div().text_size(px(15.0)).child("FleetConsole"))
             .child(
                 div()
                     .flex()
-                    .flex_row()
-                    .justify_around()
-                    .child(meter("CPU", self.meters.cpu))
-                    .child(meter("RAM", self.meters.ram))
-                    .child(meter("DISK", self.meters.disk)),
+                    .flex_col()
+                    .gap(px(2.0))
+                    .child(div().text_size(px(15.0)).child("FleetConsole"))
+                    .child(
+                        div()
+                            .text_size(px(12.0))
+                            .text_color(gpui::rgb(0x8e8e93))
+                            .child(self.status.clone()),
+                    ),
             )
-            .child(div().text_size(px(12.0)).child(self.status.clone()))
+            .child(quickview::quick_view(self.sample.as_ref()))
             .child(
                 div()
                     .id("quit")
@@ -85,6 +80,7 @@ impl Render for PopoverView {
 
 pub struct Shell {
     meters: Meters,
+    sample: Option<Sample>,
     connected: bool,
     view: Option<FleetView>,
     popover: Option<WindowHandle<PopoverView>>,
@@ -145,7 +141,7 @@ fn toggle_popover(cx: &mut App) {
 
 fn open_popover(cx: &mut App) {
     popover_opened();
-    let meters = cx.global::<Shell>().meters;
+    let sample = cx.global::<Shell>().sample.clone();
     let status = cx.global::<Shell>().status_line();
     let (w, h) = POPOVER_SIZE;
     #[cfg(target_os = "macos")]
@@ -177,7 +173,7 @@ fn open_popover(cx: &mut App) {
             app_id: Some(BUNDLE_ID.into()),
             ..Default::default()
         };
-        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters, status: status.clone() })) {
+        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { sample: sample.clone(), status: status.clone() })) {
             cx.global_mut::<Shell>().popover = Some(handle);
         }
         return;
@@ -196,7 +192,7 @@ fn open_popover(cx: &mut App) {
         app_id: Some(BUNDLE_ID.into()),
         ..Default::default()
     };
-    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters, status: status.clone() })) {
+    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { sample, status: status.clone() })) {
         cx.global_mut::<Shell>().popover = Some(handle);
     }
 }
@@ -209,8 +205,8 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     return;
                 }
             }
-            ShellEvent::Meters(meters) => {
-                if cx.update(|cx| apply_meters(meters, cx)).is_err() {
+            ShellEvent::Sample(sample) => {
+                if cx.update(|cx| apply_sample(sample, cx)).is_err() {
                     return;
                 }
             }
@@ -232,14 +228,18 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
     }
 }
 
-fn apply_meters(meters: Meters, cx: &mut App) {
-    eprintln!("FleetConsole: meters {}", meters.text());
-    cx.global_mut::<Shell>().meters = meters;
+fn apply_sample(sample: Sample, cx: &mut App) {
+    eprintln!("FleetConsole: meters {}", sample.meters.text());
+    let meters = sample.meters;
+    let shell = cx.global_mut::<Shell>();
+    shell.meters = meters;
+    shell.sample = Some(sample);
     push_shell_state(cx);
     if let Some(handle) = cx.global::<Shell>().popover {
+        let sample = cx.global::<Shell>().sample.clone();
         let _ = handle.update(cx, |view, _, view_cx| {
-            if view.meters != meters {
-                view.meters = meters;
+            if view.sample.as_ref().map(|s| s.meters) != Some(meters) {
+                view.sample = sample;
                 view_cx.notify();
             }
         });
@@ -376,6 +376,7 @@ fn main() {
 
         cx.set_global(Shell {
             meters: Meters::default(),
+            sample: None,
             connected: false,
             view: None,
             popover: None,
@@ -393,8 +394,8 @@ fn main() {
         std::thread::spawn(move || {
             let mut sampler = sampler::Sampler::new();
             loop {
-                let meters = sampler.sample();
-                if tx.unbounded_send(ShellEvent::Meters(meters)).is_err() {
+                let sample = sampler.sample();
+                if tx.unbounded_send(ShellEvent::Sample(sample)).is_err() {
                     return;
                 }
                 std::thread::sleep(sampler::SAMPLE_INTERVAL);

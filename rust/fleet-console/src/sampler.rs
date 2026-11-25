@@ -45,10 +45,54 @@ fn percent_of(share: f64) -> Option<u32> {
     }
 }
 
+/// Memory pressure, from the same source the Swift build reads
+/// (`kern.memorystatus_vm_pressure_level` on macOS). The label strings
+/// are the Swift ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Pressure {
+    Normal,
+    Warning,
+    Critical,
+    Unknown,
+}
+
+impl Pressure {
+    pub fn label(self) -> &'static str {
+        match self {
+            Pressure::Normal => "normal",
+            Pressure::Warning => "elevated",
+            Pressure::Critical => "critical",
+            Pressure::Unknown => "unknown",
+        }
+    }
+}
+
+/// One full set of local readings: the menubar meters plus everything
+/// the Quick View instruments need.
+#[derive(Debug, Clone)]
+pub struct Sample {
+    pub meters: Meters,
+    pub cpu_share: Option<f64>,
+    pub mem_share: Option<f64>,
+    pub mem_used_bytes: u64,
+    pub mem_total_bytes: u64,
+    pub mem_pressure: Pressure,
+    pub disk_share: Option<f64>,
+    pub disk_available: u64,
+    pub disk_total: u64,
+    pub net_down_bps: Option<f64>,
+    pub net_up_bps: Option<f64>,
+    /// "{brand} · {core summary}", the CPU instrument's help text.
+    pub cpu_help: String,
+}
+
 pub struct Sampler {
     system: sysinfo::System,
     disks: sysinfo::Disks,
+    networks: sysinfo::Networks,
     cpu_primed: bool,
+    network_primed: bool,
+    cpu_help: String,
 }
 
 impl Default for Sampler {
@@ -62,21 +106,26 @@ impl Sampler {
         let mut system = sysinfo::System::new();
         system.refresh_cpu_usage();
         system.refresh_memory();
+        let cpu_help = cpu_help(&system);
         Self {
             system,
             disks: sysinfo::Disks::new_with_refreshed_list(),
+            networks: sysinfo::Networks::new_with_refreshed_list(),
             cpu_primed: false,
+            network_primed: false,
+            cpu_help,
         }
     }
 
-    pub fn sample(&mut self) -> Meters {
+    pub fn sample(&mut self) -> Sample {
         self.system.refresh_cpu_usage();
         self.system.refresh_memory();
         self.disks.refresh();
-        let cpu = if self.cpu_primed {
+        self.networks.refresh();
+        let cpu_share = if self.cpu_primed {
             let usage = self.system.global_cpu_usage();
             if usage.is_finite() {
-                Some(usage.clamp(0.0, 100.0).round() as u32)
+                Some((usage.clamp(0.0, 100.0) / 100.0) as f64)
             } else {
                 None
             }
@@ -84,43 +133,224 @@ impl Sampler {
             None
         };
         self.cpu_primed = true;
-        Meters {
-            cpu,
-            ram: memory_percent(&self.system),
-            disk: disk_percent(&self.disks),
+        let (mem_used_bytes, mem_total_bytes) = memory_bytes(&self.system);
+        let mem_share = if mem_total_bytes > 0 {
+            Some(mem_used_bytes as f64 / mem_total_bytes as f64)
+        } else {
+            None
+        };
+        let (disk_share, disk_available, disk_total) = disk_reading(&self.disks);
+        let (net_down_bps, net_up_bps) = if self.network_primed {
+            network_rates(&self.networks)
+        } else {
+            (None, None)
+        };
+        self.network_primed = true;
+        Sample {
+            meters: Meters {
+                cpu: cpu_share.and_then(|share| percent_of(share)),
+                ram: mem_share.and_then(|share| percent_of(share)),
+                disk: disk_share.and_then(|share| percent_of(share)),
+            },
+            cpu_share,
+            mem_share,
+            mem_used_bytes,
+            mem_total_bytes,
+            mem_pressure: memory_pressure(),
+            disk_share,
+            disk_available,
+            disk_total,
+            net_down_bps,
+            net_up_bps,
+            cpu_help: self.cpu_help.clone(),
         }
     }
 }
 
-fn disk_percent(disks: &sysinfo::Disks) -> Option<u32> {
-    let disk = disks
+fn disk_reading(disks: &sysinfo::Disks) -> (Option<f64>, u64, u64) {
+    let Some(disk) = disks
         .list()
         .iter()
-        .find(|disk| disk.mount_point() == Path::new("/"))?;
+        .find(|disk| disk.mount_point() == Path::new("/"))
+    else {
+        return (None, 0, 0);
+    };
     let total = disk.total_space();
     let available = disk.available_space();
     if total == 0 || available > total {
-        return None;
+        return (None, available, total);
     }
-    percent_of((total - available) as f64 / total as f64)
+    (
+        Some((total - available) as f64 / total as f64),
+        available,
+        total,
+    )
 }
 
-#[cfg(not(target_os = "macos"))]
-fn memory_percent(system: &sysinfo::System) -> Option<u32> {
-    let total = system.total_memory();
-    if total == 0 {
-        return None;
+/// Physical-interface traffic only: loopback and the usual virtual
+/// interfaces are excluded, as the Swift counters exclude them.
+fn network_rates(networks: &sysinfo::Networks) -> (Option<f64>, Option<f64>) {
+    let mut down: u64 = 0;
+    let mut up: u64 = 0;
+    let mut any = false;
+    for (name, data) in networks.list() {
+        if !is_physical_interface(name) {
+            continue;
+        }
+        any = true;
+        down = down.saturating_add(data.received());
+        up = up.saturating_add(data.transmitted());
     }
-    percent_of(system.used_memory() as f64 / total as f64)
+    if !any {
+        return (None, None);
+    }
+    let seconds = SAMPLE_INTERVAL.as_secs_f64();
+    (
+        Some(down as f64 / seconds),
+        Some(up as f64 / seconds),
+    )
+}
+
+fn is_physical_interface(name: &str) -> bool {
+    const VIRTUAL_PREFIXES: [&str; 16] = [
+        "lo", "utun", "awdl", "llw", "bridge", "anpi", "gif", "stf", "docker", "veth", "virbr",
+        "br-", "tun", "tap", "wg", "ppp",
+    ];
+    !VIRTUAL_PREFIXES
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+}
+
+fn cpu_help(system: &sysinfo::System) -> String {
+    let brand = system
+        .cpus()
+        .first()
+        .map(|cpu| cpu.brand().trim().to_string())
+        .filter(|brand| !brand.is_empty())
+        .unwrap_or_else(|| "CPU".to_string());
+    format!("{brand} · {}", core_summary(system))
 }
 
 #[cfg(target_os = "macos")]
-fn memory_percent(system: &sysinfo::System) -> Option<u32> {
-    let total = system.total_memory();
-    if total == 0 {
+fn core_summary(system: &sysinfo::System) -> String {
+    let logical = system.cpus().len() as i64;
+    if let (Some(level0), Some(level1)) = (
+        sysctl_int("hw.perflevel0.logicalcpu"),
+        sysctl_int("hw.perflevel1.logicalcpu"),
+    ) {
+        if level0 + level1 == logical && logical > 0 {
+            let name0 = sysctl_string("hw.perflevel0.name")
+                .unwrap_or_else(|| "performance".to_string())
+                .to_lowercase();
+            let performance_first = name0.starts_with('p');
+            let (performance, efficiency) = if performance_first {
+                (level0, level1)
+            } else {
+                (level1, level0)
+            };
+            return format!("{performance}P + {efficiency}E");
+        }
+    }
+    format!("{logical} cores")
+}
+
+#[cfg(not(target_os = "macos"))]
+fn core_summary(system: &sysinfo::System) -> String {
+    let logical = system.cpus().len();
+    let physical = system.physical_core_count().unwrap_or(logical);
+    format!("{physical} cores")
+}
+
+#[cfg(target_os = "macos")]
+fn sysctl_int(name: &str) -> Option<i64> {
+    let cname = std::ffi::CString::new(name).ok()?;
+    let mut value: i64 = 0;
+    let mut size = std::mem::size_of::<i64>();
+    let status = unsafe {
+        libc::sysctlbyname(
+            cname.as_ptr(),
+            &mut value as *mut i64 as *mut libc::c_void,
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    (status == 0).then_some(value)
+}
+
+#[cfg(target_os = "macos")]
+fn sysctl_string(name: &str) -> Option<String> {
+    let cname = std::ffi::CString::new(name).ok()?;
+    let mut size: usize = 0;
+    let status = unsafe {
+        libc::sysctlbyname(
+            cname.as_ptr(),
+            std::ptr::null_mut(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 || size == 0 {
         return None;
     }
-    percent_of(mac_memory_used(total)? as f64 / total as f64)
+    let mut buffer = vec![0u8; size];
+    let status = unsafe {
+        libc::sysctlbyname(
+            cname.as_ptr(),
+            buffer.as_mut_ptr() as *mut libc::c_void,
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 {
+        return None;
+    }
+    buffer.retain(|byte| *byte != 0);
+    String::from_utf8(buffer).ok()
+}
+
+#[cfg(target_os = "macos")]
+fn memory_pressure() -> Pressure {
+    let cname = match std::ffi::CString::new("kern.memorystatus_vm_pressure_level") {
+        Ok(name) => name,
+        Err(_) => return Pressure::Unknown,
+    };
+    let mut level: i32 = 0;
+    let mut size = std::mem::size_of::<i32>();
+    let status = unsafe {
+        libc::sysctlbyname(
+            cname.as_ptr(),
+            &mut level as *mut i32 as *mut libc::c_void,
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 {
+        return Pressure::Unknown;
+    }
+    match level {
+        1 => Pressure::Normal,
+        2 => Pressure::Warning,
+        4 => Pressure::Critical,
+        _ => Pressure::Unknown,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn memory_pressure() -> Pressure {
+    Pressure::Unknown
+}
+
+fn memory_bytes(system: &sysinfo::System) -> (u64, u64) {
+    let total = system.total_memory();
+    #[cfg(target_os = "macos")]
+    let used = mac_memory_used(total).unwrap_or_else(|| system.used_memory());
+    #[cfg(not(target_os = "macos"))]
+    let used = system.used_memory();
+    (used, total)
 }
 
 #[cfg(target_os = "macos")]
