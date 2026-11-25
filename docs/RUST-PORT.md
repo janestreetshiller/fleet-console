@@ -28,7 +28,7 @@ for implementing the UI, rather than a converter for SwiftUI screens. See the
 | `rust/fleet-agent` | Resident operations helper | Separate from Agent-RX and the GPUI shell. |
 | `rust/fleet-telemetry` | Local machine/process sampling | Distinguish measured values, unavailable fields and snapshots from live streams. |
 | `rust/ouros-adapter`, `rust/fleet-spatial` | Graph/state and layout structures | Seeded graphs are not evidence of a connected agent. |
-| `rust/fleet-gpui` | Experimental workspace rendering | Continue as a development client until real workflows pass. |
+| `rust/fleet-gpui` | Experimental workspace rendering | **Killed 2026-11-24.** A second GPUI front end that shipped to nobody; `rust/fleet-console` is the only GPUI app. |
 
 ## Confirmed gaps at the start of this sprint
 

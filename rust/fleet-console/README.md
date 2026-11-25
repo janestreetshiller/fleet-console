@@ -1,11 +1,11 @@
 # FleetConsole — production GPUI app (scaffold)
 
 The production rebuild of FleetConsole 1.3.0 in GPUI (Rust), per the parity
-list in the repo `WORKLOG.md`. It lives beside the experimental companion in
-`rust/fleet-gpui`, which stays untouched as a development client: that crate
-opens a main window at launch, shows no meters in its macOS status item, and
-has no Linux tray, so it was not a clean base for the menubar-first
-production shell.
+list in the repo `WORKLOG.md`. It replaces the two experimental front ends that never shipped — the
+`fleet-gpui` desktop client and the `fleet-tui` terminal client — both removed
+with their shared `fleet-ui-core` view models when the ecosystem standardised
+on one GPUI app per product (owner decision, 2026-11-24). This crate is that
+app for FleetConsole; the Swift 1.3.0 build stays the download until parity.
 
 What exists in this scaffold:
 

@@ -7,10 +7,7 @@ members = [
     "fleet-telemetry",
     "ouros-adapter",
     "fleet-spatial",
-    "fleet-gpui",
     "fleet-console",
-    "fleet-ui-core",
-    "fleet-tui",
 ]
 
 [workspace.package]
@@ -30,4 +27,3 @@ fleet-proto = { path = "fleet-proto" }
 fleet-telemetry = { path = "fleet-telemetry" }
 ouros-adapter = { path = "ouros-adapter" }
 fleet-spatial = { path = "fleet-spatial" }
-fleet-ui-core = { path = "fleet-ui-core" }
