@@ -9,9 +9,12 @@ use gpui::{
 #[cfg(target_os = "macos")]
 use gpui::{point, WindowKind};
 
+mod controller;
 mod sampler;
+mod snapshot;
 
 use sampler::Meters;
+use snapshot::FleetView;
 
 actions!(fleet_console, [Quit]);
 
@@ -21,15 +24,18 @@ pub const METER_TEXT: &str = "CPU —   RAM —   DISK —";
 pub const TOOLTIP_DISCONNECTED: &str = "FleetConsole — controller not running";
 pub const POPOVER_SIZE: (f32, f32) = (360.0, 210.0);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum ShellEvent {
     TogglePopover,
     Quit,
     Meters(Meters),
+    Connection(bool),
+    Snapshot(snapshot::Snapshot),
 }
 
 pub struct PopoverView {
     meters: Meters,
+    status: String,
 }
 
 impl Render for PopoverView {
@@ -61,11 +67,7 @@ impl Render for PopoverView {
                     .child(meter("RAM", self.meters.ram))
                     .child(meter("DISK", self.meters.disk)),
             )
-            .child(
-                div()
-                    .text_size(px(12.0))
-                    .child("Controller not connected yet"),
-            )
+            .child(div().text_size(px(12.0)).child(self.status.clone()))
             .child(
                 div()
                     .id("quit")
@@ -83,6 +85,8 @@ impl Render for PopoverView {
 
 pub struct Shell {
     meters: Meters,
+    connected: bool,
+    view: Option<FleetView>,
     popover: Option<WindowHandle<PopoverView>>,
     #[cfg(target_os = "macos")]
     _item: Option<mac_status::Item>,
@@ -92,6 +96,36 @@ pub struct Shell {
 
 impl Global for Shell {}
 
+impl Shell {
+    fn status_line(&self) -> String {
+        match (&self.connected, &self.view) {
+            (true, Some(view)) => view.status_line.clone(),
+            _ => "Controller offline".to_string(),
+        }
+    }
+
+    fn alert_text(&self) -> String {
+        match (&self.connected, &self.view) {
+            (true, Some(view)) => view.alert.clone(),
+            _ => FleetView::offline_alert().to_string(),
+        }
+    }
+}
+
+/// Opening the popover calls refresh-all and marks messages seen in the
+/// Swift build; the sampler already refreshes local probes continuously,
+/// so this sends the two daemon one-shots (markSeen, refreshDevices).
+fn popover_opened() {
+    std::thread::spawn(|| {
+        let _ = controller::send_one_shot(&fleet_proto::RpcRequest::new(
+            fleet_proto::RpcOp::MarkSeen,
+        ));
+        let _ = controller::send_one_shot(&fleet_proto::RpcRequest::new(
+            fleet_proto::RpcOp::RefreshDevices,
+        ));
+    });
+}
+
 fn toggle_popover(cx: &mut App) {
     if let Some(handle) = cx.global::<Shell>().popover {
         let toggled = handle.update(cx, |_, window, _| {
@@ -99,6 +133,7 @@ fn toggle_popover(cx: &mut App) {
                 window.remove_window();
             } else {
                 window.activate_window();
+                popover_opened();
             }
         });
         if toggled.is_ok() {
@@ -109,7 +144,9 @@ fn toggle_popover(cx: &mut App) {
 }
 
 fn open_popover(cx: &mut App) {
+    popover_opened();
     let meters = cx.global::<Shell>().meters;
+    let status = cx.global::<Shell>().status_line();
     let (w, h) = POPOVER_SIZE;
     #[cfg(target_os = "macos")]
     let anchored = cx
@@ -140,7 +177,7 @@ fn open_popover(cx: &mut App) {
             app_id: Some(BUNDLE_ID.into()),
             ..Default::default()
         };
-        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters })) {
+        if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters, status: status.clone() })) {
             cx.global_mut::<Shell>().popover = Some(handle);
         }
         return;
@@ -159,7 +196,7 @@ fn open_popover(cx: &mut App) {
         app_id: Some(BUNDLE_ID.into()),
         ..Default::default()
     };
-    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters })) {
+    if let Ok(handle) = cx.open_window(options, |_, cx| cx.new(|_| PopoverView { meters, status: status.clone() })) {
         cx.global_mut::<Shell>().popover = Some(handle);
     }
 }
@@ -177,6 +214,16 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     return;
                 }
             }
+            ShellEvent::Connection(connected) => {
+                if cx.update(|cx| apply_connection(connected, cx)).is_err() {
+                    return;
+                }
+            }
+            ShellEvent::Snapshot(snapshot) => {
+                if cx.update(|cx| apply_snapshot(snapshot, cx)).is_err() {
+                    return;
+                }
+            }
             ShellEvent::Quit => {
                 let _ = cx.update(|cx| cx.quit());
                 return;
@@ -188,18 +235,79 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
 fn apply_meters(meters: Meters, cx: &mut App) {
     eprintln!("FleetConsole: meters {}", meters.text());
     cx.global_mut::<Shell>().meters = meters;
-    #[cfg(target_os = "macos")]
-    if let Some(item) = &cx.global::<Shell>()._item {
-        item.set_meters(meters);
-    }
-    #[cfg(target_os = "linux")]
-    if let Some(tray) = &cx.global::<Shell>()._tray {
-        let _ = tray.update(|tray: &mut linux_tray::FleetTray| tray.meters = meters);
-    }
+    push_shell_state(cx);
     if let Some(handle) = cx.global::<Shell>().popover {
         let _ = handle.update(cx, |view, _, view_cx| {
             if view.meters != meters {
                 view.meters = meters;
+                view_cx.notify();
+            }
+        });
+    }
+}
+
+fn apply_connection(connected: bool, cx: &mut App) {
+    eprintln!("FleetConsole: controller connected={connected}");
+    let shell = cx.global_mut::<Shell>();
+    shell.connected = connected;
+    if !connected {
+        shell.view = None;
+    }
+    push_shell_state(cx);
+    push_popover_status(cx);
+}
+
+fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    let view = FleetView::from_snapshot(&snapshot, now);
+    eprintln!(
+        "FleetConsole: fleet status '{}' alert '{}'",
+        view.status_line, view.alert
+    );
+    let shell = cx.global_mut::<Shell>();
+    shell.connected = true;
+    shell.view = Some(view);
+    push_shell_state(cx);
+    push_popover_status(cx);
+}
+
+/// Pushes the current meters + fleet state to the platform status item.
+fn push_shell_state(cx: &mut App) {
+    let (meters, connected, view) = {
+        let shell = cx.global::<Shell>();
+        (shell.meters, shell.connected, shell.view.clone())
+    };
+    #[cfg(target_os = "macos")]
+    if let Some(item) = &cx.global::<Shell>()._item {
+        item.set_status(meters, connected, view.as_ref());
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(tray) = &cx.global::<Shell>()._tray {
+        let alert = match (&connected, &view) {
+            (true, Some(view)) => view.alert.clone(),
+            _ => FleetView::offline_alert().to_string(),
+        };
+        let fleet_tooltip = match (&connected, &view) {
+            (true, Some(view)) => Some(view.tooltip.clone()),
+            _ => None,
+        };
+        let _ = tray.update(|tray: &mut linux_tray::FleetTray| {
+            tray.meters = meters;
+            tray.alert = alert;
+            tray.fleet_tooltip = fleet_tooltip;
+        });
+    }
+}
+
+fn push_popover_status(cx: &mut App) {
+    let status = cx.global::<Shell>().status_line();
+    if let Some(handle) = cx.global::<Shell>().popover {
+        let _ = handle.update(cx, |view, _, view_cx| {
+            if view.status != status {
+                view.status = status;
                 view_cx.notify();
             }
         });
@@ -268,6 +376,8 @@ fn main() {
 
         cx.set_global(Shell {
             meters: Meters::default(),
+            connected: false,
+            view: None,
             popover: None,
             #[cfg(target_os = "macos")]
             _item: item,
@@ -277,6 +387,8 @@ fn main() {
 
         cx.spawn(async move |cx: &mut gpui::AsyncApp| forward_events(rx, cx).await)
             .detach();
+
+        controller::spawn(tx.clone());
 
         std::thread::spawn(move || {
             let mut sampler = sampler::Sampler::new();
@@ -358,6 +470,49 @@ mod mac_status {
             let _: () = msg_send![menu, addItem: item];
             let _: () = msg_send![menu, popUpMenuPositioningItem: nil atLocation: NSPoint::new(0.0, 0.0) inView: sender];
             let _: () = msg_send![menu, release];
+        }
+    }
+
+    /// Sets the button title as an attributed string so the alert suffix
+    /// carries the Swift tint (system red for `.bad`, system orange for
+    /// `.warn`); the meter text itself stays the default colour.
+    unsafe fn set_attributed_title(
+        button: id,
+        title: &str,
+        alert: &str,
+        tint: super::snapshot::Tint,
+    ) {
+        unsafe {
+            let attributed: id = msg_send![class!(NSMutableAttributedString), alloc];
+            let attributed: id = msg_send![attributed, initWithString: ns_string(title)];
+            if attributed == nil {
+                let _: () = msg_send![button, setTitle: ns_string(title)];
+                return;
+            }
+            if tint != super::snapshot::Tint::None && !alert.is_empty() {
+                let color: id = match tint {
+                    super::snapshot::Tint::Bad => {
+                        msg_send![class!(NSColor), systemRedColor]
+                    }
+                    _ => msg_send![class!(NSColor), systemOrangeColor],
+                };
+                if color != nil {
+                    let total = title.encode_utf16().count() as u64;
+                    let alert_len = alert.encode_utf16().count() as u64;
+                    let range = cocoa::foundation::NSRange::new(
+                        total.saturating_sub(alert_len),
+                        alert_len,
+                    );
+                    let _: () = msg_send![
+                        attributed,
+                        addAttribute: ns_string("NSForegroundColor")
+                        value: color
+                        range: range
+                    ];
+                }
+            }
+            let _: () = msg_send![button, setAttributedTitle: attributed];
+            let _: () = msg_send![attributed, release];
         }
     }
 
@@ -443,16 +598,50 @@ mod mac_status {
             }
         }
 
-        pub fn set_meters(&self, meters: Meters) {
+        pub fn set_status(
+            &self,
+            meters: Meters,
+            connected: bool,
+            view: Option<&super::FleetView>,
+        ) {
             unsafe {
                 let button: id = msg_send![self.item, button];
                 if button == nil {
                     return;
                 }
-                let _: () = msg_send![button, setTitle: ns_string(&meters.text())];
+                let (alert, tint, tooltip) = match (connected, view) {
+                    (true, Some(view)) => (
+                        view.alert.clone(),
+                        view.tint,
+                        view.tooltip.clone(),
+                    ),
+                    _ => (
+                        super::FleetView::offline_alert().to_string(),
+                        super::snapshot::Tint::Bad,
+                        TOOLTIP_DISCONNECTED.to_string(),
+                    ),
+                };
+                let mut title = meters.text();
+                if !alert.is_empty() {
+                    title.push_str("  ");
+                    title.push_str(&alert);
+                }
+                set_attributed_title(button, &title, &alert, tint);
+                let _: () = msg_send![button, setToolTip: ns_string(&tooltip)];
+                let mut accessibility = format!(
+                    "FleetConsole fleet — {}. CPU {}, RAM {}, DISK {}",
+                    tooltip.replace('\n', ", "),
+                    super::sampler::value_text(meters.cpu),
+                    super::sampler::value_text(meters.ram),
+                    super::sampler::value_text(meters.disk),
+                );
+                if !alert.is_empty() {
+                    accessibility.push(' ');
+                    accessibility.push_str(&alert);
+                }
                 let _: () = msg_send![
                     button,
-                    setAccessibilityLabel: ns_string(&meters.accessibility())
+                    setAccessibilityLabel: ns_string(&accessibility)
                 ];
             }
         }
@@ -528,6 +717,8 @@ mod linux_tray {
     pub struct FleetTray {
         tx: UnboundedSender<ShellEvent>,
         pub meters: Meters,
+        pub alert: String,
+        pub fleet_tooltip: Option<String>,
     }
 
     fn orange_pixmap() -> Vec<Icon> {
@@ -554,20 +745,33 @@ mod linux_tray {
             orange_pixmap()
         }
         fn tool_tip(&self) -> ToolTip {
-            ToolTip {
-                title: TOOLTIP_DISCONNECTED.into(),
-                description: self.meters.text(),
-                icon_name: String::new(),
-                icon_pixmap: Vec::new(),
+            match &self.fleet_tooltip {
+                Some(tooltip) => ToolTip {
+                    title: "FleetConsole".into(),
+                    description: tooltip.clone(),
+                    icon_name: String::new(),
+                    icon_pixmap: Vec::new(),
+                },
+                None => ToolTip {
+                    title: TOOLTIP_DISCONNECTED.into(),
+                    description: self.meters.text(),
+                    icon_name: String::new(),
+                    icon_pixmap: Vec::new(),
+                },
             }
         }
         fn activate(&mut self, _x: i32, _y: i32) {
             let _ = self.tx.unbounded_send(ShellEvent::TogglePopover);
         }
         fn menu(&self) -> Vec<MenuItem<Self>> {
+            let meters_label = if self.alert.is_empty() {
+                self.meters.text()
+            } else {
+                format!("{}  {}", self.meters.text(), self.alert)
+            };
             vec![
                 StandardItem {
-                    label: self.meters.text(),
+                    label: meters_label,
                     enabled: false,
                     ..Default::default()
                 }
@@ -598,6 +802,8 @@ mod linux_tray {
         FleetTray {
             tx,
             meters: Meters::default(),
+            alert: String::new(),
+            fleet_tooltip: None,
         }
         .spawn()
             .map_err(|error| format!("StatusNotifierItem spawn failed: {error}"))

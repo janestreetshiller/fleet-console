@@ -15,10 +15,17 @@ What exists in this scaffold:
 - Launch: no main window. The app lives in the macOS menubar / Linux
   system tray and stays resident with zero windows open.
 - Shell: three meter columns (CPU / RAM / DISK) with live local
-  readings; a click toggles a small popover that says the controller is
-  not connected yet and shows the same readings; a Quit item in the
-  popover, in the tray menu (Linux) / right-click menu (macOS), and on
-  Cmd-Q / Ctrl-Q.
+  readings; a click toggles a small popover that shows the fleet status
+  line and the same readings; a Quit item in the popover, in the tray
+  menu (Linux) / right-click menu (macOS), and on Cmd-Q / Ctrl-Q.
+- Controller connection (`src/controller.rs`, `src/snapshot.rs`): a
+  thread subscribes to fleetd over the owner-only Unix socket and
+  streams snapshots in, reconnecting with the Swift backoff (0.5s
+  doubling to a 5s cap). The menubar title appends the Swift alert text
+  (`Offline`, or `!N` for awaiting replies or attention) tinted red or
+  orange, the tooltip carries the counts line, agent profile lines,
+  next-lease line, and daemon uptime, and opening the popover sends
+  markSeen and refreshDevices, all derived with the Swift rules.
 - Local sampling (`src/sampler.rs`): a sampler thread reads this
   machine every 2 seconds and feeds the menubar status item (macOS),
   the tray title/menu/tooltip text (Linux), and the popover meter row.

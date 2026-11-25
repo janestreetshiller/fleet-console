@@ -1693,11 +1693,14 @@ name = "fleet-console"
 version = "1.3.0"
 dependencies = [
  "cocoa 0.26.0",
+ "fleet-proto",
  "futures",
  "gpui",
  "ksni",
  "libc",
  "objc",
+ "serde",
+ "serde_json",
  "sysinfo",
 ]
 
