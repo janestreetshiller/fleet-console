@@ -15,9 +15,19 @@ What exists in this scaffold:
 - Launch: no main window. The app lives in the macOS menubar / Linux
   system tray and stays resident with zero windows open.
 - Shell: three meter columns (CPU / RAM / DISK) with live local
-  readings; a click toggles a small popover that shows the fleet status
-  line and the same readings; a Quit item in the popover, in the tray
-  menu (Linux) / right-click menu (macOS), and on Cmd-Q / Ctrl-Q.
+  readings; a click toggles the 480pt popover, which shows the fleet
+  status line, the Quick View instrument strip (CPU and Memory retro
+  gauges, Disk cell grid, Network rate bars), a Dashboard button, and
+  Quit; a Quit item also sits in the tray menu (Linux) / right-click
+  menu (macOS), and on Cmd-Q / Ctrl-Q.
+- Dashboard (`src/dashboard.rs`): a window with the six Swift modules
+  in order — Overview (Agent awareness), Processes, Storage, Services
+  (Operations), Events, Launch Services (Plists) — opened with ⌘0 or
+  the popover's Dashboard button and switched with ⌘1 to ⌘6 or the
+  View menu. Overview, Services, and Events render the controller
+  snapshot; Processes shows the top local processes from a 4-second
+  process sampler; Storage lists mounted disks; Launch Services reads
+  `launchctl list` (macOS) or `systemctl --user` (Linux).
 - Controller connection (`src/controller.rs`, `src/snapshot.rs`): a
   thread subscribes to fleetd over the owner-only Unix socket and
   streams snapshots in, reconnecting with the Swift backoff (0.5s

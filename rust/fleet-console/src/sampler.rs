@@ -67,6 +67,47 @@ impl Pressure {
     }
 }
 
+/// One mounted disk, for the Dashboard's Storage module.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DiskRow {
+    pub name: String,
+    pub mount: String,
+    pub total: u64,
+    pub available: u64,
+}
+
+/// One process, for the Dashboard's Processes module.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcRow {
+    pub pid: u32,
+    pub name: String,
+    pub cpu_pct: f32,
+    pub mem_bytes: u64,
+}
+
+/// The top processes by CPU. The caller's `System` must have been
+/// refreshed at least once before, or every CPU reading is zero.
+pub fn collect_processes(system: &mut sysinfo::System) -> Vec<ProcRow> {
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All);
+    let mut rows: Vec<ProcRow> = system
+        .processes()
+        .values()
+        .map(|process| ProcRow {
+            pid: process.pid().as_u32(),
+            name: process.name().to_string_lossy().into_owned(),
+            cpu_pct: process.cpu_usage(),
+            mem_bytes: process.memory(),
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.cpu_pct
+            .partial_cmp(&a.cpu_pct)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    rows.truncate(25);
+    rows
+}
+
 /// One full set of local readings: the menubar meters plus everything
 /// the Quick View instruments need.
 #[derive(Debug, Clone)]
@@ -80,6 +121,7 @@ pub struct Sample {
     pub disk_share: Option<f64>,
     pub disk_available: u64,
     pub disk_total: u64,
+    pub disks: Vec<DiskRow>,
     pub net_down_bps: Option<f64>,
     pub net_up_bps: Option<f64>,
     /// "{brand} · {core summary}", the CPU instrument's help text.
@@ -140,6 +182,17 @@ impl Sampler {
             None
         };
         let (disk_share, disk_available, disk_total) = disk_reading(&self.disks);
+        let disks = self
+            .disks
+            .list()
+            .iter()
+            .map(|disk| DiskRow {
+                name: disk.name().to_string_lossy().into_owned(),
+                mount: disk.mount_point().to_string_lossy().into_owned(),
+                total: disk.total_space(),
+                available: disk.available_space(),
+            })
+            .collect();
         let (net_down_bps, net_up_bps) = if self.network_primed {
             network_rates(&self.networks)
         } else {
@@ -160,6 +213,7 @@ impl Sampler {
             disk_share,
             disk_available,
             disk_total,
+            disks,
             net_down_bps,
             net_up_bps,
             cpu_help: self.cpu_help.clone(),

@@ -24,13 +24,111 @@ pub struct Snapshot {
     #[serde(default)]
     pub attention: Vec<Attention>,
     #[serde(rename = "recentEvents", default)]
-    pub recent_events: Vec<serde_json::Value>,
+    pub recent_events: Vec<Event>,
     #[serde(default)]
     pub messages: Vec<Message>,
     #[serde(default)]
     pub external: Vec<serde_json::Value>,
     #[serde(default)]
     pub sessions: Vec<serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct Event {
+    #[serde(default)]
+    pub seq: i64,
+    #[serde(rename = "serviceID", default)]
+    pub service_id: Option<String>,
+    #[serde(rename = "serviceName", default)]
+    pub service_name: Option<String>,
+    #[serde(default)]
+    pub ts: serde_json::Value,
+    #[serde(default)]
+    pub kind: String,
+    #[serde(default)]
+    pub detail: String,
+}
+
+/// One service as the Dashboard's Operations module lists it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ServiceRow {
+    pub id: String,
+    pub state: String,
+    pub state_label: String,
+    pub owner: String,
+    pub ports: String,
+    pub cpu_pct: Option<f64>,
+    pub mem_mb: Option<f64>,
+    pub restart_count: i64,
+    pub purpose: String,
+}
+
+/// One event as the Dashboard's Events module lists it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EventRow {
+    pub seq: i64,
+    pub label: String,
+    pub is_bad: bool,
+    pub service_name: String,
+    pub detail: String,
+    pub when: String,
+}
+
+/// The Swift ServiceState label: never says "healthy" unless a health
+/// check actually passed.
+pub fn service_state_label(state: &str) -> String {
+    match state {
+        "starting" => "Starting",
+        "running" => "Running (unverified)",
+        "healthy" => "Healthy",
+        "degraded" => "Degraded",
+        "unhealthy" => "Health check failing",
+        "paused" => "Paused (still holding ports)",
+        "expiring" => "Lease expiring",
+        "expired" => "Lease expired",
+        "stopping" => "Stopping",
+        "stopped" => "Stopped",
+        "crashed" => "Crashed",
+        other => other,
+    }
+    .to_string()
+}
+
+/// The Swift EventKind label and severity.
+pub fn event_kind_label(kind: &str) -> (String, bool) {
+    let (label, is_bad) = match kind {
+        "registered" => ("Registered", false),
+        "claimed" => ("Claimed", false),
+        "started" => ("Started", false),
+        "restarted" => ("Restarted", false),
+        "healthPassed" => ("Health check passed", false),
+        "healthFailed" => ("Health check failed", true),
+        "leaseRenewed" => ("Lease renewed", false),
+        "leaseExpiring" => ("Lease expiring", false),
+        "leaseExpired" => ("Lease expired", true),
+        "maxRuntimeExceeded" => ("Max runtime exceeded", true),
+        "budgetWarning" => ("Budget warning", true),
+        "portViolation" => ("Port violation", true),
+        "stopRequested" => ("Stop requested", false),
+        "stopping" => ("Stopping", false),
+        "stopped" => ("Stopped", false),
+        "paused" => ("Paused", false),
+        "resumed" => ("Resumed", false),
+        "messagePosted" => ("Message posted", false),
+        "messageAnswered" => ("Message answered", false),
+        "crashed" => ("Crashed", true),
+        "reapIncomplete" => ("Reap incomplete", true),
+        "pidReuseSuspected" => ("PID reuse suspected", true),
+        "reconcileMissing" => ("Process missing", true),
+        "becameUnmanaged" => ("Became unmanaged", true),
+        "rejectedLaunch" => ("Launch rejected", true),
+        "rejectedPeer" => ("Peer rejected", true),
+        "daemonStarted" => ("Controller started", false),
+        "daemonStopping" => ("Controller stopping", false),
+        "daemonCrashed" => ("Controller exited abnormally", true),
+        other => (other, false),
+    };
+    (label.to_string(), is_bad)
 }
 
 fn default_daemon() -> fleet_proto::DaemonInfo {
@@ -179,6 +277,8 @@ pub struct FleetView {
     pub running_count: i64,
     pub profiles: Vec<ProfileLine>,
     pub next_lease_expiry: Option<f64>,
+    pub service_rows: Vec<ServiceRow>,
+    pub event_rows: Vec<EventRow>,
 }
 
 struct Profile {
@@ -411,6 +511,52 @@ impl FleetView {
             fmt_duration(now - snapshot.daemon.started_at)
         ));
 
+        let service_rows = snapshot
+            .services
+            .iter()
+            .map(|service| ServiceRow {
+                id: service.id.clone(),
+                state: service.state.clone(),
+                state_label: service_state_label(&service.state),
+                owner: service.owner.clone(),
+                ports: fmt_ports(service.effective_ports()),
+                cpu_pct: service.resources.cpu_pct,
+                mem_mb: service.resources.mem_mb,
+                restart_count: service.restart_count,
+                purpose: service.purpose.clone(),
+            })
+            .collect();
+        let event_rows = snapshot
+            .recent_events
+            .iter()
+            .rev()
+            .map(|event| {
+                let (label, is_bad) = event_kind_label(&event.kind);
+                let when = match &event.ts {
+                    serde_json::Value::Number(number) => number
+                        .as_f64()
+                        .map(|ts| fmt_relative(Some(ts), now))
+                        .unwrap_or_default(),
+                    serde_json::Value::String(text) => {
+                        text.chars().take(19).collect::<String>().replace('T', " ")
+                    }
+                    _ => String::new(),
+                };
+                EventRow {
+                    seq: event.seq,
+                    label,
+                    is_bad,
+                    service_name: event
+                        .service_name
+                        .clone()
+                        .or_else(|| event.service_id.clone())
+                        .unwrap_or_default(),
+                    detail: event.detail.clone(),
+                    when,
+                }
+            })
+            .collect();
+
         FleetView {
             alert,
             status_line,
@@ -429,6 +575,8 @@ impl FleetView {
                 })
                 .collect(),
             next_lease_expiry: next_lease,
+            service_rows,
+            event_rows,
         }
     }
 

@@ -1,6 +1,6 @@
 #![allow(unexpected_cfgs)]
 
-use futures::channel::mpsc::{unbounded, UnboundedReceiver};
+use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use gpui::{
     actions, div, prelude::*, px, size, App, Application, Bounds, Context, Global, Menu, MenuItem,
@@ -10,14 +10,30 @@ use gpui::{
 use gpui::{point, WindowKind};
 
 mod controller;
+mod dashboard;
 mod quickview;
 mod sampler;
 mod snapshot;
 
+use dashboard::{DashboardView, LaunchRow, Module};
 use sampler::{Meters, Sample};
 use snapshot::FleetView;
 
 actions!(fleet_console, [Quit]);
+actions!(
+    fleet_console_dashboard,
+    [
+        OpenDashboard,
+        ShowOverview,
+        ShowProcesses,
+        ShowStorage,
+        ShowServices,
+        ShowEvents,
+        ShowLaunchServices,
+        RefreshProbes,
+        OpenGuide
+    ]
+);
 
 pub const BUNDLE_ID: &str = "com.fleetconsole.app";
 pub const STATUS_ITEM_AUTOSAVE_NAME: &str = "com.fleetconsole.item.fleet";
@@ -32,6 +48,8 @@ pub enum ShellEvent {
     Sample(Sample),
     Connection(bool),
     Snapshot(snapshot::Snapshot),
+    Processes(Vec<sampler::ProcRow>),
+    LaunchServices(Vec<LaunchRow>),
 }
 
 pub struct PopoverView {
@@ -52,14 +70,35 @@ impl Render for PopoverView {
             .child(
                 div()
                     .flex()
-                    .flex_col()
-                    .gap(px(2.0))
-                    .child(div().text_size(px(15.0)).child("FleetConsole"))
+                    .flex_row()
+                    .justify_between()
+                    .items_start()
                     .child(
                         div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.0))
+                            .child(div().text_size(px(15.0)).child("FleetConsole"))
+                            .child(
+                                div()
+                                    .text_size(px(12.0))
+                                    .text_color(gpui::rgb(0x8e8e93))
+                                    .child(self.status.clone()),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .id("open-dashboard")
+                            .px(px(10.0))
+                            .py(px(5.0))
+                            .border_1()
+                            .border_color(gpui::rgb(0x8a8a8a))
+                            .rounded(px(6.0))
                             .text_size(px(12.0))
-                            .text_color(gpui::rgb(0x8e8e93))
-                            .child(self.status.clone()),
+                            .child("Dashboard")
+                            .on_click(|_, _, cx| {
+                                open_dashboard(cx, Module::Overview)
+                            }),
                     ),
             )
             .child(quickview::quick_view(self.sample.as_ref()))
@@ -84,6 +123,10 @@ pub struct Shell {
     connected: bool,
     view: Option<FleetView>,
     popover: Option<WindowHandle<PopoverView>>,
+    dashboard: Option<WindowHandle<DashboardView>>,
+    processes: Vec<sampler::ProcRow>,
+    launch_rows: Vec<LaunchRow>,
+    tx: Option<UnboundedSender<ShellEvent>>,
     #[cfg(target_os = "macos")]
     _item: Option<mac_status::Item>,
     #[cfg(target_os = "linux")]
@@ -220,6 +263,16 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     return;
                 }
             }
+            ShellEvent::Processes(rows) => {
+                if cx.update(|cx| apply_processes(rows, cx)).is_err() {
+                    return;
+                }
+            }
+            ShellEvent::LaunchServices(rows) => {
+                if cx.update(|cx| apply_launch_services(rows, cx)).is_err() {
+                    return;
+                }
+            }
             ShellEvent::Quit => {
                 let _ = cx.update(|cx| cx.quit());
                 return;
@@ -235,6 +288,7 @@ fn apply_sample(sample: Sample, cx: &mut App) {
     shell.meters = meters;
     shell.sample = Some(sample);
     push_shell_state(cx);
+    push_dashboard(cx);
     if let Some(handle) = cx.global::<Shell>().popover {
         let sample = cx.global::<Shell>().sample.clone();
         let _ = handle.update(cx, |view, _, view_cx| {
@@ -255,6 +309,104 @@ fn apply_connection(connected: bool, cx: &mut App) {
     }
     push_shell_state(cx);
     push_popover_status(cx);
+    push_dashboard(cx);
+}
+
+fn apply_processes(rows: Vec<sampler::ProcRow>, cx: &mut App) {
+    cx.global_mut::<Shell>().processes = rows;
+    push_dashboard(cx);
+}
+
+fn apply_launch_services(rows: Vec<LaunchRow>, cx: &mut App) {
+    cx.global_mut::<Shell>().launch_rows = rows;
+    push_dashboard(cx);
+}
+
+/// Opens the Dashboard on a module, or switches the open Dashboard to
+/// it. Opening also refreshes the launch-services inventory.
+fn open_dashboard(cx: &mut App, module: Module) {
+    if let Some(handle) = cx.global::<Shell>().dashboard {
+        let _ = handle.update(cx, |view, window, view_cx| {
+            view.module = module;
+            window.activate_window();
+            view_cx.notify();
+        });
+        request_launch_services(cx);
+        return;
+    }
+    let (connected, view, sample, processes, launch_rows) = {
+        let shell = cx.global::<Shell>();
+        (
+            shell.connected,
+            shell.view.clone(),
+            shell.sample.clone(),
+            shell.processes.clone(),
+            shell.launch_rows.clone(),
+        )
+    };
+    let options = WindowOptions {
+        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
+            None,
+            size(px(1100.0), px(700.0)),
+            cx,
+        ))),
+        titlebar: Some(TitlebarOptions {
+            title: Some("FleetConsole Dashboard".into()),
+            appears_transparent: false,
+            traffic_light_position: None,
+        }),
+        app_id: Some(BUNDLE_ID.into()),
+        ..Default::default()
+    };
+    if let Ok(handle) = cx.open_window(options, |_, cx| {
+        cx.new(|_| DashboardView {
+            module,
+            connected,
+            view,
+            sample,
+            processes,
+            launch_rows,
+            scroll: gpui::ScrollHandle::new(),
+        })
+    }) {
+        cx.global_mut::<Shell>().dashboard = Some(handle);
+    }
+    request_launch_services(cx);
+}
+
+fn request_launch_services(cx: &mut App) {
+    let Some(tx) = cx.global::<Shell>().tx.clone() else {
+        return;
+    };
+    std::thread::spawn(move || {
+        let rows = dashboard::fetch_launch_services();
+        let _ = tx.unbounded_send(ShellEvent::LaunchServices(rows));
+    });
+}
+
+/// Syncs the open Dashboard with the shell's current state.
+fn push_dashboard(cx: &mut App) {
+    let Some(handle) = cx.global::<Shell>().dashboard else {
+        return;
+    };
+    let (connected, view, sample, processes, launch_rows) = {
+        let shell = cx.global::<Shell>();
+        (
+            shell.connected,
+            shell.view.clone(),
+            shell.sample.clone(),
+            shell.processes.clone(),
+            shell.launch_rows.clone(),
+        )
+    };
+    let _ = handle.update(cx, |dash, _, view_cx| {
+        dash.connected = connected;
+        dash.view = view;
+        dash.sample = sample;
+        dash.processes = processes;
+        dash.launch_rows = launch_rows;
+        view_cx.notify();
+    });
 }
 
 fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
@@ -272,6 +424,7 @@ fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
     shell.view = Some(view);
     push_shell_state(cx);
     push_popover_status(cx);
+    push_dashboard(cx);
 }
 
 /// Pushes the current meters + fleet state to the platform status item.
@@ -329,11 +482,27 @@ fn main() {
     }
     if args.iter().any(|a| a == "--help") {
         println!(
-            "FleetConsole — menubar (macOS) / tray (Linux) shell\n\nUsage: FleetConsole [--popover] [--identity] [--version]\n  --popover   open the popover at launch (verification aid)\n"
+            "FleetConsole — menubar (macOS) / tray (Linux) shell\n\nUsage: FleetConsole [--popover] [--dashboard[=module]] [--identity] [--version]\n  --popover   open the popover at launch (verification aid)\n  --dashboard open the Dashboard at launch, optionally on a module:\n              overview, processes, storage, services, events, launch\n"
         );
         return;
     }
     let open_popover_at_launch = args.iter().any(|a| a == "--popover");
+    let dashboard_at_launch = args.iter().find_map(|a| {
+        if a == "--dashboard" {
+            Some(Module::Overview)
+        } else if let Some(name) = a.strip_prefix("--dashboard=") {
+            Some(match name {
+                "processes" => Module::Processes,
+                "storage" => Module::Storage,
+                "services" => Module::Services,
+                "events" => Module::Events,
+                "launch" => Module::LaunchServices,
+                _ => Module::Overview,
+            })
+        } else {
+            None
+        }
+    });
 
     Application::new().run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
@@ -342,12 +511,71 @@ fn main() {
         cx.bind_keys([
             gpui::KeyBinding::new("cmd-q", Quit, None),
             gpui::KeyBinding::new("ctrl-q", Quit, None),
+            gpui::KeyBinding::new("cmd-0", OpenDashboard, None),
+            gpui::KeyBinding::new("cmd-1", ShowOverview, None),
+            gpui::KeyBinding::new("cmd-2", ShowProcesses, None),
+            gpui::KeyBinding::new("cmd-3", ShowStorage, None),
+            gpui::KeyBinding::new("cmd-4", ShowServices, None),
+            gpui::KeyBinding::new("cmd-5", ShowEvents, None),
+            gpui::KeyBinding::new("cmd-6", ShowLaunchServices, None),
+            gpui::KeyBinding::new("cmd-r", RefreshProbes, None),
         ]);
         cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
-        cx.set_menus(vec![Menu {
-            name: "FleetConsole".into(),
-            items: vec![MenuItem::action("Quit FleetConsole", Quit)],
-        }]);
+        cx.on_action(|_: &OpenDashboard, cx: &mut App| {
+            open_dashboard(cx, Module::Overview)
+        });
+        cx.on_action(|_: &ShowOverview, cx: &mut App| {
+            open_dashboard(cx, Module::Overview)
+        });
+        cx.on_action(|_: &ShowProcesses, cx: &mut App| {
+            open_dashboard(cx, Module::Processes)
+        });
+        cx.on_action(|_: &ShowStorage, cx: &mut App| {
+            open_dashboard(cx, Module::Storage)
+        });
+        cx.on_action(|_: &ShowServices, cx: &mut App| {
+            open_dashboard(cx, Module::Services)
+        });
+        cx.on_action(|_: &ShowEvents, cx: &mut App| {
+            open_dashboard(cx, Module::Events)
+        });
+        cx.on_action(|_: &ShowLaunchServices, cx: &mut App| {
+            open_dashboard(cx, Module::LaunchServices)
+        });
+        cx.on_action(|_: &RefreshProbes, cx: &mut App| {
+            let _ = controller::send_one_shot(&fleet_proto::RpcRequest::new(
+                fleet_proto::RpcOp::RefreshDevices,
+            ));
+            request_launch_services(cx);
+        });
+        cx.on_action(|_: &OpenGuide, cx: &mut App| {
+            cx.open_url("https://github.com/janestreetshiller/fleet-console#readme");
+        });
+        cx.set_menus(vec![
+            Menu {
+                name: "FleetConsole".into(),
+                items: vec![MenuItem::action("Quit FleetConsole", Quit)],
+            },
+            Menu {
+                name: "View".into(),
+                items: vec![
+                    MenuItem::action("Open Dashboard", OpenDashboard),
+                    MenuItem::separator(),
+                    MenuItem::action("Overview", ShowOverview),
+                    MenuItem::action("Processes", ShowProcesses),
+                    MenuItem::action("Storage", ShowStorage),
+                    MenuItem::action("Services", ShowServices),
+                    MenuItem::action("Events", ShowEvents),
+                    MenuItem::action("Launch Services", ShowLaunchServices),
+                    MenuItem::separator(),
+                    MenuItem::action("Refresh", RefreshProbes),
+                ],
+            },
+            Menu {
+                name: "Help".into(),
+                items: vec![MenuItem::action("FleetConsole Guide", OpenGuide)],
+            },
+        ]);
 
         let (tx, rx) = unbounded::<ShellEvent>();
 
@@ -380,6 +608,10 @@ fn main() {
             connected: false,
             view: None,
             popover: None,
+            dashboard: None,
+            processes: Vec::new(),
+            launch_rows: Vec::new(),
+            tx: Some(tx.clone()),
             #[cfg(target_os = "macos")]
             _item: item,
             #[cfg(target_os = "linux")]
@@ -390,6 +622,21 @@ fn main() {
             .detach();
 
         controller::spawn(tx.clone());
+
+        {
+            let tx = tx.clone();
+            std::thread::spawn(move || {
+                let mut system = sysinfo::System::new();
+                system.refresh_processes(sysinfo::ProcessesToUpdate::All);
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(4));
+                    let rows = sampler::collect_processes(&mut system);
+                    if tx.unbounded_send(ShellEvent::Processes(rows)).is_err() {
+                        return;
+                    }
+                }
+            });
+        }
 
         std::thread::spawn(move || {
             let mut sampler = sampler::Sampler::new();
@@ -404,6 +651,9 @@ fn main() {
 
         if open_popover_at_launch {
             toggle_popover(cx);
+        }
+        if let Some(module) = dashboard_at_launch {
+            open_dashboard(cx, module);
         }
     });
 }
