@@ -29,11 +29,11 @@ public struct FleetTopology: Codable, Sendable, Equatable {
     public var edges: [Edge]
     public var limitations: [String]
 
-    public init(snapshot: Snapshot, owner: String? = nil, now: Date = Date()) {
+    public init(snapshot: Snapshot, owner: String? = nil, connected: Bool = true, now: Date = Date()) {
         generatedAt = snapshot.generatedAt
         let interval = snapshot.daemon.tickIntervalSec
         let tolerance = interval.isFinite && interval > 0 ? max(1, interval * 3) : 15
-        isStale = now.timeIntervalSince(snapshot.generatedAt) > tolerance
+        isStale = !connected || now.timeIntervalSince(snapshot.generatedAt) > tolerance
         validUntil = nil
         nodes = []; edges = []
         limitations = [
@@ -41,6 +41,7 @@ public struct FleetTopology: Codable, Sendable, Equatable {
             "Listeners show observed group ports, not connections or dependencies.",
             "Agent reasoning, token velocity, context usage and Ouros account usage are unavailable in the controller snapshot."
         ]
+        if !connected { limitations.append("Controller disconnected; registry observations are retained from the last snapshot.") }
         let services = snapshot.activeServices.filter { owner == nil || $0.ownerAgent == owner }
             .sorted { ($0.ownerAgent, $0.id) < ($1.ownerAgent, $1.id) }
         let mail = snapshot.messages.filter { owner == nil || $0.agent == owner }
@@ -74,12 +75,17 @@ public struct FleetTopology: Codable, Sendable, Equatable {
                               serviceID: service.id, owner: service.ownerAgent,
                               observedAt: service.evidence.checkedAt, cpuPct: cpu, memMB: mem))
             edges.append(Edge(source: "owner:" + service.ownerAgent, target: id, kind: .owns, observedAt: service.updatedAt, provenance: "fleetd service registry"))
-            if evidenceFresh, service.evidence.processExists == true, let pid = service.pid, pid == service.pgid {
+            if !isStale, service.evidence.processExists == true,
+               let pid = service.pid, pid > 0, pid == service.pgid,
+               let signature = service.startSignature, !signature.isEmpty,
+               let verifiedAt = service.evidence.leaderVerifiedAt,
+               (0...tolerance).contains(now.timeIntervalSince(verifiedAt)) {
+                expiryDates.append(verifiedAt.addingTimeInterval(tolerance))
                 let processID = id + ":leader"
                 nodes.append(Node(id: processID, kind: .process, title: "PID \(pid)",
-                                  detail: "Identity verified · recorded group \(service.pgid.map(String.init) ?? "unavailable")",
-                                  serviceID: service.id, owner: service.ownerAgent, observedAt: service.evidence.checkedAt))
-                edges.append(Edge(source: id, target: processID, kind: .verifiedLeader, observedAt: service.evidence.checkedAt, provenance: "fleetd process identity check"))
+                                  detail: "Identity verified · recorded group \(pid)",
+                                  serviceID: service.id, owner: service.ownerAgent, observedAt: verifiedAt))
+                edges.append(Edge(source: id, target: processID, kind: .verifiedLeader, observedAt: verifiedAt, provenance: "fleetd process identity check"))
             }
             if evidenceFresh, service.evidence.portScanRan {
                 for port in Set(service.evidence.listeningPorts).sorted() where (1...65535).contains(port) {
@@ -102,6 +108,6 @@ public struct FleetTopology: Codable, Sendable, Equatable {
                                   memMB: !sessionsFresh || !session.memMB.isFinite || session.memMB < 0 ? nil : session.memMB))
             }
         }
-        validUntil = expiryDates.filter { $0 >= now }.min()
+        validUntil = isStale ? nil : expiryDates.filter { $0 >= now }.min()
     }
 }

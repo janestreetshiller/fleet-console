@@ -9,6 +9,7 @@ public struct Evidence: Codable, Sendable, Hashable {
     public var healthDetail: String?
     public var healthLatencyMs: Double?
     public var checkedAt: Date?
+    public var leaderVerifiedAt: Date?
 
     public init(processExists: Bool? = nil,
                 listeningPorts: [Int] = [],
@@ -17,7 +18,8 @@ public struct Evidence: Codable, Sendable, Hashable {
                 healthPassed: Bool? = nil,
                 healthDetail: String? = nil,
                 healthLatencyMs: Double? = nil,
-                checkedAt: Date? = nil) {
+                checkedAt: Date? = nil,
+                leaderVerifiedAt: Date? = nil) {
         self.processExists = processExists
         self.listeningPorts = listeningPorts
         self.portScanRan = portScanRan
@@ -26,6 +28,7 @@ public struct Evidence: Codable, Sendable, Hashable {
         self.healthDetail = healthDetail
         self.healthLatencyMs = healthLatencyMs
         self.checkedAt = checkedAt
+        self.leaderVerifiedAt = leaderVerifiedAt
     }
 
     public func isStale(now: Date = Date(), tolerance: TimeInterval) -> Bool {
@@ -280,6 +283,15 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
     public var isVerified: Bool { evidence.healthCheckRan && evidence.healthPassed == true }
 
     public var isSignallableByController: Bool { !claimed }
+
+    package func leaderVerification(in table: ProcessTable) -> Date? {
+        guard !table.processProbeFailed,
+              let pid, pid > 0, pid == pgid,
+              let startSignature, !startSignature.isEmpty,
+              let proc = table.process(pid), proc.pid == pid, proc.pgid == pid,
+              proc.startSignature == startSignature else { return nil }
+        return table.capturedAt
+    }
 
     public var signalRefusal: String? {
         guard claimed else { return nil }

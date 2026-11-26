@@ -143,6 +143,8 @@ pub struct Service {
     pub state: String,
     pid: Option<i32>,
     pgid: Option<i32>,
+    #[serde(rename = "startSignature")]
+    start_signature: Option<String>,
     #[serde(default)]
     claimed: bool,
     #[serde(rename = "claimedAt")]
@@ -175,10 +177,14 @@ pub struct Service {
 
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Evidence {
+    #[serde(rename = "processExists", default)]
+    process_exists: bool,
     #[serde(rename = "listeningPorts", default)]
     pub listening_ports: Vec<i64>,
     #[serde(rename = "checkedAt")]
     checked_at: Option<f64>,
+    #[serde(rename = "leaderVerifiedAt")]
+    leader_verified_at: Option<f64>,
     #[serde(rename = "portScanRan", default)]
     port_scan_ran: bool,
     #[serde(rename = "healthCheckRan", default)]
@@ -297,6 +303,7 @@ pub struct FleetView {
 pub(crate) enum TopologyNodeKind {
     Owner,
     Service,
+    Leader,
     Listener,
     Session,
 }
@@ -317,6 +324,7 @@ pub(crate) struct TopologyNode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TopologyEdgeKind {
     Owns,
+    VerifiedLeader,
     ObservedListener,
 }
 
@@ -357,7 +365,7 @@ impl FleetTopology {
             edges: Vec::new(),
             limitations: &[
                 "Ownership is a registry record; it does not identify a detected agent session.",
-                "Recorded process IDs are not verified leaders: controller liveness can mean only that the group survived.",
+                "Recorded process IDs and group liveness alone do not verify a leader.",
                 "Listeners show observed group ports, not connections or dependencies.",
                 "Agent reasoning, token velocity, context usage and Ouros account usage are unavailable in the controller snapshot.",
             ],
@@ -472,6 +480,36 @@ impl FleetTopology {
                     kind: TopologyEdgeKind::Owns,
                     observed_at: (service.updated_at != 0.0).then_some(service.updated_at),
                     provenance: "fleetd service registry",
+                });
+            }
+            if let Some((at, pid)) = fresh_observation(service.evidence.leader_verified_at)
+                .filter(|&at| at >= snapshot.daemon.started_at && at <= now)
+                .zip(service.pid.filter(|&pid| {
+                    pid > 0
+                        && service.pgid == Some(pid)
+                        && service.evidence.process_exists
+                        && service.start_signature.as_ref().is_some_and(|s| !s.is_empty())
+                }))
+            {
+                topology.track_expiry(Some(at), tolerance);
+                let leader_id = format!("{id}:leader:{pid}");
+                topology.nodes.push(TopologyNode {
+                    id: leader_id.clone(),
+                    kind: TopologyNodeKind::Leader,
+                    title: format!("PID {pid}"),
+                    detail: "Fleetd matched the process group and recorded start signature".to_owned(),
+                    service_id: Some(service.id.clone()),
+                    owner: recorded_owner.clone(),
+                    observed_at: Some(at),
+                    cpu_pct: None,
+                    mem_mb: None,
+                });
+                topology.edges.push(TopologyEdge {
+                    source: id.clone(),
+                    target: leader_id,
+                    kind: TopologyEdgeKind::VerifiedLeader,
+                    observed_at: Some(at),
+                    provenance: "fleetd process table identity match",
                 });
             }
             for port in ports {
@@ -943,6 +981,64 @@ mod tests {
             let session = topology.nodes.iter().find(|n| n.id == "session:s").unwrap();
             assert_eq!(session.owner, None);
             assert_eq!(session.cpu_pct, (!is_stale).then_some(3.0));
+        }
+    }
+
+    fn stamped_leader_snapshot() -> Snapshot {
+        snapshot_from(
+            r#"{"generatedAt":1000, "daemon":{"version":"1.3.0","pid":7,"startedAt":990,"tickIntervalSec":5},
+                "services":[{"id":"tracked","ownerAgent":"registry","state":"running",
+                    "pid":42,"pgid":42,"startSignature":"recorded start",
+                    "evidence":{"processExists":true,"leaderVerifiedAt":995}}]}"#,
+        )
+    }
+
+    #[test]
+    fn topology_projects_stamped_leader_independently_of_health_and_resources() {
+        let snap = stamped_leader_snapshot();
+        let topology = FleetTopology::from_snapshot(&snap, Some("registry"), 1000.0, true);
+        let leader = topology.nodes.iter().find(|n| n.kind == TopologyNodeKind::Leader).unwrap();
+        assert_eq!(leader.title, "PID 42");
+        assert_eq!(leader.service_id.as_deref(), Some("tracked"));
+        assert_eq!(leader.observed_at, Some(995.0));
+        assert_eq!(topology.edges[1], TopologyEdge {
+            source: "service:tracked".into(),
+            target: leader.id.clone(),
+            kind: TopologyEdgeKind::VerifiedLeader,
+            observed_at: Some(995.0),
+            provenance: "fleetd process table identity match",
+        });
+        assert_eq!(topology.valid_until, Some(1010.0));
+    }
+
+    #[test]
+    fn topology_requires_fresh_leader_evidence_and_exact_recorded_identity() {
+        let snap = stamped_leader_snapshot();
+        let assert_no_leader = |snapshot: &Snapshot, now, connected| {
+            let topology = FleetTopology::from_snapshot(snapshot, None, now, connected);
+            assert!(topology.nodes.iter().all(|n| n.kind != TopologyNodeKind::Leader));
+            assert!(topology.edges.iter().all(|e| e.kind != TopologyEdgeKind::VerifiedLeader));
+        };
+        assert_no_leader(&topology_snapshot(), 1000.0, true);
+        assert_no_leader(&snap, 1010.1, true);
+        assert_no_leader(&snap, 1000.0, false);
+        for (pid, pgid, signature, exists, verified_at) in [
+            (Some(42), Some(41), Some("start"), true, 995.0),
+            (Some(0), Some(0), Some("start"), true, 995.0),
+            (Some(42), Some(42), None, true, 995.0),
+            (Some(42), Some(42), Some(""), true, 995.0),
+            (Some(42), Some(42), Some("start"), false, 995.0),
+            (Some(42), Some(42), Some("start"), true, 989.0),
+            (Some(42), Some(42), Some("start"), true, 1001.0),
+        ] {
+            let mut snap = stamped_leader_snapshot();
+            let service = &mut snap.services[0];
+            service.pid = pid;
+            service.pgid = pgid;
+            service.start_signature = signature.map(str::to_owned);
+            service.evidence.process_exists = exists;
+            service.evidence.leader_verified_at = Some(verified_at);
+            assert_no_leader(&snap, 1000.0, true);
         }
     }
 

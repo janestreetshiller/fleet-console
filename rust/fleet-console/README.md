@@ -32,10 +32,12 @@ What exists in this scaffold:
   snapshot; Processes shows the top local processes from a configurable
   sampler (4 seconds by default); Storage lists mounted disks; Launch Services
   reads `launchctl list` (macOS) or `systemctl --user` (Linux).
-- Overview separates recorded owners, registered services, observed
-  group listeners, and unlinked detected sessions. It labels retained
-  snapshots when the controller disconnects and expires live evidence
-  after three controller ticks. Recorded PIDs are not verified leaders.
+- Overview separates recorded owners, registered services, verified process
+  group leaders, observed group listeners, and unlinked detected sessions.
+  A leader requires fleetd to have matched the recorded PID, process group
+  and start signature; a recorded PID or group liveness alone is not
+  enough. Overview labels retained snapshots on disconnect and expires live
+  evidence after three controller ticks, measured from each observation.
 - Configuration: **Edit Configuration** opens the installed `config.json`
   in an editor; **Reveal Logs** opens the installed log folder. On macOS
   these are under `~/Library/Application Support/FleetConsole` and

@@ -230,6 +230,7 @@ impl DashboardView {
         for (kind, label) in [
             (TopologyNodeKind::Owner, "Recorded owners"),
             (TopologyNodeKind::Service, "Registered services"),
+            (TopologyNodeKind::Leader, "Verified process group leaders"),
             (TopologyNodeKind::Listener, "Observed group listeners"),
             (TopologyNodeKind::Session, "Detected sessions · ownership unlinked"),
         ] {
@@ -241,7 +242,9 @@ impl DashboardView {
             for node in rows {
                 let title = match (kind, &node.owner, &node.service_id) {
                     (TopologyNodeKind::Service, Some(owner), _) => format!("{} · registry owner: {owner}", node.title),
-                    (TopologyNodeKind::Listener, _, Some(id)) => format!("{} · service: {id}", node.title),
+                    (TopologyNodeKind::Leader | TopologyNodeKind::Listener, _, Some(id)) => {
+                        format!("{} · service: {id}", node.title)
+                    }
                     _ => node.title.clone(),
                 };
                 let metrics = matches!(kind, TopologyNodeKind::Service | TopologyNodeKind::Session)

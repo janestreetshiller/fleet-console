@@ -132,6 +132,8 @@ final class Controller: @unchecked Sendable {
             if alive {
                 record.evidence.processExists = true
                 record.evidence.checkedAt = Date()
+                record.evidence.leaderVerifiedAt = record.leaderVerification(in: table)
+                record.evidence.portScanRan = false
                 services[record.id] = record
                 try registry.upsert(record)
                 FleetLog.info("readopted \(record.friendlyName) pid \(record.pid ?? -1)")
@@ -189,6 +191,7 @@ final class Controller: @unchecked Sendable {
         record.lastExitCode = exitCode
         record.state = requested ? .stopped : .crashed
         record.evidence.processExists = false
+        record.evidence.leaderVerifiedAt = nil
         record.evidence.checkedAt = Date()
         record.updatedAt = Date()
         services[record.id] = record
@@ -216,6 +219,9 @@ final class Controller: @unchecked Sendable {
         queue.sync {
             self.daemon.lastTickAt = Date()
             guard !table.processProbeFailed else {
+                for (id, record) in self.services where record.evidence.leaderVerifiedAt != nil {
+                    self.services[id]?.evidence.leaderVerifiedAt = nil
+                }
                 FleetLog.warn("skipping evaluation: ps probe failed; no liveness verdict this tick")
                 return
             }
@@ -237,6 +243,8 @@ final class Controller: @unchecked Sendable {
             let alive = isAlive(record, in: table)
             record.evidence.checkedAt = now
             record.evidence.processExists = alive
+            record.evidence.leaderVerifiedAt = record.leaderVerification(in: table)
+            record.evidence.portScanRan = false
 
             if !alive {
                 let requested = pendingStops[record.id] != nil || record.state == .stopping
@@ -256,6 +264,7 @@ final class Controller: @unchecked Sendable {
             if record.state == .stopping {
                 if let pgid = record.pgid {
                     record.evidence.listeningPorts = table.listeningPorts(inGroup: pgid)
+                    record.evidence.portScanRan = !table.listenerProbeFailed
                     record.resources = table.resourceUsage(inGroup: pgid)
                 }
                 record.updatedAt = now
@@ -264,9 +273,13 @@ final class Controller: @unchecked Sendable {
                 continue
             }
 
-            guard let pgid = record.pgid else { continue }
+            guard let pgid = record.pgid else {
+                services[record.id] = record
+                try? registry.upsert(record)
+                continue
+            }
             record.evidence.listeningPorts = table.listeningPorts(inGroup: pgid)
-            record.evidence.portScanRan = true
+            record.evidence.portScanRan = !table.listenerProbeFailed
             record.resources = table.resourceUsage(inGroup: pgid)
 
             record.cpuHistory.append(record.resources.cpuPct ?? 0)
@@ -583,7 +596,8 @@ final class Controller: @unchecked Sendable {
         let name = friendlyName?.trimmingCharacters(in: .whitespaces).nilIfEmpty
             ?? known?.command.nilIfEmpty
             ?? proc.executableName
-        let ports = known?.ports ?? table.listeningPorts(inGroup: proc.pgid)
+        let observedPorts = table.listeningPorts(inGroup: proc.pgid)
+        let ports = known?.ports ?? observedPorts
 
         var record = ServiceRecord(friendlyName: name,
                                    ownerAgent: owner?.nilIfEmpty ?? "operator",
@@ -602,10 +616,11 @@ final class Controller: @unchecked Sendable {
                                    leaseTTLSec: leaseTTL,
                                    state: .running,
                                    evidence: Evidence(processExists: true,
-                                                      listeningPorts: ports,
-                                                      portScanRan: true,
+                                                      listeningPorts: observedPorts,
+                                                      portScanRan: !table.listenerProbeFailed,
                                                       checkedAt: Date()),
                                    resources: table.resourceUsage(inGroup: proc.pgid))
+        record.evidence.leaderVerifiedAt = record.leaderVerification(in: table)
         record.claimed = true
         record.claimedAt = Date()
 
@@ -662,6 +677,7 @@ final class Controller: @unchecked Sendable {
             return
         }
         guard let pid = record.pid, let pgid = record.pgid, pgid > 1 else {
+            record.evidence.leaderVerifiedAt = nil
             record.state = .stopped
             record.updatedAt = Date()
             services[record.id] = record
@@ -675,6 +691,7 @@ final class Controller: @unchecked Sendable {
         }
 
         let table = ProcessTable.capture(includeListeners: false)
+        record.evidence.leaderVerifiedAt = record.leaderVerification(in: table)
         if let proc = table.process(pid), let signature = record.startSignature,
            proc.startSignature != signature {
             _ = try? registry.append(.pidReuseSuspected, service: record,
@@ -770,6 +787,7 @@ final class Controller: @unchecked Sendable {
 
             if var closed = services[previous.id], !closed.state.isTerminal {
                 closed.state = .stopped
+                closed.evidence.leaderVerifiedAt = nil
                 closed.updatedAt = Date()
                 services[closed.id] = closed
                 try registry.upsert(closed)

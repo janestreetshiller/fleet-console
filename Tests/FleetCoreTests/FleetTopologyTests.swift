@@ -7,9 +7,11 @@ struct FleetTopologyTests {
     func service(_ id: String = "svc", owner: String = "ouros") -> ServiceRecord {
         ServiceRecord(id: id, friendlyName: "API", ownerAgent: owner, purpose: "Serve project",
                       command: ["api"], cwd: "/project", pid: 42, pgid: 42,
+                      startSignature: "recorded start",
                       declaredPorts: [9000], leaseExpiresAt: now.addingTimeInterval(600), leaseTTLSec: 600,
                       state: .running,
-                      evidence: Evidence(processExists: true, listeningPorts: [8080], portScanRan: true, checkedAt: now),
+                      evidence: Evidence(processExists: true, listeningPorts: [8080], portScanRan: true,
+                                         checkedAt: now, leaderVerifiedAt: now),
                       resources: ResourceSample(cpuPct: 0, memMB: 64, sampledAt: now), updatedAt: now)
     }
     func snapshot(_ services: [ServiceRecord], sessions: [AgentSession] = [], messages: [AgentMessage] = []) -> Snapshot {
@@ -29,6 +31,7 @@ struct FleetTopologyTests {
     @Test func staleAndMissingEvidenceNeverCreatesEdgesOrZeroSamples() {
         var record = service()
         record.evidence.checkedAt = nil
+        record.evidence.leaderVerifiedAt = nil
         record.resources = ResourceSample()
         let graph = FleetTopology(snapshot: snapshot([record]), now: now)
         #expect(graph.edges.count == 1)
@@ -63,6 +66,77 @@ struct FleetTopologyTests {
         #expect(!graph.edges.contains { $0.kind == .verifiedLeader })
     }
 
+    @Test(arguments: [nil as Double?, -16, 1])
+    func groupLivenessCannotSubstituteForFreshLeaderEvidence(_ stampOffset: Double?) {
+        var record = service()
+        record.evidence.leaderVerifiedAt = stampOffset.map { now.addingTimeInterval($0) }
+        let graph = FleetTopology(snapshot: snapshot([record]), now: now)
+        #expect(graph.edges.map(\.kind) == [.owns, .observedListener])
+        #expect(!graph.nodes.contains { $0.kind == .process })
+    }
+
+    @Test func leaderStampControlsObservationAndExpiryIndependently() {
+        var record = service()
+        let stamp = now.addingTimeInterval(-10)
+        record.evidence.checkedAt = nil
+        record.evidence.leaderVerifiedAt = stamp
+        let graph = FleetTopology(snapshot: snapshot([record]), now: now)
+        #expect(graph.edges.map(\.kind) == [.owns, .verifiedLeader])
+        #expect(graph.edges.first { $0.kind == .verifiedLeader }?.observedAt == stamp)
+        #expect(graph.nodes.first { $0.kind == .process }?.observedAt == stamp)
+        #expect(graph.validUntil == now.addingTimeInterval(5))
+    }
+
+    @Test func leaderStampCannotVerifyMissingSignatureOrInvalidPID() {
+        var record = service()
+        record.startSignature = ""
+        let missingSignature = FleetTopology(snapshot: snapshot([record]), now: now)
+        #expect(!missingSignature.edges.contains { $0.kind == .verifiedLeader })
+        record.startSignature = "recorded start"
+        record.pid = 0
+        record.pgid = 0
+        let invalidPID = FleetTopology(snapshot: snapshot([record]), now: now)
+        #expect(!invalidPID.edges.contains { $0.kind == .verifiedLeader })
+    }
+
+    @Test func olderEvidenceDecodesWithoutLeaderVerification() throws {
+        let data = Data(#"{"processExists":true,"listeningPorts":[],"portScanRan":false,"healthCheckRan":false}"#.utf8)
+        let evidence = try Codec.decode(Evidence.self, from: data)
+        #expect(evidence.processExists == true)
+        #expect(evidence.leaderVerifiedAt == nil)
+        let fresh = service().evidence
+        #expect(try Codec.decode(Evidence.self, from: Codec.encode(fresh)) == fresh)
+    }
+
+    @Test func leaderVerificationRequiresExactCapturedProcess() {
+        var record = service()
+        var table = ProcessTable()
+        table.capturedAt = now
+        let leader = ProcessTable.Proc(pid: 42, ppid: 1, pgid: 42, uid: 501, cpuPct: 0, rssKB: 0,
+                                       state: "S", startSignature: "recorded start", commandLine: "api")
+        var child = leader
+        child.pid = 43
+        child.ppid = 42
+        table.byPID[child.pid] = child
+        #expect(record.leaderVerification(in: table) == nil)
+
+        table.byPID[leader.pid] = leader
+        #expect(record.leaderVerification(in: table) == now)
+        table.listenerProbeFailed = true
+        #expect(record.leaderVerification(in: table) == now)
+        table.processProbeFailed = true
+        #expect(record.leaderVerification(in: table) == nil)
+        table.processProbeFailed = false
+
+        table.byPID[leader.pid]?.pgid = 41
+        #expect(record.leaderVerification(in: table) == nil)
+        table.byPID[leader.pid] = leader
+        record.startSignature = "different start"
+        #expect(record.leaderVerification(in: table) == nil)
+        record.startSignature = nil
+        #expect(record.leaderVerification(in: table) == nil)
+    }
+
     @Test func deterministicOrderAndRoundTrip() throws {
         let a = service("a"), b = service("b")
         let first = FleetTopology(snapshot: snapshot([a, b]), now: now)
@@ -85,6 +159,7 @@ struct FleetTopologyTests {
         var record = service()
         record.resources = ResourceSample(cpuPct: .infinity, memMB: -1, sampledAt: now)
         record.evidence.checkedAt = now.addingTimeInterval(-10)
+        record.evidence.leaderVerifiedAt = now.addingTimeInterval(-10)
         let graph = FleetTopology(snapshot: snapshot([record]), now: now)
         #expect(graph.nodes.first { $0.kind == .service }?.cpuPct == nil)
         #expect(graph.nodes.first { $0.kind == .service }?.memMB == nil)
