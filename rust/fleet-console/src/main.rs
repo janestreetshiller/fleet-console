@@ -18,6 +18,8 @@ use gpui::{point, WindowKind};
 mod config;
 mod controller;
 mod dashboard;
+#[cfg(target_os = "macos")]
+mod mac_launch;
 mod quickview;
 mod sampler;
 mod snapshot;
@@ -62,6 +64,8 @@ pub enum ShellEvent {
     Processes(Vec<sampler::ProcRow>),
     LaunchServices(Vec<LaunchRow>),
     ShowModule(Module),
+    #[cfg(target_os = "macos")]
+    DashboardHandoff(Module),
     Reconcile,
     ConfigLoaded(ConfigRead),
     EditConfiguration,
@@ -142,6 +146,7 @@ pub struct Shell {
     sample: Option<Sample>,
     connected: bool,
     view: Option<FleetView>,
+    snapshot: Option<Arc<snapshot::Snapshot>>,
     popover: Option<WindowHandle<PopoverView>>,
     dashboard: Option<WindowHandle<DashboardView>>,
     processes: Vec<sampler::ProcRow>,
@@ -338,6 +343,12 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
             }
             ShellEvent::ShowModule(module) => {
                 if cx.update(|cx| open_dashboard(cx, module)).is_err() {
+                    return;
+                }
+            }
+            #[cfg(target_os = "macos")]
+            ShellEvent::DashboardHandoff(module) => {
+                if cx.update(|cx| open_launched_dashboard(cx, module)).is_err() {
                     return;
                 }
             }
@@ -545,6 +556,12 @@ fn open_dashboard(cx: &mut App, module: Module) {
     cx.defer(move |cx| show_dashboard(cx, module));
 }
 
+fn open_launched_dashboard(cx: &mut App, module: Module) {
+    #[cfg(target_os = "macos")]
+    cx.activate(true);
+    open_dashboard(cx, module);
+}
+
 fn show_dashboard(cx: &mut App, module: Module) {
     if let Some(handle) = cx.global::<Shell>().dashboard {
         let updated = handle.update(cx, |view, window, view_cx| {
@@ -558,7 +575,7 @@ fn show_dashboard(cx: &mut App, module: Module) {
         }
         cx.global_mut::<Shell>().dashboard = None;
     }
-    let (connected, view, sample, processes, launch_rows) = {
+    let (connected, view, sample, processes, launch_rows, snapshot) = {
         let shell = cx.global::<Shell>();
         (
             shell.connected,
@@ -566,6 +583,7 @@ fn show_dashboard(cx: &mut App, module: Module) {
             shell.sample.clone(),
             shell.processes.clone(),
             shell.launch_rows.clone(),
+            shell.snapshot.clone(),
         )
     };
     let options = WindowOptions {
@@ -583,14 +601,19 @@ fn show_dashboard(cx: &mut App, module: Module) {
         ..Default::default()
     };
     if let Ok(handle) = cx.open_window(options, |_, cx| {
-        cx.new(|_| DashboardView {
-            module,
-            connected,
-            view,
-            sample,
-            processes,
-            launch_rows,
-            scroll: gpui::ScrollHandle::new(),
+        cx.new(|cx| {
+            DashboardView::start_topology_clock(cx);
+            DashboardView {
+                module,
+                connected,
+                view,
+                sample,
+                processes,
+                launch_rows,
+                scroll: gpui::ScrollHandle::new(),
+                snapshot,
+                topology: None,
+            }
         })
     }) {
         cx.global_mut::<Shell>().dashboard = Some(handle);
@@ -619,6 +642,7 @@ fn push_dashboard(cx: &mut App) {
         dash.sample = shell.sample.clone();
         dash.processes = shell.processes.clone();
         dash.launch_rows = shell.launch_rows.clone();
+        dash.snapshot = shell.snapshot.clone();
         view_cx.notify();
     });
 }
@@ -636,6 +660,7 @@ fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
     let shell = cx.global_mut::<Shell>();
     shell.connected = true;
     shell.view = Some(view);
+    shell.snapshot = Some(Arc::new(snapshot));
     push_shell_state(cx);
     push_popover_status(cx);
     push_dashboard(cx);
@@ -685,19 +710,28 @@ fn push_popover_status(cx: &mut App) {
     }
 }
 
+const DASHBOARD_ROUTES: [(&str, Module); 6] = [
+    ("overview", Module::Overview),
+    ("processes", Module::Processes),
+    ("storage", Module::Storage),
+    ("services", Module::Services),
+    ("events", Module::Events),
+    ("launch", Module::LaunchServices),
+];
+
 fn dashboard_launch_module<'a>(
     args: impl IntoIterator<Item = &'a str>,
     dashboard_env: Option<&str>,
 ) -> Option<Module> {
     args.into_iter()
-        .find_map(|arg| match arg {
-            "--dashboard" | "--dashboard=overview" => Some(Module::Overview),
-            "--dashboard=processes" => Some(Module::Processes),
-            "--dashboard=storage" => Some(Module::Storage),
-            "--dashboard=services" => Some(Module::Services),
-            "--dashboard=events" => Some(Module::Events),
-            "--dashboard=launch" => Some(Module::LaunchServices),
-            _ => None,
+        .find_map(|arg| {
+            if arg == "--dashboard" {
+                return Some(Module::Overview);
+            }
+            let route = arg.strip_prefix("--dashboard=")?;
+            DASHBOARD_ROUTES
+                .iter()
+                .find_map(|(name, module)| (*name == route).then_some(*module))
         })
         .or_else(|| (dashboard_env == Some("1")).then_some(Module::Overview))
 }
@@ -759,6 +793,8 @@ fn main() {
         println!(
             "FleetConsole — menubar (macOS) / tray (Linux) shell\n\nUsage: FleetConsole [--popover] [--dashboard[=module]] [--identity] [--version]\n  --popover   open the popover at launch (verification aid)\n  --dashboard open the Dashboard at launch, optionally on a module:\n              overview, processes, storage, services, events, launch\n  FLEETCONSOLE_DASHBOARD=1 also opens the Dashboard at launch\n"
         );
+        #[cfg(target_os = "macos")]
+        println!("  --review    open the Dashboard in review mode (no Dock icon)\n");
         return;
     }
     let open_popover_at_launch = args.iter().any(|a| a == "--popover");
@@ -767,21 +803,38 @@ fn main() {
         std::env::var("FLEETCONSOLE_DASHBOARD").as_deref().ok(),
     );
 
-    let config_path = Arc::new(ConfigPath::detect());
-    if let Err(error) = config_path.ensure_exists() {
-        eprintln!(
-            "FleetConsole: could not initialize {}: {error}",
-            config_path.file().display()
-        );
+    let (tx, rx) = unbounded::<ShellEvent>();
+    #[cfg(target_os = "macos")]
+    let launch = mac_launch::Launch::new(&args);
+    #[cfg(target_os = "macos")]
+    let _dashboard_observer = launch.observe_dashboard(&tx);
+    #[cfg(target_os = "macos")]
+    if launch.handoff(dashboard_at_launch) {
+        return;
     }
-    let stamp = config_stamp(config_path.file());
-    let config = UiConfig::load(config_path.file());
-    let interval = config.config.process_sample;
-    let sections = MenuSections::from(&config.config.sections);
 
     Application::new().run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
-        mac_status::set_accessory_policy();
+        let dashboard_at_launch = {
+            launch.apply_activation_policy();
+            if launch.handoff(dashboard_at_launch) {
+                cx.quit();
+                return;
+            }
+            launch.startup_dashboard(dashboard_at_launch)
+        };
+
+        let config_path = Arc::new(ConfigPath::detect());
+        if let Err(error) = config_path.ensure_exists() {
+            eprintln!(
+                "FleetConsole: could not initialize {}: {error}",
+                config_path.file().display()
+            );
+        }
+        let stamp = config_stamp(config_path.file());
+        let config = UiConfig::load(config_path.file());
+        let interval = config.config.process_sample;
+        let sections = MenuSections::from(&config.config.sections);
 
         cx.bind_keys([
             gpui::KeyBinding::new("cmd-q", Quit, None),
@@ -830,8 +883,6 @@ fn main() {
         cx.on_action(|_: &RevealLogs, cx: &mut App| open_config_path(cx, false));
         set_app_menus(cx, sections);
 
-        let (tx, rx) = unbounded::<ShellEvent>();
-
         #[cfg(target_os = "macos")]
         let item = match mac_status::Item::install(tx.clone(), sections) {
             Ok(item) => {
@@ -860,6 +911,7 @@ fn main() {
             sample: None,
             connected: false,
             view: None,
+            snapshot: None,
             popover: None,
             dashboard: None,
             processes: Vec::new(),
@@ -895,7 +947,7 @@ fn main() {
             toggle_popover(cx);
         }
         if let Some(module) = dashboard_at_launch {
-            open_dashboard(cx, module);
+            open_launched_dashboard(cx, module);
         }
     });
 }
@@ -915,7 +967,6 @@ mod mac_status {
 
     const TARGET_CLASS: &str = "FleetConsoleProdStatusTarget";
     const VARIABLE_LENGTH: f64 = -1.0;
-    const POLICY_ACCESSORY: i64 = 1;
     const EVENT_RIGHT_MOUSE_UP: u64 = 4;
 
     static EVENTS: Mutex<Option<UnboundedSender<ShellEvent>>> = Mutex::new(None);
@@ -1125,13 +1176,6 @@ mod mac_status {
         unsafe {
             let s: id = NSString::alloc(nil).init_str(text);
             msg_send![s, autorelease]
-        }
-    }
-
-    pub fn set_accessory_policy() {
-        unsafe {
-            let app: id = msg_send![class!(NSApplication), sharedApplication];
-            let _: bool = msg_send![app, setActivationPolicy: POLICY_ACCESSORY];
         }
     }
 

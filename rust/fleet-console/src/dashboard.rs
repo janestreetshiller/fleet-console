@@ -1,4 +1,5 @@
-
+use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use gpui::{
     div, px, rgb, Context, InteractiveElement, IntoElement, ParentElement, Render, ScrollHandle,
     StatefulInteractiveElement, Styled, Window,
@@ -6,7 +7,7 @@ use gpui::{
 
 use crate::quickview::fmt_bytes;
 use crate::sampler::{ProcRow, Sample};
-use crate::snapshot::FleetView;
+use crate::snapshot::{FleetTopology, FleetView, Snapshot, TopologyNodeKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Module {
@@ -138,6 +139,18 @@ pub struct DashboardView {
     pub processes: Vec<ProcRow>,
     pub launch_rows: Vec<LaunchRow>,
     pub scroll: ScrollHandle,
+    pub(crate) snapshot: Option<Arc<Snapshot>>,
+    pub(crate) topology: Option<TopologyCache>,
+}
+
+pub(crate) struct TopologyCache {
+    source: Arc<Snapshot>,
+    live: bool,
+    projection: FleetTopology,
+}
+
+fn now_seconds() -> f64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |age| age.as_secs_f64())
 }
 
 fn fmt_cpu(pct: Option<f64>) -> String {
@@ -173,6 +186,77 @@ fn cell(text: String, width: f32, color: u32) -> impl IntoElement {
 }
 
 impl DashboardView {
+    pub(crate) fn start_topology_clock(cx: &mut Context<Self>) {
+        let executor = cx.background_executor().clone();
+        cx.spawn(async move |this, cx| {
+            loop {
+                executor.timer(Duration::from_secs(1)).await;
+                if this.update(cx, |view, cx| {
+                    if view.module == Module::Overview
+                        && view.topology.as_ref().and_then(|cache| cache.projection.valid_until)
+                            .is_some_and(|until| now_seconds() > until)
+                    {
+                        cx.notify();
+                    }
+                }).is_err() {
+                    return;
+                }
+            }
+        }).detach();
+    }
+
+    fn refresh_topology(&mut self) {
+        let Some(source) = &self.snapshot else { return; };
+        let live = self.connected && self.view.is_some();
+        let now = now_seconds();
+        if self.topology.as_ref().is_some_and(|cache| {
+            Arc::ptr_eq(&cache.source, source) && cache.live == live
+                && cache.projection.valid_until.is_none_or(|until| now <= until)
+        }) {
+            return;
+        }
+        self.topology = Some(TopologyCache {
+            source: source.clone(),
+            live,
+            projection: FleetTopology::from_snapshot(source, None, now, live),
+        });
+    }
+
+    fn relationships(topology: &FleetTopology) -> gpui::Div {
+        let mut body = div().flex().flex_col().gap(px(8.0)).pt(px(10.0));
+        if topology.is_stale {
+            body = body.child("Retained controller observations; live evidence is unavailable.");
+        }
+        for (kind, label) in [
+            (TopologyNodeKind::Owner, "Recorded owners"),
+            (TopologyNodeKind::Service, "Registered services"),
+            (TopologyNodeKind::Listener, "Observed group listeners"),
+            (TopologyNodeKind::Session, "Detected sessions · ownership unlinked"),
+        ] {
+            let mut rows = topology.nodes.iter().filter(|node| node.kind == kind).peekable();
+            if rows.peek().is_none() {
+                continue;
+            }
+            body = body.child(header(label));
+            for node in rows {
+                let title = match (kind, &node.owner, &node.service_id) {
+                    (TopologyNodeKind::Service, Some(owner), _) => format!("{} · registry owner: {owner}", node.title),
+                    (TopologyNodeKind::Listener, _, Some(id)) => format!("{} · service: {id}", node.title),
+                    _ => node.title.clone(),
+                };
+                let metrics = matches!(kind, TopologyNodeKind::Service | TopologyNodeKind::Session)
+                    .then(|| format!("CPU {} · Memory {}", fmt_cpu(node.cpu_pct), fmt_mem(node.mem_mb)));
+                body = body.child(
+                    div().flex().flex_col().gap(px(2.0)).text_size(px(13.0))
+                        .child(title)
+                        .children(metrics.map(|metrics| div().text_size(px(12.0)).child(metrics)))
+                        .child(div().text_size(px(12.0)).text_color(rgb(0x8E8E93)).child(node.detail.clone())),
+                );
+            }
+        }
+        body
+    }
+
     fn overview(&self) -> impl IntoElement {
         let mut body = div().flex().flex_col().gap(px(10.0));
         match (&self.view, self.connected) {
@@ -211,6 +295,9 @@ impl DashboardView {
                         .child("Controller offline"),
                 );
             }
+        }
+        if let Some(topology) = &self.topology {
+            body = body.child(Self::relationships(&topology.projection));
         }
         if let Some(sample) = &self.sample {
             body = body.child(
@@ -483,7 +570,10 @@ impl Render for DashboardView {
             );
         }
         let content = match self.module {
-            Module::Overview => self.overview().into_any_element(),
+            Module::Overview => {
+                self.refresh_topology();
+                self.overview().into_any_element()
+            }
             Module::Processes => self.processes().into_any_element(),
             Module::Storage => self.storage().into_any_element(),
             Module::Services => self.services().into_any_element(),

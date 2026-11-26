@@ -1,4 +1,6 @@
 
+use std::collections::BTreeMap;
+
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -21,7 +23,19 @@ pub struct Snapshot {
     #[serde(default)]
     pub external: Vec<serde_json::Value>,
     #[serde(default)]
-    pub sessions: Vec<serde_json::Value>,
+    pub sessions: Vec<AgentSession>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSession {
+    id: String,
+    tool: String,
+    pid: i32,
+    project: Option<String>,
+    cpu_pct: Option<f64>,
+    #[serde(rename = "memMB")]
+    mem_mb: Option<f64>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -121,10 +135,20 @@ pub fn event_kind_label(kind: &str) -> (String, bool) {
 pub struct Service {
     #[serde(default)]
     pub id: String,
+    #[serde(rename = "friendlyName", default)]
+    friendly_name: String,
     #[serde(rename = "ownerAgent", default)]
     pub owner: String,
     #[serde(default)]
     pub state: String,
+    pid: Option<i32>,
+    pgid: Option<i32>,
+    #[serde(default)]
+    claimed: bool,
+    #[serde(rename = "claimedAt")]
+    claimed_at: Option<f64>,
+    #[serde(default)]
+    health: HealthSpec,
     #[serde(rename = "leaseExpiresAt", default)]
     pub lease_expires_at: Option<f64>,
     #[serde(rename = "declaredPorts", default)]
@@ -153,6 +177,20 @@ pub struct Service {
 pub struct Evidence {
     #[serde(rename = "listeningPorts", default)]
     pub listening_ports: Vec<i64>,
+    #[serde(rename = "checkedAt")]
+    checked_at: Option<f64>,
+    #[serde(rename = "portScanRan", default)]
+    port_scan_ran: bool,
+    #[serde(rename = "healthCheckRan", default)]
+    health_check_ran: bool,
+    #[serde(rename = "healthPassed")]
+    health_passed: Option<bool>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+struct HealthSpec {
+    #[serde(default)]
+    kind: String,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -161,6 +199,8 @@ pub struct Resources {
     pub cpu_pct: Option<f64>,
     #[serde(rename = "memMB", default)]
     pub mem_mb: Option<f64>,
+    #[serde(rename = "sampledAt")]
+    sampled_at: Option<f64>,
 }
 
 impl Service {
@@ -251,6 +291,266 @@ pub struct FleetView {
     pub next_lease_expiry: Option<f64>,
     pub service_rows: Vec<ServiceRow>,
     pub event_rows: Vec<EventRow>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TopologyNodeKind {
+    Owner,
+    Service,
+    Listener,
+    Session,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TopologyNode {
+    pub(crate) id: String,
+    pub(crate) kind: TopologyNodeKind,
+    pub(crate) title: String,
+    pub(crate) detail: String,
+    pub(crate) service_id: Option<String>,
+    pub(crate) owner: Option<String>,
+    pub(crate) observed_at: Option<f64>,
+    pub(crate) cpu_pct: Option<f64>,
+    pub(crate) mem_mb: Option<f64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum TopologyEdgeKind {
+    Owns,
+    ObservedListener,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct TopologyEdge {
+    pub(crate) source: String,
+    pub(crate) target: String,
+    pub(crate) kind: TopologyEdgeKind,
+    pub(crate) observed_at: Option<f64>,
+    pub(crate) provenance: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct FleetTopology {
+    pub(crate) generated_at: f64,
+    pub(crate) is_stale: bool,
+    pub(crate) valid_until: Option<f64>,
+    pub(crate) nodes: Vec<TopologyNode>,
+    pub(crate) edges: Vec<TopologyEdge>,
+    pub(crate) limitations: &'static [&'static str],
+}
+
+impl FleetTopology {
+    pub(crate) fn from_snapshot(snapshot: &Snapshot, owner: Option<&str>, now: f64, connected: bool) -> Self {
+        let interval = snapshot.daemon.tick_interval_sec;
+        let tolerance = if interval.is_finite() && interval > 0.0 {
+            (interval * 3.0).max(1.0)
+        } else {
+            15.0
+        };
+        let generated_at = snapshot.generated_at;
+        let is_stale = !connected || now - generated_at > tolerance;
+        let mut topology = Self {
+            generated_at,
+            is_stale,
+            valid_until: (!is_stale).then_some(generated_at + tolerance),
+            nodes: Vec::new(),
+            edges: Vec::new(),
+            limitations: &[
+                "Ownership is a registry record; it does not identify a detected agent session.",
+                "Recorded process IDs are not verified leaders: controller liveness can mean only that the group survived.",
+                "Listeners show observed group ports, not connections or dependencies.",
+                "Agent reasoning, token velocity, context usage and Ouros account usage are unavailable in the controller snapshot.",
+            ],
+        };
+        let includes_owner = |name: &str| !name.trim().is_empty() && owner.is_none_or(|id| id == name);
+        let mut services: Vec<_> = snapshot
+            .services
+            .iter()
+            .filter(|s| {
+                !s.is_terminal()
+                    && !s.id.trim().is_empty()
+                    && (owner.is_none() || includes_owner(&s.owner))
+            })
+            .collect();
+        services.sort_unstable_by(|a, b| (&a.owner, &a.id).cmp(&(&b.owner, &b.id)));
+        let mut owners = BTreeMap::new();
+        for service in &services {
+            if includes_owner(&service.owner) {
+                owners.insert(service.owner.as_str(), 0);
+            }
+        }
+        for message in &snapshot.messages {
+            if includes_owner(&message.agent) {
+                *owners.entry(message.agent.as_str()).or_default() +=
+                    message.is_awaiting_reply() as usize;
+            }
+        }
+        for (name, waiting) in owners {
+            topology.nodes.push(TopologyNode {
+                id: format!("owner:{name}"),
+                kind: TopologyNodeKind::Owner,
+                title: name.to_owned(),
+                detail: format!("{waiting} awaiting replies"),
+                service_id: None,
+                owner: Some(name.to_owned()),
+                observed_at: None,
+                cpu_pct: None,
+                mem_mb: None,
+            });
+        }
+
+        let fresh_observation = |at: Option<f64>| {
+            at.filter(|&at| !is_stale && at <= generated_at && now - at <= tolerance)
+        };
+        let metric = |fresh: Option<f64>, value: Option<f64>| {
+            fresh.and(value).filter(|n| n.is_finite() && *n >= 0.0)
+        };
+        for service in services {
+            let id = format!("service:{}", service.id);
+            let recorded_owner = includes_owner(&service.owner).then(|| service.owner.clone());
+            let evidence_at = fresh_observation(service.evidence.checked_at);
+            let sample_at = fresh_observation(service.resources.sampled_at);
+            topology.track_expiry(evidence_at, tolerance);
+            topology.track_expiry(sample_at, tolerance);
+
+            let health = if evidence_at.is_none() {
+                "health unavailable or stale"
+            } else if service.health.kind == "none" {
+                "no health check configured"
+            } else {
+                match (service.evidence.health_check_ran, service.evidence.health_passed) {
+                    (true, Some(true)) => "health check passed",
+                    (true, Some(false)) => "health check failed",
+                    _ => "health check unavailable",
+                }
+            };
+            let listener_at = evidence_at.zip(sample_at).and_then(|(checked, sampled)| {
+                (service.evidence.port_scan_ran
+                    && service.pgid.is_some_and(|pgid| pgid > 0)
+                    && sampled >= snapshot.daemon.started_at
+                    && sampled <= checked
+                    && (!service.claimed || service.claimed_at.is_some_and(|at| sampled >= at)))
+                .then_some(sampled)
+            });
+            let mut ports: Vec<_> = if listener_at.is_some() {
+                service
+                    .evidence
+                    .listening_ports
+                    .iter()
+                    .copied()
+                    .filter(|port| (1..=65535).contains(port))
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            ports.sort_unstable();
+            ports.dedup();
+            let scan = match (listener_at, ports.is_empty()) {
+                (None, _) => "listener scan unavailable or stale",
+                (Some(_), true) => "no listeners observed",
+                (Some(_), false) => "listeners observed",
+            };
+            let control = if service.claimed {
+                "claimed · visibility only"
+            } else {
+                "controller launched"
+            };
+            let mut detail = format!("{} · {control} · {health} · {scan}", service.state);
+            if let Some(pid) = service.pid {
+                detail.push_str(&format!(" · recorded PID {pid}"));
+            }
+            if let Some(pgid) = service.pgid {
+                detail.push_str(&format!(" · recorded group {pgid}"));
+            }
+            if !service.declared_ports.is_empty() {
+                detail.push_str(&format!(" · declared {}", fmt_ports(&service.declared_ports)));
+            }
+            if let Some(name) = &recorded_owner {
+                topology.edges.push(TopologyEdge {
+                    source: format!("owner:{name}"),
+                    target: id.clone(),
+                    kind: TopologyEdgeKind::Owns,
+                    observed_at: (service.updated_at != 0.0).then_some(service.updated_at),
+                    provenance: "fleetd service registry",
+                });
+            }
+            for port in ports {
+                let port_id = format!("{id}:port:{port}");
+                topology.nodes.push(TopologyNode {
+                    id: port_id.clone(),
+                    kind: TopologyNodeKind::Listener,
+                    title: format!(":{port}"),
+                    detail: "Observed group listener".to_owned(),
+                    service_id: Some(service.id.clone()),
+                    owner: recorded_owner.clone(),
+                    observed_at: listener_at,
+                    cpu_pct: None,
+                    mem_mb: None,
+                });
+                topology.edges.push(TopologyEdge {
+                    source: id.clone(),
+                    target: port_id,
+                    kind: TopologyEdgeKind::ObservedListener,
+                    observed_at: listener_at,
+                    provenance: "fleetd group listener scan",
+                });
+            }
+            topology.nodes.push(TopologyNode {
+                id,
+                kind: TopologyNodeKind::Service,
+                title: if service.friendly_name.is_empty() {
+                    service.id.clone()
+                } else {
+                    service.friendly_name.clone()
+                },
+                detail,
+                service_id: Some(service.id.clone()),
+                owner: recorded_owner,
+                observed_at: service.evidence.checked_at,
+                cpu_pct: metric(sample_at, service.resources.cpu_pct),
+                mem_mb: metric(sample_at, service.resources.mem_mb),
+            });
+        }
+        if owner.is_none() {
+            let scanned_at = snapshot.daemon.last_reconcile_at;
+            let session_at = fresh_observation(scanned_at);
+            topology.track_expiry(session_at, tolerance);
+            let mut sessions: Vec<_> = snapshot.sessions.iter().collect();
+            sessions.sort_unstable_by(|a, b| a.id.cmp(&b.id));
+            for session in sessions {
+                let project = session
+                    .project
+                    .as_deref()
+                    .and_then(|path| std::path::Path::new(path).file_name())
+                    .and_then(|name| name.to_str())
+                    .unwrap_or("—");
+                let freshness = if session_at.is_some() {
+                    ""
+                } else {
+                    " · session scan stale or unavailable"
+                };
+                topology.nodes.push(TopologyNode {
+                    id: format!("session:{}", session.id),
+                    kind: TopologyNodeKind::Session,
+                    title: session.tool.clone(),
+                    detail: format!("Detected PID {} · {project} · ownership unlinked{freshness}", session.pid),
+                    service_id: None,
+                    owner: None,
+                    observed_at: scanned_at,
+                    cpu_pct: metric(session_at, session.cpu_pct),
+                    mem_mb: metric(session_at, session.mem_mb),
+                });
+            }
+        }
+        topology
+    }
+
+    fn track_expiry(&mut self, observation: Option<f64>, tolerance: f64) {
+        if let Some(at) = observation {
+            let expiry = at + tolerance;
+            self.valid_until = Some(self.valid_until.map_or(expiry, |current| current.min(expiry)));
+        }
+    }
 }
 
 struct Profile {
@@ -563,6 +863,110 @@ mod tests {
 
     fn snapshot_from(json: &str) -> Snapshot {
         serde_json::from_str(json).expect("fixture parses")
+    }
+
+    fn topology_snapshot() -> Snapshot {
+        snapshot_from(
+            r#"{"generatedAt":1000, "daemon":{"version":"1.3.0","pid":7,"startedAt":990,
+                "tickIntervalSec":5,"lastReconcileAt":999},
+                "services":[
+                    {"id":"tracked","friendlyName":"Web","ownerAgent":"registry","state":"running",
+                        "pid":42,"pgid":42,"startSignature":"recorded start","updatedAt":995,
+                        "declaredPorts":[8000],"health":{"kind":"none"},
+                        "evidence":{"processExists":true,"checkedAt":998,"portScanRan":true,
+                            "listeningPorts":[8123,8123,0,65536]},
+                        "resources":{"sampledAt":997,"cpuPct":2,"memMB":-1}},
+                    {"id":"no-owner","state":"running","pid":42,"pgid":42},
+                    {"id":"stopped","ownerAgent":"former","state":"stopped"}],
+                "sessions":[{"id":"s","tool":"codex","pid":42,"project":"/work/web","cpuPct":3,"memMB":4}]}"#,
+        )
+    }
+
+    #[test]
+    fn topology_uses_registry_ownership_and_observed_ports_not_pid_matches() {
+        let snap = topology_snapshot();
+        let topology = FleetTopology::from_snapshot(&snap, None, 1000.0, true);
+        assert!(!topology.is_stale);
+        assert_eq!(topology.valid_until, Some(1012.0));
+        assert_eq!(
+            topology.edges,
+            [
+                TopologyEdge {
+                    source: "owner:registry".into(),
+                    target: "service:tracked".into(),
+                    kind: TopologyEdgeKind::Owns,
+                    observed_at: Some(995.0),
+                    provenance: "fleetd service registry",
+                },
+                TopologyEdge {
+                    source: "service:tracked".into(),
+                    target: "service:tracked:port:8123".into(),
+                    kind: TopologyEdgeKind::ObservedListener,
+                    observed_at: Some(997.0),
+                    provenance: "fleetd group listener scan",
+                },
+            ]
+        );
+        assert_eq!(topology.nodes.len(), 5);
+        let tracked = topology.nodes.iter().find(|n| n.id == "service:tracked").unwrap();
+        assert!(tracked.detail.contains("declared :8000"));
+        assert!(tracked.detail.contains("recorded group 42"));
+        assert_eq!(tracked.cpu_pct, Some(2.0));
+        assert_eq!(tracked.mem_mb, None);
+        let session = topology.nodes.iter().find(|n| n.id == "session:s").unwrap();
+        assert_eq!(session.kind, TopologyNodeKind::Session);
+        assert_eq!(session.owner, None);
+        assert_eq!(session.service_id, None);
+        assert_eq!(session.mem_mb, Some(4.0));
+        let filtered = FleetTopology::from_snapshot(&snap, Some("registry"), 1000.0, true);
+        assert_eq!(filtered.edges, topology.edges);
+        assert_eq!(filtered.nodes.len(), 3);
+    }
+
+    #[test]
+    fn topology_expires_live_evidence_without_losing_recorded_ownership() {
+        let snap = topology_snapshot();
+        for (now, connected, is_stale, valid_until) in [
+            (1012.5, true, false, Some(1013.0)),
+            (1016.0, true, true, None),
+            (1000.0, false, true, None),
+        ] {
+            let topology = FleetTopology::from_snapshot(&snap, None, now, connected);
+            assert_eq!(topology.is_stale, is_stale);
+            assert_eq!(topology.valid_until, valid_until);
+            assert_eq!(topology.edges.len(), 1);
+            assert_eq!(topology.edges[0].kind, TopologyEdgeKind::Owns);
+            assert!(topology.nodes.iter().all(|n| n.kind != TopologyNodeKind::Listener));
+            let tracked = topology.nodes.iter().find(|n| n.id == "service:tracked").unwrap();
+            assert_eq!(tracked.cpu_pct, None);
+            assert_eq!(tracked.owner.as_deref(), Some("registry"));
+            let session = topology.nodes.iter().find(|n| n.id == "session:s").unwrap();
+            assert_eq!(session.owner, None);
+            assert_eq!(session.cpu_pct, (!is_stale).then_some(3.0));
+        }
+    }
+
+    #[test]
+    fn topology_rejects_unrun_retained_and_unstamped_listener_scans() {
+        for (scan_ran, checked_at, sampled_at, claimed_at) in [
+            (false, Some(998.0), Some(997.0), None),
+            (true, None, Some(997.0), None),
+            (true, Some(998.0), None, None),
+            (true, Some(998.0), Some(989.0), None),
+            (true, Some(998.0), Some(997.0), Some(998.0)),
+        ] {
+            let mut snap = topology_snapshot();
+            let service = &mut snap.services[0];
+            service.evidence.port_scan_ran = scan_ran;
+            service.evidence.checked_at = checked_at;
+            service.resources.sampled_at = sampled_at;
+            service.claimed = claimed_at.is_some();
+            service.claimed_at = claimed_at;
+            let topology = FleetTopology::from_snapshot(&snap, None, 1000.0, true);
+            assert_eq!(topology.edges.len(), 1);
+            assert_eq!(topology.edges[0].kind, TopologyEdgeKind::Owns);
+            assert!(topology.nodes.iter().all(|n| n.kind != TopologyNodeKind::Listener));
+        }
     }
 
     #[test]

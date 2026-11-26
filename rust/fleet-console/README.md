@@ -14,6 +14,10 @@ What exists in this scaffold:
   `scripts/build-macos-app.sh` from `macos/Info.plist` (`LSUIElement true`).
 - Launch: no main window. The app lives in the macOS menubar / Linux
   system tray and stays resident with zero windows open.
+- A second packaged macOS launch activates the existing app. An explicit
+  dashboard request goes to that instance before the second process opens
+  configuration or connects to fleetd. `--review` opens Overview; a
+  Boolean `FleetConsoleReviewBuild` plist flag also enables a Dock icon.
 - Shell: three meter columns (CPU / RAM / DISK) with live local
   readings; a click toggles the 480pt popover, which shows the fleet
   status line, the Quick View instrument strip (CPU and Memory retro
@@ -28,6 +32,10 @@ What exists in this scaffold:
   snapshot; Processes shows the top local processes from a configurable
   sampler (4 seconds by default); Storage lists mounted disks; Launch Services
   reads `launchctl list` (macOS) or `systemctl --user` (Linux).
+- Overview separates recorded owners, registered services, observed
+  group listeners, and unlinked detected sessions. It labels retained
+  snapshots when the controller disconnects and expires live evidence
+  after three controller ticks. Recorded PIDs are not verified leaders.
 - Configuration: **Edit Configuration** opens the installed `config.json`
   in an editor; **Reveal Logs** opens the installed log folder. On macOS
   these are under `~/Library/Application Support/FleetConsole` and
