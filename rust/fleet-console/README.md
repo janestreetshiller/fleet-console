@@ -32,12 +32,20 @@ What exists in this scaffold:
   snapshot; Processes shows the top local processes from a configurable
   sampler (4 seconds by default); Storage lists mounted disks; Launch Services
   reads `launchctl list` (macOS) or `systemctl --user` (Linux).
-- Overview separates recorded owners, registered services, verified process
-  group leaders, observed group listeners, and unlinked detected sessions.
-  A leader requires fleetd to have matched the recorded PID, process group
-  and start signature; a recorded PID or group liveness alone is not
-  enough. Overview labels retained snapshots on disconnect and expires live
-  evidence after three controller ticks, measured from each observation.
+- Overview's native **Agent awareness map** separates recorded owners,
+  registered services, verified process group leaders, observed group
+  listeners, and unlinked detected sessions. Drag empty space to pan,
+  use the zoom controls or **Fit all**, and select a card to inspect its
+  evidence and follow recorded relationships. The map limits displayed
+  cards on large snapshots; Services, Processes, and Events remain
+  reachable from Overview diagnostics.
+- Map lines show registry ownership, verified leaders, or observed group
+  listeners—not session ownership, connections, or dependencies. A
+  leader requires fleetd to match the recorded PID, process group, and
+  start signature; a recorded PID or group liveness alone is not enough.
+  Overview labels retained snapshots when live evidence is unavailable.
+  Live evidence expires after three controller ticks, measured from each
+  observation.
 - Configuration: **Edit Configuration** opens the installed `config.json`
   in an editor; **Reveal Logs** opens the installed log folder. On macOS
   these are under `~/Library/Application Support/FleetConsole` and

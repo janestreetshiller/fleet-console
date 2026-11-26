@@ -15,6 +15,7 @@ use gpui::{
 #[cfg(target_os = "macos")]
 use gpui::{point, WindowKind};
 
+mod awareness_layout;
 mod config;
 mod controller;
 mod dashboard;
