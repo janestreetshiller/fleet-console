@@ -31,9 +31,9 @@ What exists in this scaffold:
 - Configuration: **Edit Configuration** opens the installed `config.json`
   in an editor; **Reveal Logs** opens the installed log folder. On macOS
   these are under `~/Library/Application Support/FleetConsole` and
-  `~/Library/Logs/FleetConsole` respectively, unless
-  `FLEETCONSOLE_STATE_ROOT` redirects them to `config.json` and `logs`
-  within that root. Changes, atomic replacements, and deletion are
+  `~/Library/Logs/FleetConsole` respectively. `FLEETCONSOLE_STATE_ROOT`
+  replaces `~` and preserves the same `Library` paths. Changes, atomic
+  replacements, and deletion are
   picked up live without restarting the controller. A missing file
   uses defaults; a file that cannot be read or parsed also uses
   defaults and shows the error in Quick View and Dashboard.
