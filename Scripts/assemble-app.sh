@@ -67,8 +67,8 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
     <key>CFBundleIdentifier</key><string>com.fleetconsole.app</string>
     <key>CFBundleExecutable</key><string>FleetConsole</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>1.3.0</string>
-    <key>CFBundleVersion</key><string>11</string>
+    <key>CFBundleShortVersionString</key><string>1.3.1</string>
+    <key>CFBundleVersion</key><string>12</string>
     <key>LSMinimumSystemVersion</key><string>14.0</string>
 
     <!-- LSUIElement keeps the icon out of the Dock, but not out of Finder, Get

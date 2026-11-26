@@ -50,11 +50,10 @@ enum ProcessLauncher {
                 throw FleetError.rejected("declared ports \(undeclared) are outside --allow-port \(request.budget.allowedPorts)")
             }
         }
-        if request.health.kind == .http, let target = request.health.target,
-           let url = URL(string: target), let host = url.host {
-            let allowed = ["127.0.0.1", "localhost", "::1", "0.0.0.0"]
-            guard allowed.contains(host) else {
-                throw FleetError.rejected("http health checks must target localhost, got \(host)")
+        if request.health.kind == .http {
+            guard let target = request.health.target, let url = URL(string: target),
+                  HealthChecker.isLoopbackHTTP(url) else {
+                throw FleetError.rejected("HTTP health checks must target localhost")
             }
         }
 

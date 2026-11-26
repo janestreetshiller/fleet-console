@@ -74,9 +74,7 @@ final class AppModel {
                 self?.apply(snapshot)
             } onConnection: { [weak self] connected, error in
                 guard let self else { return }
-                self.connected = connected
-                self.connectionError = connected ? nil : error
-                self.lastSnapshotReceivedUptime = nil
+                self.setConnection(connected, error: error)
                 if !connected {
                     self.agentRegistered = DaemonClient.shared.agentIsRegistered()
                 }
@@ -93,6 +91,16 @@ final class AppModel {
 
     deinit {
         clockTimer?.invalidate()
+    }
+
+    func setConnection(_ connected: Bool, error: String?) {
+        self.connected = connected
+        connectionError = connected ? nil : error
+        lastSnapshotReceivedUptime = nil
+        if !connected, let source = topologySource {
+            topology = FleetTopology(snapshot: source, connected: false)
+            topologySource = nil
+        }
     }
 
     func apply(_ snapshot: Snapshot) {
@@ -301,9 +309,7 @@ final class AppModel {
                 if surfacesErrors {
                     self.actionError = error.localizedDescription
                 } else {
-                    self.connected = false
-                    self.lastSnapshotReceivedUptime = nil
-                    self.connectionError = error.localizedDescription
+                    self.setConnection(false, error: error.localizedDescription)
                 }
             }
         }

@@ -40,7 +40,16 @@ enum HealthChecker {
         return Outcome(passed: result.ok, detail: result.detail, latencyMs: result.latencyMs)
     }
 
+    static func isLoopbackHTTP(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              let host = url.host?.lowercased() else { return false }
+        return host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
+    }
+
     static func httpGet(_ url: URL, expect: Int, timeout: TimeInterval) -> Outcome {
+        guard isLoopbackHTTP(url) else {
+            return Outcome(passed: false, detail: "HTTP health checks must target localhost", latencyMs: 0)
+        }
         let start = Date()
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
@@ -53,7 +62,7 @@ enum HealthChecker {
         let config = URLSessionConfiguration.ephemeral
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout
-        let session = URLSession(configuration: config)
+        let session = URLSession(configuration: config, delegate: LoopbackRedirects.shared, delegateQueue: nil)
         let task = session.dataTask(with: request) { _, response, error in
             defer { semaphore.signal() }
             if let error {
@@ -76,6 +85,16 @@ enum HealthChecker {
         }
         session.invalidateAndCancel()
         return settled.resolved(or: Outcome(passed: false, detail: "no response", latencyMs: elapsed(start)))
+    }
+
+    private final class LoopbackRedirects: NSObject, URLSessionTaskDelegate {
+        static let shared = LoopbackRedirects()
+
+        func urlSession(_ session: URLSession, task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
+                        completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+            completionHandler(request.url.map(HealthChecker.isLoopbackHTTP) == true ? request : nil)
+        }
     }
 
     private final class SettledOutcome: @unchecked Sendable {

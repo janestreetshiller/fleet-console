@@ -41,7 +41,7 @@ var signalSources: [DispatchSourceSignal] = []
 for sig in [SIGTERM, SIGINT, SIGHUP] {
     signal(sig, SIG_IGN)
     let source = DispatchSource.makeSignalSource(signal: sig, queue: signalQueue)
-    source.setEventHandler {
+    source.setEventHandler { @Sendable [controller] in
         StopMarker.write(signal: sig)
         FleetLog.info("received signal \(sig); shutting down")
         controller.shutdown()
@@ -59,3 +59,4 @@ do {
     FleetLog.error("fatal: \(error.localizedDescription)")
     exit(1)
 }
+dispatchMain()

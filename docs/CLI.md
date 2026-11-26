@@ -71,7 +71,7 @@ processes enter through `claim`, which records visibility without control.
 | `--max-runtime <dur>` | — | hard ceiling regardless of renewals |
 | `--cpu-warn <pct>` / `--mem-warn <mb>` | — | budget warning thresholds |
 | `--allow-port <n>` | `--port` values | repeatable; a listener outside this set is flagged |
-| `--health-http <url>` | — | localhost only |
+| `--health-http <url>` | — | HTTP(S) loopback only; redirects leaving loopback are not followed |
 | `--health-tcp <host:port>` | — | |
 | `--health-interval <dur>` / `--health-timeout <dur>` | `15s` / `4s` | |
 | `--expect-status <n>` | `200` | |

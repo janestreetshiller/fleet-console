@@ -93,9 +93,11 @@ struct AwarenessGraphTests {
     func registryEvidenceRemainsASeparateProvenanceForest(_ age: Double) throws {
         var record = ServiceRecord(id: "svc", friendlyName: "API", ownerAgent: "Codex", purpose: "Serve project",
                                    command: ["codex", "--resume", "agent"], cwd: "/work/api", pid: 42, pgid: 42,
+                                   startSignature: "recorded start",
                                    declaredPorts: [9000], leaseExpiresAt: now.addingTimeInterval(600), leaseTTLSec: 600,
                                    state: .running,
-                                   evidence: Evidence(processExists: true, listeningPorts: [8080], portScanRan: true, checkedAt: now),
+                                   evidence: Evidence(processExists: true, listeningPorts: [8080], portScanRan: true,
+                                                      checkedAt: now, leaderVerifiedAt: now),
                                    resources: ResourceSample(cpuPct: 2, memMB: 16, sampledAt: now), updatedAt: now)
         record.claimed = true
         let snapshot = Snapshot(generatedAt: now, daemon: DaemonInfo(version: "test", pid: 1, startedAt: now),

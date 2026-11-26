@@ -110,7 +110,10 @@ struct ServiceRowView: View {
     }
 
     private var rowHelp: String {
-        var parts = [labels.displayName(for: service), "\(service.state.label): \(service.state.meaning)",
+        let meaning = service.claimed && (service.state == .expiring || service.state == .expired)
+            ? "claim only; the controller will not stop this process"
+            : service.state.meaning
+        var parts = [labels.displayName(for: service), "\(service.state.label): \(meaning)",
                      service.purpose, "owned by \(service.ownerAgent) in \(service.projectFolderName)"]
         if let color = labels.label(for: service.id).color { parts.append("\(color.label) tag") }
         if isStale { parts.append("Status not refreshed recently") }
