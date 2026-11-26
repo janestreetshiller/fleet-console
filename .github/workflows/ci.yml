@@ -50,7 +50,7 @@ jobs:
         run: >-
           cargo check --manifest-path rust/Cargo.toml
           --workspace --all-targets --locked
-      - name: Verify Rust clients
+      - name: Verify FleetConsole and the controller protocol
         run: Scripts/verify-rust-clients.sh
 
   linux:
@@ -73,5 +73,5 @@ jobs:
         run: |
           rustc --version
           cargo --version
-      - name: Verify Rust clients
+      - name: Verify FleetConsole and the controller protocol
         run: Scripts/verify-rust-clients.sh

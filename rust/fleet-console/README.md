@@ -104,3 +104,6 @@ Build:
 - macOS: `scripts/build-macos-app.sh` (builds and assembles the .app).
 - Linux: `cargo build --release -p fleet-console` in `rust/`, then run
   `target/release/FleetConsole` inside the desktop session.
+
+Run `Scripts/verify-rust-clients.sh` from the repository root for the
+FleetConsole binary tests, controller protocol tests, and source identity check.
