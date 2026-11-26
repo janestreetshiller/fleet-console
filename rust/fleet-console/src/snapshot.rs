@@ -818,6 +818,35 @@ impl FleetView {
                 fmt_relative(Some(lease), now)
             ));
         }
+        let unreachable: Vec<_> = snapshot
+            .devices
+            .iter()
+            .filter_map(|device| {
+                let evidence = device.get("evidence")?;
+                if evidence.get("isSelf").and_then(serde_json::Value::as_bool) == Some(true) {
+                    return None;
+                }
+                let observed = ["icmpOK", "tcpOK", "tailscaleOnline"]
+                    .map(|probe| evidence.get(probe).and_then(serde_json::Value::as_bool));
+                if !observed.contains(&Some(false)) || observed.contains(&Some(true)) {
+                    return None;
+                }
+                device.get("name").and_then(serde_json::Value::as_str)
+            })
+            .collect();
+        if let Some((first, rest)) = unreachable.split_first() {
+            use std::fmt::Write;
+            let mut line = String::with_capacity(
+                26 + 2 * rest.len() + unreachable.iter().map(|name| name.len()).sum::<usize>(),
+            );
+            write!(line, "{} device(s) unreachable: {first}", unreachable.len())
+                .expect("formatting into a string is infallible");
+            for name in rest {
+                line.push_str(", ");
+                line.push_str(name);
+            }
+            lines.push(line);
+        }
         lines.push(format!(
             "fleetd up {}",
             fmt_duration(now - snapshot.daemon.started_at)
@@ -1079,6 +1108,26 @@ mod tests {
         assert_eq!(view.status_line, "1 services running");
         assert_eq!(view.tint, Tint::None);
         assert_eq!(view.tooltip, "1 running\nclaude: 1 service running\nfleetd up 10m");
+    }
+
+    #[test]
+    fn tooltip_reports_only_devices_with_negative_reachability_evidence() {
+        let snap = snapshot_from(
+            r#"{"generatedAt":1000.0,"daemon":{"version":"1.1.0","pid":7,"startedAt":400.0,"tickIntervalSec":5},
+                "services":[{"id":"svc","ownerAgent":"claude","state":"running","startedAt":1.0,
+                             "updatedAt":2.0,"leaseExpiresAt":1120.0}],
+                "devices":[
+                    {"name":"This Mac","evidence":{"isSelf":true,"tcpOK":false}},
+                    {"name":"Not sampled","evidence":{}},
+                    {"name":"Mixed","evidence":{"icmpOK":false,"tailscaleOnline":true}},
+                    {"name":"Build machine","evidence":{"icmpOK":false}},
+                    {"name":"Test machine","evidence":{"tcpOK":false,"tailscaleOnline":false}}
+                ]}"#,
+        );
+        let view = FleetView::from_snapshot(&snap, 1000.0);
+        assert!(view.tooltip.ends_with(
+            "\nnext lease expires in 2m\n2 device(s) unreachable: Build machine, Test machine\nfleetd up 10m"
+        ));
     }
 
     #[test]
