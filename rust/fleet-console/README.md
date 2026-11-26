@@ -12,12 +12,17 @@ What exists in this scaffold:
 - Identity: bundle id `com.fleetconsole.app`, name/executable
   `FleetConsole`, version 1.3.0. macOS bundle assembled by
   `scripts/build-macos-app.sh` from `macos/Info.plist` (`LSUIElement true`).
-- Launch: no main window. The app lives in the macOS menubar / Linux
-  system tray and stays resident with zero windows open.
+- Launch: the app lives in the macOS menubar / Linux system tray
+  and stays resident with zero windows open.
 - A second packaged macOS launch activates the existing app. An explicit
   dashboard request goes to that instance before the second process opens
   configuration or connects to fleetd. `--review` opens Overview; a
   Boolean `FleetConsoleReviewBuild` plist flag also enables a Dock icon.
+- The packaged macOS app shows Welcome on first launch unless skipped.
+  Replay Welcome is in the status-item menu. After notification permission
+  is granted, only fresh unseen problems and requests awaiting an answer
+  produce audible system notifications; the initial mailbox is silent.
+  Review launches and isolated state roots skip automatic onboarding.
 - Shell: three meter columns (CPU / RAM / DISK) with live local
   readings; a click toggles the 480pt popover, which shows the fleet
   status line, the Quick View instrument strip (CPU and Memory retro

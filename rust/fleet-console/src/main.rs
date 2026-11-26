@@ -21,9 +21,13 @@ mod controller;
 mod dashboard;
 #[cfg(target_os = "macos")]
 mod mac_launch;
+#[cfg(any(target_os = "macos", test))]
+mod notifications;
 mod quickview;
 mod sampler;
 mod snapshot;
+#[cfg(target_os = "macos")]
+mod welcome;
 
 use config::{ConfigPath, ConfigRead, Sections, UiConfig};
 use dashboard::{DashboardView, LaunchRow, Module};
@@ -71,6 +75,8 @@ pub enum ShellEvent {
     ConfigLoaded(ConfigRead),
     EditConfiguration,
     RevealLogs,
+    #[cfg(target_os = "macos")]
+    ReplayWelcome,
     OpenGuide,
 }
 
@@ -155,6 +161,8 @@ pub struct Shell {
     config_path: Arc<ConfigPath>,
     config: ConfigRead,
     tx: Option<UnboundedSender<ShellEvent>>,
+    #[cfg(target_os = "macos")]
+    notifications: Option<notifications::Notifications>,
     #[cfg(target_os = "macos")]
     _item: Option<mac_status::Item>,
     #[cfg(target_os = "linux")]
@@ -366,6 +374,12 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
             ShellEvent::EditConfiguration | ShellEvent::RevealLogs => {
                 let edit = matches!(event, ShellEvent::EditConfiguration);
                 if cx.update(|cx| open_config_path(cx, edit)).is_err() {
+                    return;
+                }
+            }
+            #[cfg(target_os = "macos")]
+            ShellEvent::ReplayWelcome => {
+                if cx.update(welcome::replay).is_err() {
                     return;
                 }
             }
@@ -659,6 +673,10 @@ fn apply_snapshot(snapshot: snapshot::Snapshot, cx: &mut App) {
         view.status_line, view.alert
     );
     let shell = cx.global_mut::<Shell>();
+    #[cfg(target_os = "macos")]
+    if let Some(notifications) = shell.notifications.as_mut() {
+        notifications.update(&snapshot);
+    }
     shell.connected = true;
     shell.view = Some(view);
     shell.snapshot = Some(Arc::new(snapshot));
@@ -824,6 +842,8 @@ fn main() {
             }
             launch.startup_dashboard(dashboard_at_launch)
         };
+        #[cfg(target_os = "macos")]
+        let onboarding = launch.enables_onboarding();
 
         let config_path = Arc::new(ConfigPath::detect());
         if let Err(error) = config_path.ensure_exists() {
@@ -921,10 +941,17 @@ fn main() {
             config,
             tx: Some(tx.clone()),
             #[cfg(target_os = "macos")]
+            notifications: onboarding.then(notifications::Notifications::new),
+            #[cfg(target_os = "macos")]
             _item: item,
             #[cfg(target_os = "linux")]
             _tray: tray,
         });
+        #[cfg(target_os = "macos")]
+        {
+            welcome::init(cx, onboarding, |cx| open_dashboard(cx, Module::Overview));
+            welcome::show_if_due(cx);
+        }
 
         cx.spawn(async move |cx: &mut gpui::AsyncApp| forward_events(rx, cx).await)
             .detach();
@@ -1022,6 +1049,7 @@ mod mac_status {
             12 => ShellEvent::RevealLogs,
             13 => ShellEvent::OpenGuide,
             14 => ShellEvent::EditConfiguration,
+            15 => ShellEvent::ReplayWelcome,
             _ => return,
         };
         send(event);
@@ -1097,6 +1125,7 @@ mod mac_status {
             add_menu_item(menu, target, "Find Background Processes", action, 11, "", true);
             add_menu_item(menu, target, "Edit Configuration", action, 14, "", true);
             add_menu_item(menu, target, "Reveal Logs in Finder", action, 12, "", true);
+            add_menu_item(menu, target, "Replay Welcome", action, 15, "", true);
             add_separator(menu);
             add_menu_item(menu, target, "Help", action, 0, "", false);
             add_menu_item(menu, target, "FleetConsole Guide", action, 13, "", true);

@@ -243,6 +243,8 @@ pub struct Message {
     pub id: i64,
     #[serde(default)]
     pub agent: String,
+    #[serde(rename = "serviceName", default)]
+    pub service_name: Option<String>,
     #[serde(default)]
     pub kind: String,
     #[serde(default)]

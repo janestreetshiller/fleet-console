@@ -86,6 +86,12 @@ impl Launch {
         self.review.dashboard(requested)
     }
 
+    pub(super) fn enables_onboarding(&self) -> bool {
+        !self.review.enabled
+            && self.bundle.as_ref().is_some_and(|bundle| bundle.identifier == BUNDLE_ID)
+            && std::env::var_os(fleet_proto::STATE_ROOT_VARIABLE).is_none_or(|root| root.is_empty())
+    }
+
     pub(super) fn apply_activation_policy(&self) {
         let policy = if self.review.regular_activation {
             POLICY_REGULAR
