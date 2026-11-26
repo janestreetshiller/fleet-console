@@ -334,9 +334,77 @@ unsafe fn string<'a>(value: id) -> Option<&'a str> {
     CStr::from_ptr(text).to_str().ok()
 }
 
+pub(super) fn show_cli_setup(cx: &mut gpui::App) {
+    cx.activate(true);
+    cx.spawn(async |cx: &mut gpui::AsyncApp| {
+        let (response, command) = objc::rc::autoreleasepool(|| unsafe {
+            let bundle: id = msg_send![class!(NSBundle), mainBundle];
+            let resources: id = msg_send![bundle, resourcePath];
+            let command = string(resources)
+                .map(|path| std::path::Path::new(path).join("bin/fleetctl"))
+                .filter(|path| {
+                    use std::os::unix::fs::PermissionsExt;
+                    path.metadata().is_ok_and(|info| {
+                        info.is_file() && info.permissions().mode() & 0o111 != 0
+                    })
+                })
+                .and_then(|path| path.to_str().map(doctor_command));
+            let alert = objc::rc::StrongPtr::new(msg_send![class!(NSAlert), new]);
+            let alert = *alert;
+            let _: () = msg_send![alert, setMessageText: ns_string("Use fleetctl from Terminal")];
+            let detail = match &command {
+                Some(command) => format!("fleetctl is included with this copy of FleetConsole. It records who started background work, why it is running, and when its lease expires.\n\nPaste this command into Terminal to check the controller:\n\n{command}\n\nUse this full path until fleetctl is on your PATH."),
+                None => "This copy does not contain an executable fleetctl at Resources/bin/fleetctl. Packaged FleetConsole apps include it; when running from source, build the fleetctl product with Swift. The CLI reference explains commands and controller setup.".into(),
+            };
+            let _: () = msg_send![alert, setInformativeText: ns_string(&detail)];
+            if command.is_some() {
+                let _: id = msg_send![alert, addButtonWithTitle: ns_string("Copy Doctor Command")];
+            }
+            let _: id = msg_send![alert, addButtonWithTitle: ns_string("CLI Reference")];
+            let _: id = msg_send![alert, addButtonWithTitle: ns_string("Close")];
+            let response: isize = msg_send![alert, runModal];
+            (response, command)
+        });
+        match (response, command) {
+            (1000, Some(command)) => {
+                let _ = cx
+                    .update(|cx| cx.write_to_clipboard(gpui::ClipboardItem::new_string(command)));
+            }
+            (1000, None) | (1001, Some(_)) => {
+                let _ = cx.update(|cx| {
+                    cx.open_url("https://github.com/janestreetshiller/fleet-console/blob/main/docs/CLI.md");
+                });
+            }
+            _ => {}
+        }
+    })
+    .detach();
+}
+
+fn doctor_command(path: &str) -> String {
+    format!("'{}' doctor", path.replace('\'', "'\\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copied_doctor_command_preserves_the_bundled_path_as_one_argument() {
+        let path = "/Applications/Fleet's $(false).app/Contents/Resources/bin/fleetctl";
+        let output = std::process::Command::new("/bin/sh")
+            .args([
+                "-c",
+                &format!("set -- {}; printf '%s\\n' \"$@\"", doctor_command(path)),
+            ])
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("{path}\ndoctor\n")
+        );
+    }
 
     #[test]
     fn review_flag_opens_dashboard_without_upgrading_activation_policy() {

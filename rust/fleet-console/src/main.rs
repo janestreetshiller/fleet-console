@@ -48,7 +48,8 @@ actions!(
         RefreshProbes,
         EditConfiguration,
         RevealLogs,
-        OpenGuide
+        OpenGuide,
+        ShowCliSetup
     ]
 );
 
@@ -78,6 +79,8 @@ pub enum ShellEvent {
     #[cfg(target_os = "macos")]
     ReplayWelcome,
     OpenGuide,
+    #[cfg(target_os = "macos")]
+    ShowCliSetup,
 }
 
 pub struct PopoverView {
@@ -392,6 +395,12 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     })
                     .is_err()
                 {
+                    return;
+                }
+            }
+            #[cfg(target_os = "macos")]
+            ShellEvent::ShowCliSetup => {
+                if cx.update(mac_launch::show_cli_setup).is_err() {
                     return;
                 }
             }
@@ -774,6 +783,11 @@ fn set_app_menus(cx: &mut App, sections: MenuSections) {
         MenuItem::separator(),
         MenuItem::action("Refresh", RefreshProbes),
     ]);
+    let help_items = vec![
+        MenuItem::action("FleetConsole Guide", OpenGuide),
+        #[cfg(target_os = "macos")]
+        MenuItem::action("fleetctl Setup…", ShowCliSetup),
+    ];
     cx.set_menus(vec![
         Menu {
             name: "FleetConsole".into(),
@@ -790,7 +804,7 @@ fn set_app_menus(cx: &mut App, sections: MenuSections) {
         },
         Menu {
             name: "Help".into(),
-            items: vec![MenuItem::action("FleetConsole Guide", OpenGuide)],
+            items: help_items,
         },
     ]);
 }
@@ -900,6 +914,8 @@ fn main() {
         cx.on_action(|_: &OpenGuide, cx: &mut App| {
             cx.open_url("https://github.com/janestreetshiller/fleet-console#readme");
         });
+        #[cfg(target_os = "macos")]
+        cx.on_action(|_: &ShowCliSetup, cx: &mut App| mac_launch::show_cli_setup(cx));
         cx.on_action(|_: &EditConfiguration, cx: &mut App| open_config_path(cx, true));
         cx.on_action(|_: &RevealLogs, cx: &mut App| open_config_path(cx, false));
         set_app_menus(cx, sections);
@@ -1051,6 +1067,7 @@ mod mac_status {
             13 => ShellEvent::OpenGuide,
             14 => ShellEvent::EditConfiguration,
             15 => ShellEvent::ReplayWelcome,
+            16 => ShellEvent::ShowCliSetup,
             _ => return,
         };
         send(event);
@@ -1130,6 +1147,7 @@ mod mac_status {
             add_separator(menu);
             add_menu_item(menu, target, "Help", action, 0, "", false);
             add_menu_item(menu, target, "FleetConsole Guide", action, 13, "", true);
+            add_menu_item(menu, target, "fleetctl Setup…", action, 16, "", true);
             add_separator(menu);
             add_menu_item(menu, target, "Quit FleetConsole", sel!(fleetQuitClicked:), 0, "q", true);
             let _: () = msg_send![menu, popUpMenuPositioningItem: nil atLocation: NSPoint::new(0.0, 0.0) inView: sender];
