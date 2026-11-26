@@ -307,3 +307,5 @@ The native PTY fixture verifies the exact painted diagnostic rows and the origin
 The GPUI status tooltip reports named unreachable devices from controller probe evidence after the next lease and before daemon uptime. It does not treat this Mac, mixed probe results, or an unsampled device as unreachable. Local internet, link, and Tailscale fault reporting remain separate parity gates.
 
 When `fleetd` receives a stop signal, its signal queue owns shutdown through the final SQLite event, stop-marker cleanup, and process exit. Unblocking the accepting thread does not end the process before that cleanup.
+
+Expiring an adopted process only expires its claim. The controller does not signal it or count it as reaped; readers ignore legacy reap flags on claimed records. The event history remains append-only.

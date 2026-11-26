@@ -730,7 +730,7 @@ fn profiles(snapshot: &Snapshot) -> Vec<Profile> {
                     .fold(None, |acc: Option<f64>, v| Some(acc.map_or(v, |a| a.min(v)))),
                 total_launched: all.len() as i64,
                 total_crashed: all.iter().filter(|s| s.state == "crashed").count() as i64,
-                total_leaked: all.iter().filter(|s| s.reaped_for_expiry).count() as i64,
+                total_leaked: all.iter().filter(|s| !s.claimed && s.reaped_for_expiry).count() as i64,
                 message_count: mail.len() as i64,
                 awaiting_reply: mail.iter().filter(|m| m.is_awaiting_reply()).count() as i64,
             }
@@ -1128,6 +1128,18 @@ mod tests {
         assert!(view.tooltip.ends_with(
             "\nnext lease expires in 2m\n2 device(s) unreachable: Build machine, Test machine\nfleetd up 10m"
         ));
+    }
+
+    #[test]
+    fn legacy_claim_expiry_is_not_counted_as_a_reap() {
+        let snapshot = snapshot_from(
+            r#"{"generatedAt":1000.0,"daemon":{"version":"1.1.0","pid":7,"startedAt":400.0,"tickIntervalSec":5},
+                "services":[
+                    {"id":"claimed","ownerAgent":"codex","state":"expired","claimed":true,"reapedForExpiry":true},
+                    {"id":"launched","ownerAgent":"codex","state":"expired","reapedForExpiry":true}
+                ]}"#,
+        );
+        assert!(FleetView::from_snapshot(&snapshot, 1000.0).tooltip.contains("1 left running"));
     }
 
     #[test]

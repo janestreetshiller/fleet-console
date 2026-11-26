@@ -260,9 +260,10 @@ public struct ServiceRecord: Codable, Sendable, Identifiable, Hashable {
         cpuHistory = try c.decodeIfPresent([Double].self, forKey: .cpuHistory) ?? []
         memHistory = try c.decodeIfPresent([Double].self, forKey: .memHistory) ?? []
         pausedAt = try c.decodeIfPresent(Date.self, forKey: .pausedAt)
-        reapedForExpiry = try c.decodeIfPresent(Bool.self, forKey: .reapedForExpiry) ?? false
         healthFailureCount = try c.decodeIfPresent(Int.self, forKey: .healthFailureCount) ?? 0
-        claimed = try c.decodeIfPresent(Bool.self, forKey: .claimed) ?? false
+        let decodedClaim = try c.decodeIfPresent(Bool.self, forKey: .claimed) ?? false
+        claimed = decodedClaim
+        reapedForExpiry = try c.decodeIfPresent(Bool.self, forKey: .reapedForExpiry) == true && !decodedClaim
         claimedAt = try c.decodeIfPresent(Date.self, forKey: .claimedAt)
     }
 

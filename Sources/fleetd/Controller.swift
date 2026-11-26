@@ -336,7 +336,7 @@ final class Controller: @unchecked Sendable {
 
             if let reap {
                 record.state = .expired
-                record.reapedForExpiry = true
+                record.reapedForExpiry = record.isSignallableByController
                 record.updatedAt = now
                 services[record.id] = record
                 try? registry.upsert(record)
@@ -360,8 +360,11 @@ final class Controller: @unchecked Sendable {
             let warnWindow = max(30, record.leaseTTLSec * 0.1)
             if remaining <= warnWindow {
                 if expiringNotified.insert(record.id).inserted {
+                    let consequence = record.isSignallableByController
+                        ? "renew or it will be stopped"
+                        : "renew to keep the claim current; the controller will not signal it"
                     _ = try? registry.append(.leaseExpiring, service: record,
-                                         detail: "lease expires in \(Fmt.duration(remaining)) — renew or it will be stopped")
+                                             detail: "lease expires in \(Fmt.duration(remaining)) — \(consequence)")
                 }
                 record.state = .expiring
             } else {
