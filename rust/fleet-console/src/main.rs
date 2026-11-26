@@ -950,6 +950,7 @@ fn main() {
         #[cfg(target_os = "macos")]
         {
             welcome::init(cx, onboarding, |cx| open_dashboard(cx, Module::Overview));
+            launch.register_controller();
             welcome::show_if_due(cx);
         }
 
