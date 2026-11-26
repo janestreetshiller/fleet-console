@@ -1,5 +1,11 @@
 #![allow(unexpected_cfgs)]
 
+use std::io;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use futures::channel::mpsc::{unbounded, UnboundedReceiver, UnboundedSender};
 use futures::StreamExt;
 use gpui::{
@@ -9,12 +15,14 @@ use gpui::{
 #[cfg(target_os = "macos")]
 use gpui::{point, WindowKind};
 
+mod config;
 mod controller;
 mod dashboard;
 mod quickview;
 mod sampler;
 mod snapshot;
 
+use config::{ConfigPath, ConfigRead, Sections, UiConfig};
 use dashboard::{DashboardView, LaunchRow, Module};
 use sampler::{Meters, Sample};
 use snapshot::FleetView;
@@ -31,6 +39,8 @@ actions!(
         ShowEvents,
         ShowLaunchServices,
         RefreshProbes,
+        EditConfiguration,
+        RevealLogs,
         OpenGuide
     ]
 );
@@ -40,6 +50,7 @@ pub const STATUS_ITEM_AUTOSAVE_NAME: &str = "com.fleetconsole.item.fleet";
 pub const METER_TEXT: &str = "CPU —   RAM —   DISK —";
 pub const TOOLTIP_DISCONNECTED: &str = "FleetConsole — controller not running";
 pub const POPOVER_SIZE: (f32, f32) = (480.0, 260.0);
+const CONFIG_CHECK_INTERVAL: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone)]
 pub enum ShellEvent {
@@ -52,6 +63,8 @@ pub enum ShellEvent {
     LaunchServices(Vec<LaunchRow>),
     ShowModule(Module),
     Reconcile,
+    ConfigLoaded(ConfigRead),
+    EditConfiguration,
     RevealLogs,
     OpenGuide,
 }
@@ -62,8 +75,10 @@ pub struct PopoverView {
 }
 
 impl Render for PopoverView {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         div()
+            .id("quick-view")
+            .overflow_y_scroll()
             .flex()
             .flex_col()
             .gap(px(10.0))
@@ -105,6 +120,7 @@ impl Render for PopoverView {
                             }),
                     ),
             )
+            .children(config_warning(cx))
             .child(quickview::quick_view(self.sample.as_ref()))
             .child(
                 div()
@@ -130,6 +146,8 @@ pub struct Shell {
     dashboard: Option<WindowHandle<DashboardView>>,
     processes: Vec<sampler::ProcRow>,
     launch_rows: Vec<LaunchRow>,
+    config_path: Arc<ConfigPath>,
+    config: ConfigRead,
     tx: Option<UnboundedSender<ShellEvent>>,
     #[cfg(target_os = "macos")]
     _item: Option<mac_status::Item>,
@@ -153,6 +171,50 @@ impl Shell {
             _ => FleetView::offline_alert().to_string(),
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct MenuSections {
+    agents: bool,
+    processes: bool,
+    services: bool,
+}
+
+impl From<&Sections> for MenuSections {
+    fn from(sections: &Sections) -> Self {
+        Self {
+            agents: sections.agents,
+            processes: sections.processes,
+            services: sections.services,
+        }
+    }
+}
+
+fn config_warning(cx: &App) -> Option<impl IntoElement> {
+    let error = cx.global::<Shell>().config.error.as_ref()?;
+    Some(
+        div()
+            .flex()
+            .flex_col()
+            .items_start()
+            .flex_none()
+            .gap(px(4.0))
+            .text_size(px(12.0))
+            .text_color(gpui::rgb(0xffcc80))
+            .child("Cannot load config.json; using defaults.")
+            .child(error.clone())
+            .child(
+                div()
+                    .id("edit-unreadable-config")
+                    .border_1()
+                    .border_color(gpui::rgb(0xffcc80))
+                    .rounded(px(4.0))
+                    .px(px(6.0))
+                    .py(px(2.0))
+                    .child("Edit Configuration")
+                    .on_click(|_, _, cx| open_config_path(cx, true)),
+            ),
+    )
 }
 
 fn popover_opened() {
@@ -284,8 +346,16 @@ async fn forward_events(mut rx: UnboundedReceiver<ShellEvent>, cx: &mut gpui::As
                     fleet_proto::RpcOp::Reconcile,
                 ));
             }
-            ShellEvent::RevealLogs => {
-                reveal_logs();
+            ShellEvent::ConfigLoaded(config) => {
+                if cx.update(|cx| apply_config(config, cx)).is_err() {
+                    return;
+                }
+            }
+            ShellEvent::EditConfiguration | ShellEvent::RevealLogs => {
+                let edit = matches!(event, ShellEvent::EditConfiguration);
+                if cx.update(|cx| open_config_path(cx, edit)).is_err() {
+                    return;
+                }
             }
             ShellEvent::OpenGuide => {
                 if cx
@@ -338,29 +408,127 @@ fn apply_connection(connected: bool, cx: &mut App) {
     push_dashboard(cx);
 }
 
-fn reveal_logs() {
-    let home = std::env::var("HOME").unwrap_or_default();
-    let dir = match std::env::var("FLEETCONSOLE_STATE_ROOT") {
-        Ok(root) if !root.is_empty() => {
-            std::path::PathBuf::from(root).join("logs")
+fn open_config_path(cx: &App, edit: bool) {
+    let paths = Arc::clone(&cx.global::<Shell>().config_path);
+    std::thread::spawn(move || {
+        let path = if edit { paths.file() } else { paths.logs() };
+        let prepared = if edit {
+            paths.ensure_exists()
+        } else {
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(path)
+        };
+        let mut command = std::process::Command::new(if cfg!(target_os = "macos") {
+            "open"
+        } else {
+            "xdg-open"
+        });
+        if cfg!(target_os = "macos") && edit {
+            command.arg("-t");
         }
-        _ if cfg!(target_os = "macos") => {
-            std::path::PathBuf::from(home).join("Library/Logs/FleetConsole")
+        match prepared.and_then(|()| command.arg(path).status()) {
+            Ok(status) if status.success() => {}
+            Ok(status) => eprintln!("FleetConsole: cannot open {}: {status}", path.display()),
+            Err(error) => eprintln!("FleetConsole: cannot open {}: {error}", path.display()),
         }
-        _ => match std::env::var("XDG_STATE_HOME") {
-            Ok(state) if !state.is_empty() => {
-                std::path::PathBuf::from(state).join("fleetconsole/logs")
+    });
+}
+
+fn apply_config(config: ConfigRead, cx: &mut App) {
+    let shell = cx.global_mut::<Shell>();
+    let previous_sections = MenuSections::from(&shell.config.config.sections);
+    let sections = MenuSections::from(&config.config.sections);
+    let error_changed = shell.config.error != config.error;
+    shell.config = config;
+    if sections != previous_sections {
+        if sections.processes != previous_sections.processes
+            || sections.services != previous_sections.services
+        {
+            set_app_menus(cx, sections);
+        }
+        #[cfg(target_os = "macos")]
+        if let Some(item) = &cx.global::<Shell>()._item {
+            item.set_sections(sections);
+        }
+        #[cfg(target_os = "linux")]
+        if let Some(tray) = &cx.global::<Shell>()._tray {
+            let _ = tray.update(move |tray: &mut linux_tray::FleetTray| {
+                tray.sections = sections;
+            });
+        }
+    }
+    if error_changed {
+        let shell = cx.global::<Shell>();
+        let (popover, dashboard) = (shell.popover, shell.dashboard);
+        if let Some(handle) = popover {
+            let _ = handle.update(cx, |_, _, cx| cx.notify());
+        }
+        if let Some(handle) = dashboard {
+            let _ = handle.update(cx, |_, _, cx| cx.notify());
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+struct ConfigStamp {
+    device: u64,
+    inode: u64,
+    size: u64,
+    modified: (i64, i64),
+    changed: (i64, i64),
+}
+
+fn config_stamp(path: &Path) -> Result<ConfigStamp, io::ErrorKind> {
+    let metadata = path.metadata().map_err(|error| error.kind())?;
+    Ok(ConfigStamp {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        size: metadata.size(),
+        modified: (metadata.mtime(), metadata.mtime_nsec()),
+        changed: (metadata.ctime(), metadata.ctime_nsec()),
+    })
+}
+
+fn spawn_process_sampler(
+    paths: Arc<ConfigPath>,
+    mut stamp: Result<ConfigStamp, io::ErrorKind>,
+    mut interval: Duration,
+    tx: UnboundedSender<ShellEvent>,
+) {
+    std::thread::spawn(move || {
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All);
+        let mut last_sample = Instant::now();
+        let mut last_check = last_sample;
+        while !tx.is_closed() {
+            if last_check.elapsed() >= CONFIG_CHECK_INTERVAL {
+                last_check = Instant::now();
+                let current = config_stamp(paths.file());
+                if current != stamp {
+                    stamp = current;
+                    let config = UiConfig::load(paths.file());
+                    interval = config.config.process_sample;
+                    if tx.unbounded_send(ShellEvent::ConfigLoaded(config)).is_err() {
+                        return;
+                    }
+                }
             }
-            _ => std::path::PathBuf::from(home).join(".local/state/fleetconsole/logs"),
-        },
-    };
-    let _ = std::fs::create_dir_all(&dir);
-    let opener = if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    let _ = std::process::Command::new(opener).arg(dir).spawn();
+            if last_sample.elapsed() >= interval {
+                let rows = sampler::collect_processes(&mut system);
+                last_sample = Instant::now();
+                if tx.unbounded_send(ShellEvent::Processes(rows)).is_err() {
+                    return;
+                }
+            }
+            std::thread::sleep(
+                CONFIG_CHECK_INTERVAL
+                    .saturating_sub(last_check.elapsed())
+                    .min(interval.saturating_sub(last_sample.elapsed())),
+            );
+        }
+    });
 }
 
 fn apply_processes(rows: Vec<sampler::ProcRow>, cx: &mut App) {
@@ -534,6 +702,46 @@ fn dashboard_launch_module<'a>(
         .or_else(|| (dashboard_env == Some("1")).then_some(Module::Overview))
 }
 
+fn set_app_menus(cx: &mut App, sections: MenuSections) {
+    let mut view_items = vec![
+        MenuItem::action("Open Dashboard", OpenDashboard),
+        MenuItem::separator(),
+        MenuItem::action("Overview", ShowOverview),
+    ];
+    if sections.processes {
+        view_items.push(MenuItem::action("Processes", ShowProcesses));
+    }
+    view_items.push(MenuItem::action("Storage", ShowStorage));
+    if sections.services {
+        view_items.push(MenuItem::action("Services", ShowServices));
+    }
+    view_items.extend([
+        MenuItem::action("Events", ShowEvents),
+        MenuItem::action("Launch Services", ShowLaunchServices),
+        MenuItem::separator(),
+        MenuItem::action("Refresh", RefreshProbes),
+    ]);
+    cx.set_menus(vec![
+        Menu {
+            name: "FleetConsole".into(),
+            items: vec![
+                MenuItem::action("Edit Configuration", EditConfiguration),
+                MenuItem::action("Reveal Logs", RevealLogs),
+                MenuItem::separator(),
+                MenuItem::action("Quit FleetConsole", Quit),
+            ],
+        },
+        Menu {
+            name: "View".into(),
+            items: view_items,
+        },
+        Menu {
+            name: "Help".into(),
+            items: vec![MenuItem::action("FleetConsole Guide", OpenGuide)],
+        },
+    ]);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--version") {
@@ -558,6 +766,18 @@ fn main() {
         args.iter().map(String::as_str),
         std::env::var("FLEETCONSOLE_DASHBOARD").as_deref().ok(),
     );
+
+    let config_path = Arc::new(ConfigPath::detect());
+    if let Err(error) = config_path.ensure_exists() {
+        eprintln!(
+            "FleetConsole: could not initialize {}: {error}",
+            config_path.file().display()
+        );
+    }
+    let stamp = config_stamp(config_path.file());
+    let config = UiConfig::load(config_path.file());
+    let interval = config.config.process_sample;
+    let sections = MenuSections::from(&config.config.sections);
 
     Application::new().run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
@@ -606,36 +826,14 @@ fn main() {
         cx.on_action(|_: &OpenGuide, cx: &mut App| {
             cx.open_url("https://github.com/janestreetshiller/fleet-console#readme");
         });
-        cx.set_menus(vec![
-            Menu {
-                name: "FleetConsole".into(),
-                items: vec![MenuItem::action("Quit FleetConsole", Quit)],
-            },
-            Menu {
-                name: "View".into(),
-                items: vec![
-                    MenuItem::action("Open Dashboard", OpenDashboard),
-                    MenuItem::separator(),
-                    MenuItem::action("Overview", ShowOverview),
-                    MenuItem::action("Processes", ShowProcesses),
-                    MenuItem::action("Storage", ShowStorage),
-                    MenuItem::action("Services", ShowServices),
-                    MenuItem::action("Events", ShowEvents),
-                    MenuItem::action("Launch Services", ShowLaunchServices),
-                    MenuItem::separator(),
-                    MenuItem::action("Refresh", RefreshProbes),
-                ],
-            },
-            Menu {
-                name: "Help".into(),
-                items: vec![MenuItem::action("FleetConsole Guide", OpenGuide)],
-            },
-        ]);
+        cx.on_action(|_: &EditConfiguration, cx: &mut App| open_config_path(cx, true));
+        cx.on_action(|_: &RevealLogs, cx: &mut App| open_config_path(cx, false));
+        set_app_menus(cx, sections);
 
         let (tx, rx) = unbounded::<ShellEvent>();
 
         #[cfg(target_os = "macos")]
-        let item = match mac_status::Item::install(tx.clone()) {
+        let item = match mac_status::Item::install(tx.clone(), sections) {
             Ok(item) => {
                 eprintln!("FleetConsole: macOS status item installed ({METER_TEXT})");
                 Some(item)
@@ -646,7 +844,7 @@ fn main() {
             }
         };
         #[cfg(target_os = "linux")]
-        let tray = match linux_tray::install(tx.clone()) {
+        let tray = match linux_tray::install(tx.clone(), sections) {
             Ok(handle) => {
                 eprintln!("FleetConsole: Linux StatusNotifierItem published ({METER_TEXT})");
                 Some(handle)
@@ -666,6 +864,8 @@ fn main() {
             dashboard: None,
             processes: Vec::new(),
             launch_rows: Vec::new(),
+            config_path: Arc::clone(&config_path),
+            config,
             tx: Some(tx.clone()),
             #[cfg(target_os = "macos")]
             _item: item,
@@ -678,20 +878,7 @@ fn main() {
 
         controller::spawn(tx.clone());
 
-        {
-            let tx = tx.clone();
-            std::thread::spawn(move || {
-                let mut system = sysinfo::System::new();
-                system.refresh_processes(sysinfo::ProcessesToUpdate::All);
-                loop {
-                    std::thread::sleep(std::time::Duration::from_secs(4));
-                    let rows = sampler::collect_processes(&mut system);
-                    if tx.unbounded_send(ShellEvent::Processes(rows)).is_err() {
-                        return;
-                    }
-                }
-            });
-        }
+        spawn_process_sampler(config_path, stamp, interval, tx.clone());
 
         std::thread::spawn(move || {
             let mut sampler = sampler::Sampler::new();
@@ -715,7 +902,9 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 mod mac_status {
-    use super::{Meters, ShellEvent, METER_TEXT, STATUS_ITEM_AUTOSAVE_NAME, TOOLTIP_DISCONNECTED};
+    use super::{
+        MenuSections, Meters, ShellEvent, METER_TEXT, STATUS_ITEM_AUTOSAVE_NAME, TOOLTIP_DISCONNECTED,
+    };
     use cocoa::base::{id, nil};
     use cocoa::foundation::{NSPoint, NSRect, NSString};
     use futures::channel::mpsc::UnboundedSender;
@@ -730,6 +919,7 @@ mod mac_status {
     const EVENT_RIGHT_MOUSE_UP: u64 = 4;
 
     static EVENTS: Mutex<Option<UnboundedSender<ShellEvent>>> = Mutex::new(None);
+    static MENU_SECTIONS: Mutex<Option<MenuSections>> = Mutex::new(None);
 
     fn send(event: ShellEvent) {
         if let Ok(guard) = EVENTS.lock() {
@@ -779,6 +969,7 @@ mod mac_status {
             11 => ShellEvent::Reconcile,
             12 => ShellEvent::RevealLogs,
             13 => ShellEvent::OpenGuide,
+            14 => ShellEvent::EditConfiguration,
             _ => return,
         };
         send(event);
@@ -817,32 +1008,42 @@ mod mac_status {
 
     unsafe fn show_context_menu(sender: id) {
         unsafe {
+            let Some(sections) = MENU_SECTIONS.lock().ok().and_then(|guard| *guard) else {
+                return;
+            };
             let menu: id = msg_send![class!(NSMenu), alloc];
             let menu: id = msg_send![menu, init];
             let target: id = msg_send![target_class(), new];
             let action = sel!(fleetMenuClicked:);
             add_menu_item(menu, target, "Quick View", action, 1, "", true);
             add_menu_item(menu, target, "Needs Attention", action, 2, "", true);
-            let awaiting = current_awaiting();
-            let agents_title = if awaiting > 0 {
-                format!("Agents — {awaiting} awaiting your answer")
-            } else {
-                "Agents".to_string()
-            };
-            add_menu_item(menu, target, &agents_title, action, 3, "", true);
+            if sections.agents {
+                let awaiting = current_awaiting();
+                let agents_title = if awaiting > 0 {
+                    format!("Agents — {awaiting} awaiting your answer")
+                } else {
+                    "Agents".to_string()
+                };
+                add_menu_item(menu, target, &agents_title, action, 3, "", true);
+            }
             add_menu_item(menu, target, "Open Dashboard", action, 4, "0", true);
             add_separator(menu);
             add_menu_item(menu, target, "Monitor This Mac", action, 0, "", false);
             add_menu_item(menu, target, "Overview", action, 5, "", true);
-            add_menu_item(menu, target, "Processes", action, 6, "", true);
+            if sections.processes {
+                add_menu_item(menu, target, "Processes", action, 6, "", true);
+            }
             add_menu_item(menu, target, "Storage", action, 7, "", true);
             add_separator(menu);
             add_menu_item(menu, target, "Background Work", action, 0, "", false);
-            add_menu_item(menu, target, "Services", action, 8, "", true);
+            if sections.services {
+                add_menu_item(menu, target, "Services", action, 8, "", true);
+            }
             add_menu_item(menu, target, "Events", action, 9, "", true);
             add_menu_item(menu, target, "Launch Services", action, 10, "", true);
             add_separator(menu);
             add_menu_item(menu, target, "Find Background Processes", action, 11, "", true);
+            add_menu_item(menu, target, "Edit Configuration", action, 14, "", true);
             add_menu_item(menu, target, "Reveal Logs in Finder", action, 12, "", true);
             add_separator(menu);
             add_menu_item(menu, target, "Help", action, 0, "", false);
@@ -943,7 +1144,10 @@ mod mac_status {
     unsafe impl Sync for Item {}
 
     impl Item {
-        pub fn install(tx: UnboundedSender<ShellEvent>) -> Result<Self, String> {
+        pub(super) fn install(
+            tx: UnboundedSender<ShellEvent>,
+            sections: MenuSections,
+        ) -> Result<Self, String> {
             unsafe {
                 let bar: id = msg_send![class!(NSStatusBar), systemStatusBar];
                 if bar == nil {
@@ -973,10 +1177,18 @@ mod mac_status {
                 if let Ok(mut guard) = EVENTS.lock() {
                     *guard = Some(tx);
                 }
-                Ok(Self {
+                let installed = Self {
                     item,
                     _target: target,
-                })
+                };
+                installed.set_sections(sections);
+                Ok(installed)
+            }
+        }
+
+        pub(super) fn set_sections(&self, sections: MenuSections) {
+            if let Ok(mut guard) = MENU_SECTIONS.lock() {
+                *guard = Some(sections);
             }
         }
 
@@ -1095,7 +1307,7 @@ pub struct Anchor {
 
 #[cfg(target_os = "linux")]
 mod linux_tray {
-    use super::{Meters, ShellEvent, BUNDLE_ID, TOOLTIP_DISCONNECTED};
+    use super::{MenuSections, Meters, ShellEvent, BUNDLE_ID, TOOLTIP_DISCONNECTED};
     use futures::channel::mpsc::UnboundedSender;
     use ksni::menu::{MenuItem, StandardItem};
     use ksni::{Icon, ToolTip, Tray};
@@ -1108,6 +1320,7 @@ mod linux_tray {
         pub alert: String,
         pub fleet_tooltip: Option<String>,
         pub awaiting: i64,
+        pub(super) sections: MenuSections,
     }
 
     fn entry(label: String, event: ShellEvent) -> MenuItem<FleetTray> {
@@ -1178,13 +1391,9 @@ mod linux_tray {
             } else {
                 format!("{}  {}", self.meters.text(), self.alert)
             };
-            let agents_label = if self.awaiting > 0 {
-                format!("Agents — {} awaiting your answer", self.awaiting)
-            } else {
-                "Agents".to_string()
-            };
             use super::Module;
-            vec![
+            let mut menu = Vec::with_capacity(24);
+            menu.extend([
                 StandardItem {
                     label: meters_label,
                     enabled: false,
@@ -1196,7 +1405,16 @@ mod linux_tray {
                     "Needs Attention".into(),
                     ShellEvent::ShowModule(Module::Overview),
                 ),
-                entry(agents_label, ShellEvent::ShowModule(Module::Overview)),
+            ]);
+            if self.sections.agents {
+                let label = if self.awaiting > 0 {
+                    format!("Agents — {} awaiting your answer", self.awaiting)
+                } else {
+                    "Agents".to_string()
+                };
+                menu.push(entry(label, ShellEvent::ShowModule(Module::Overview)));
+            }
+            menu.extend([
                 entry(
                     "Open Dashboard".into(),
                     ShellEvent::ShowModule(Module::Overview),
@@ -1207,20 +1425,28 @@ mod linux_tray {
                     "Overview".into(),
                     ShellEvent::ShowModule(Module::Overview),
                 ),
-                entry(
+            ]);
+            if self.sections.processes {
+                menu.push(entry(
                     "Processes".into(),
                     ShellEvent::ShowModule(Module::Processes),
-                ),
+                ));
+            }
+            menu.extend([
                 entry(
                     "Storage".into(),
                     ShellEvent::ShowModule(Module::Storage),
                 ),
                 MenuItem::Separator,
                 header_item("Background Work"),
-                entry(
+            ]);
+            if self.sections.services {
+                menu.push(entry(
                     "Services".into(),
                     ShellEvent::ShowModule(Module::Services),
-                ),
+                ));
+            }
+            menu.extend([
                 entry("Events".into(), ShellEvent::ShowModule(Module::Events)),
                 entry(
                     "Launch Services".into(),
@@ -1228,17 +1454,22 @@ mod linux_tray {
                 ),
                 MenuItem::Separator,
                 entry("Find Background Processes".into(), ShellEvent::Reconcile),
+                entry("Edit Configuration".into(), ShellEvent::EditConfiguration),
                 entry("Reveal Logs".into(), ShellEvent::RevealLogs),
                 MenuItem::Separator,
                 header_item("Help"),
                 entry("FleetConsole Guide".into(), ShellEvent::OpenGuide),
                 MenuItem::Separator,
                 entry("Quit FleetConsole".into(), ShellEvent::Quit),
-            ]
+            ]);
+            menu
         }
     }
 
-    pub fn install(tx: UnboundedSender<ShellEvent>) -> Result<Handle, String> {
+    pub(super) fn install(
+        tx: UnboundedSender<ShellEvent>,
+        sections: MenuSections,
+    ) -> Result<Handle, String> {
         use ksni::blocking::TrayMethods;
         FleetTray {
             tx,
@@ -1246,6 +1477,7 @@ mod linux_tray {
             alert: String::new(),
             fleet_tooltip: None,
             awaiting: 0,
+            sections,
         }
         .spawn()
             .map_err(|error| format!("StatusNotifierItem spawn failed: {error}"))

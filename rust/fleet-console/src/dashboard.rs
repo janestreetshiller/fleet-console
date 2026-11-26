@@ -505,6 +505,7 @@ impl Render for DashboardView {
                     .gap(px(12.0))
                     .p(px(16.0))
                     .child(header(self.module.title()))
+                    .children(crate::config_warning(cx))
                     .child(
                         div()
                             .id("dashboard-scroll")

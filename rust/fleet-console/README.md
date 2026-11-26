@@ -25,9 +25,23 @@ What exists in this scaffold:
   (Operations), Events, Launch Services (Plists) — opened with ⌘0 or
   the popover's Dashboard button and switched with ⌘1 to ⌘6 or the
   View menu. Overview, Services, and Events render the controller
-  snapshot; Processes shows the top local processes from a 4-second
-  process sampler; Storage lists mounted disks; Launch Services reads
-  `launchctl list` (macOS) or `systemctl --user` (Linux).
+  snapshot; Processes shows the top local processes from a configurable
+  sampler (4 seconds by default); Storage lists mounted disks; Launch Services
+  reads `launchctl list` (macOS) or `systemctl --user` (Linux).
+- Configuration: **Edit Configuration** opens the installed `config.json`
+  in an editor; **Reveal Logs** opens the installed log folder. On macOS
+  these are under `~/Library/Application Support/FleetConsole` and
+  `~/Library/Logs/FleetConsole` respectively, unless
+  `FLEETCONSOLE_STATE_ROOT` redirects them to `config.json` and `logs`
+  within that root. Changes, atomic replacements, and deletion are
+  picked up live without restarting the controller. A missing file
+  uses defaults; a file that cannot be read or parsed also uses
+  defaults and shows the error in Quick View and Dashboard.
+  `ui.sections.agents`, `ui.sections.processes`, and `ui.sections.services`
+  control their existing menu entries, not Dashboard navigation.
+  `ui.intervals.processSampleSec` sets the live process sampler cadence
+  (minimum 2 seconds). Other section keys and `networkRefreshSec`
+  do not yet have corresponding GPUI destinations or probes.
 - Controller connection (`src/controller.rs`, `src/snapshot.rs`): a
   thread subscribes to fleetd over the owner-only Unix socket and
   streams snapshots in, reconnecting with the Swift backoff (0.5s
