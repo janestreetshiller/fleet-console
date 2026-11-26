@@ -23,6 +23,9 @@ What exists in this scaffold:
   is granted, only fresh unseen problems and requests awaiting an answer
   produce audible system notifications; the initial mailbox is silent.
   Review launches and isolated state roots skip automatic onboarding.
+- A normal packaged macOS launch registers the bundled `fleetd` agent if
+  needed. An enabled agent is left running; if approval is pending, the
+  app logs the System Settings location and does not register again.
 - Shell: three meter columns (CPU / RAM / DISK) with live local
   readings; a click toggles the 480pt popover, which shows the fleet
   status line, the Quick View instrument strip (CPU and Memory retro

@@ -23,6 +23,15 @@ extern "C" {
     fn CFBooleanGetValue(value: *const c_void) -> u8;
 }
 
+#[link(name = "ServiceManagement", kind = "framework")]
+extern "C" {}
+
+const FLEETD_AGENT: &str = "com.fleetconsole.fleetd.plist";
+const SERVICE_NOT_REGISTERED: isize = 0;
+const SERVICE_ENABLED: isize = 1;
+const SERVICE_REQUIRES_APPROVAL: isize = 2;
+const SERVICE_NOT_FOUND: isize = 3;
+
 #[derive(Debug, PartialEq, Eq)]
 struct Review {
     enabled: bool,
@@ -90,6 +99,44 @@ impl Launch {
         !self.review.enabled
             && self.bundle.as_ref().is_some_and(|bundle| bundle.identifier == BUNDLE_ID)
             && std::env::var_os(fleet_proto::STATE_ROOT_VARIABLE).is_none_or(|root| root.is_empty())
+    }
+
+    pub(super) fn register_controller(&self) {
+        if !self.enables_onboarding() {
+            return;
+        }
+        objc::rc::autoreleasepool(|| unsafe {
+            let Some(class) = Class::get("SMAppService") else {
+                eprintln!("FleetConsole: ServiceManagement unavailable; use Scripts/install-agent.sh");
+                return;
+            };
+            let service: id = msg_send![class, agentServiceWithPlistName: ns_string(FLEETD_AGENT)];
+            if service == nil {
+                eprintln!("FleetConsole: bundled fleetd agent unavailable; use Scripts/install-agent.sh");
+                return;
+            }
+            let status: isize = msg_send![service, status];
+            match status {
+                SERVICE_ENABLED => {}
+                SERVICE_REQUIRES_APPROVAL => {
+                    eprintln!("FleetConsole: fleetd needs approval in System Settings → General → Login Items");
+                }
+                SERVICE_NOT_REGISTERED | SERVICE_NOT_FOUND => {
+                    let mut error: id = nil;
+                    let registered: BOOL = msg_send![service, registerAndReturnError: &mut error as *mut id];
+                    if registered == YES {
+                        eprintln!("FleetConsole: registered fleetd with launchd");
+                    } else {
+                        let detail: id = msg_send![error, localizedDescription];
+                        eprintln!(
+                            "FleetConsole: fleetd registration unavailable ({}); use Scripts/install-agent.sh",
+                            string(detail).unwrap_or("unknown error")
+                        );
+                    }
+                }
+                _ => eprintln!("FleetConsole: unknown fleetd registration status; use Scripts/install-agent.sh"),
+            }
+        });
     }
 
     pub(super) fn apply_activation_policy(&self) {
