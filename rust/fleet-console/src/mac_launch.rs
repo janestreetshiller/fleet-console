@@ -334,6 +334,14 @@ unsafe fn string<'a>(value: id) -> Option<&'a str> {
     CStr::from_ptr(text).to_str().ok()
 }
 
+pub(super) fn show_about(cx: &mut gpui::App) {
+    cx.activate(true);
+    objc::rc::autoreleasepool(|| unsafe {
+        let app: id = msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![app, orderFrontStandardAboutPanel: nil];
+    });
+}
+
 pub(super) fn show_cli_setup(cx: &mut gpui::App) {
     cx.activate(true);
     cx.spawn(async |cx: &mut gpui::AsyncApp| {

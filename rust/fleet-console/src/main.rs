@@ -35,6 +35,8 @@ use sampler::{Meters, Sample};
 use snapshot::FleetView;
 
 actions!(fleet_console, [Quit]);
+#[cfg(target_os = "macos")]
+actions!(fleet_console, [ShowAbout, HideFleetConsole, HideOtherApps]);
 actions!(
     fleet_console_dashboard,
     [
@@ -792,8 +794,18 @@ fn set_app_menus(cx: &mut App, sections: MenuSections) {
         Menu {
             name: "FleetConsole".into(),
             items: vec![
+                #[cfg(target_os = "macos")]
+                MenuItem::action("About FleetConsole", ShowAbout),
+                #[cfg(target_os = "macos")]
+                MenuItem::separator(),
                 MenuItem::action("Edit Configuration", EditConfiguration),
                 MenuItem::action("Reveal Logs", RevealLogs),
+                MenuItem::separator(),
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Hide FleetConsole", HideFleetConsole),
+                #[cfg(target_os = "macos")]
+                MenuItem::action("Hide Others", HideOtherApps),
+                #[cfg(target_os = "macos")]
                 MenuItem::separator(),
                 MenuItem::action("Quit FleetConsole", Quit),
             ],
@@ -872,6 +884,10 @@ fn main() {
         let sections = MenuSections::from(&config.config.sections);
 
         cx.bind_keys([
+            #[cfg(target_os = "macos")]
+            gpui::KeyBinding::new("cmd-h", HideFleetConsole, None),
+            #[cfg(target_os = "macos")]
+            gpui::KeyBinding::new("alt-cmd-h", HideOtherApps, None),
             gpui::KeyBinding::new("cmd-q", Quit, None),
             gpui::KeyBinding::new("ctrl-q", Quit, None),
             gpui::KeyBinding::new("cmd-0", OpenDashboard, None),
@@ -884,6 +900,12 @@ fn main() {
             gpui::KeyBinding::new("cmd-r", RefreshProbes, None),
         ]);
         cx.on_action(|_: &Quit, cx: &mut App| cx.quit());
+        #[cfg(target_os = "macos")]
+        {
+            cx.on_action(|_: &ShowAbout, cx: &mut App| mac_launch::show_about(cx));
+            cx.on_action(|_: &HideFleetConsole, cx: &mut App| cx.hide());
+            cx.on_action(|_: &HideOtherApps, cx: &mut App| cx.hide_other_apps());
+        }
         cx.on_action(|_: &OpenDashboard, cx: &mut App| {
             open_dashboard(cx, Module::Overview)
         });

@@ -311,3 +311,5 @@ When `fleetd` receives a stop signal, its signal queue owns shutdown through the
 Expiring an adopted process only expires its claim. The controller does not signal it or count it as reaped; readers ignore legacy reap flags on claimed records. The event history remains append-only.
 
 Controller signals require current leader identity. Grace-period escalation uses a fresh observation of a member verified before SIGTERM, so a surviving child can still be cleaned up after its leader exits, but an unverified group receives no SIGKILL. Restarting an active service refuses to launch a replacement until the previous group is confirmed gone.
+
+The GPUI macOS application menu uses the standard About panel and system Hide and Hide Others actions, with the existing Quit action retained.
