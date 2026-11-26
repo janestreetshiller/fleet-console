@@ -26,7 +26,7 @@ final class Controller: @unchecked Sendable {
     private var broadcastInFlight = false
     private var broadcastPending = false
 
-    private var pendingStops: [String: Date] = [:]
+    private var pendingStops: [String: [Int32: String]] = [:]
     private var healthInFlight: Set<String> = []
     private var lastHealthCheckAt: [String: Date] = [:]
     private var lastReconcileAt: Date?
@@ -189,6 +189,11 @@ final class Controller: @unchecked Sendable {
         guard var record = services.values.first(where: { $0.pid == pid && !$0.state.isTerminal }) else { return }
         let requested = pendingStops[record.id] != nil || record.state == .stopping
         record.lastExitCode = exitCode
+        if (pendingStops[record.id]?.count ?? 0) > 1 {
+            services[record.id] = record
+            try? registry.upsert(record)
+            return
+        }
         record.state = requested ? .stopped : .crashed
         record.evidence.processExists = false
         record.evidence.leaderVerifiedAt = nil
@@ -345,7 +350,11 @@ final class Controller: @unchecked Sendable {
                     continue
                 }
                 FleetLog.info("reaping \(record.friendlyName) (\(record.shortID)): \(reap)")
-                beginStop(record, reason: reap, requestedBy: "controller")
+                do {
+                    try beginStop(record, reason: reap, requestedBy: "controller")
+                } catch {
+                    FleetLog.warn("could not reap \(record.friendlyName): \(error.localizedDescription)")
+                }
                 continue
             }
 
@@ -670,76 +679,57 @@ final class Controller: @unchecked Sendable {
         return record
     }
 
-    func beginStop(_ record: ServiceRecord, reason: String, requestedBy: String) {
-        var record = record
-        guard record.isSignallableByController else {
-            _ = try? registry.append(.rejectedLaunch, service: record,
-                                 detail: "\(requestedBy) asked to stop a claimed record: \(reason). "
-                                     + (record.signalRefusal ?? ""))
-            FleetLog.warn("refusing to stop claimed record \(record.friendlyName) (\(record.shortID))")
-            return
-        }
-        guard let pid = record.pid, let pgid = record.pgid, pgid > 1 else {
-            record.evidence.leaderVerifiedAt = nil
-            record.state = .stopped
-            record.updatedAt = Date()
-            services[record.id] = record
-            try? registry.upsert(record)
-            return
-        }
-        guard pgid != getpgrp() else {
-            _ = try? registry.append(.pidReuseSuspected, service: record,
-                                 detail: "refusing to signal process group \(pgid): it is the controller's own group")
-            return
-        }
-
+    func beginStop(_ record: ServiceRecord, reason: String, requestedBy: String) throws {
+        try requireSignallable(record)
+        if pendingStops[record.id] != nil { return }
         let table = ProcessTable.capture(includeListeners: false)
-        record.evidence.leaderVerifiedAt = record.leaderVerification(in: table)
-        if let proc = table.process(pid), let signature = record.startSignature,
-           proc.startSignature != signature {
-            _ = try? registry.append(.pidReuseSuspected, service: record,
-                                 detail: "pid \(pid) is now '\(proc.commandLine.prefix(80))' started \(proc.startSignature); expected start \(signature). No signal sent.")
-            record.state = .crashed
-            record.evidence.processExists = false
-            record.updatedAt = Date()
-            services[record.id] = record
-            try? registry.upsert(record)
-            FleetLog.warn("pid reuse suspected for \(record.friendlyName); refusing to signal")
-            return
+        let target = try verifiedTarget(record, in: table)
+        let pgid = target.pgid
+        var record = record
+        record.evidence.leaderVerifiedAt = table.capturedAt
+        var members: [Int32: String] = [:]
+        let owner = geteuid()
+        for process in table.byPID.values where process.pgid == pgid && process.uid == owner {
+            if !process.startSignature.isEmpty {
+                members[process.pid] = process.startSignature
+            }
         }
-        guard !table.processes(inGroup: pgid).isEmpty || table.process(pid) != nil else {
-            record.state = .stopped
-            record.evidence.processExists = false
-            record.updatedAt = Date()
-            services[record.id] = record
-            try? registry.upsert(record)
-            _ = try? registry.append(.stopped, service: record, detail: "already gone when stop was requested")
-            return
+        guard killpg(pgid, SIGTERM) == 0 else {
+            throw FleetError.rejected("could not send SIGTERM to verified process group \(pgid)")
         }
-
         _ = try? registry.append(.stopRequested, service: record, detail: "\(requestedBy): \(reason)")
         record.state = .stopping
         record.updatedAt = Date()
         services[record.id] = record
         try? registry.upsert(record)
-
-        killpg(pgid, SIGTERM)
         _ = try? registry.append(.stopping, service: record,
                              detail: "SIGTERM sent to process group \(pgid); SIGKILL in \(Int(config.stopGraceSec))s if it does not exit")
-        pendingStops[record.id] = Date().addingTimeInterval(config.stopGraceSec)
-
+        pendingStops[record.id] = members
         let id = record.id
         queue.asyncAfter(deadline: .now() + config.stopGraceSec) { [weak self] in
-            self?.escalateStop(id: id, pgid: pgid, pid: pid)
+            self?.escalateStop(id: id, pgid: pgid)
         }
     }
 
-    private func escalateStop(id: String, pgid: Int32, pid: Int32) {
-        guard var record = services[id], pendingStops[id] != nil else { return }
+    private func escalateStop(id: String, pgid: Int32) {
+        guard var record = services[id], let members = pendingStops[id], !members.isEmpty else { return }
         let table = ProcessTable.capture(includeListeners: false)
-        let stillThere = table.process(pid) != nil || !table.processes(inGroup: pgid).isEmpty
-        guard stillThere else { return }
-        killpg(pgid, SIGKILL)
+        let groupPresent = table.byPID.values.contains { $0.pgid == pgid }
+        if !table.processProbeFailed && !groupPresent { return }
+        let owner = geteuid()
+        let sameGroup = !table.processProbeFailed && members.contains { pid, signature in
+            guard let process = table.process(pid) else { return false }
+            return process.pgid == pgid && process.uid == owner && process.startSignature == signature
+        }
+        guard sameGroup else {
+            _ = try? registry.append(.pidReuseSuspected, service: record,
+                                     detail: "could not re-verify process group \(pgid); no SIGKILL sent")
+            return
+        }
+        guard killpg(pgid, SIGKILL) == 0 else {
+            FleetLog.warn("could not send SIGKILL to verified process group \(pgid)")
+            return
+        }
         _ = try? registry.append(.stopping, service: record,
                              detail: "did not exit within \(Int(config.stopGraceSec))s grace; SIGKILL sent to group \(pgid)")
         FleetLog.warn("SIGKILL sent to \(record.friendlyName) group \(pgid)")
@@ -754,7 +744,7 @@ final class Controller: @unchecked Sendable {
             guard let record = services[resolved] else { throw FleetError.notFound(idOrPrefix) }
             try requireSignallable(record)
             if !record.state.isTerminal {
-                beginStop(record, reason: reason, requestedBy: "restart")
+                try beginStop(record, reason: reason, requestedBy: "restart")
             }
             return (record, config.stopGraceSec)
         }
@@ -767,6 +757,11 @@ final class Controller: @unchecked Sendable {
                 let pidGone = previous.pid.flatMap { table.process($0) } == nil
                 if groupGone && pidGone { break }
                 usleep(250_000)
+            }
+            let table = ProcessTable.capture(includeListeners: false)
+            guard !table.processProbeFailed, table.processes(inGroup: pgid).isEmpty,
+                  previous.pid.flatMap({ table.process($0) }) == nil else {
+                throw FleetError.rejected("could not confirm the previous service exited; no restart was launched")
             }
         }
 
@@ -799,23 +794,16 @@ final class Controller: @unchecked Sendable {
         }
     }
 
-    private func verifiedTarget(_ record: ServiceRecord) throws -> (pid: Int32, pgid: Int32) {
+    private func verifiedTarget(_ record: ServiceRecord, in observed: ProcessTable? = nil) throws -> (pid: Int32, pgid: Int32) {
         try requireSignallable(record)
-        guard let pid = record.pid, let pgid = record.pgid, pgid > 1 else {
-            throw FleetError.rejected("\(record.friendlyName) has no live process group")
+        guard let pid = record.pid, let pgid = record.pgid, pgid > 1, pgid != getpgrp() else {
+            throw FleetError.rejected("\(record.friendlyName) has no eligible process group")
         }
-        guard pgid != getpgrp() else {
-            throw FleetError.rejected("refusing to signal the controller's own process group")
-        }
-        let table = ProcessTable.capture(includeListeners: false)
-        if let proc = table.process(pid), let signature = record.startSignature,
-           proc.startSignature != signature {
+        let table = observed ?? ProcessTable.capture(includeListeners: false)
+        guard record.leaderVerification(in: table) != nil, table.process(pid)?.uid == geteuid() else {
             _ = try? registry.append(.pidReuseSuspected, service: record,
-                                 detail: "pid \(pid) is now '\(proc.commandLine.prefix(80))'; no signal sent")
-            throw FleetError.rejected("pid \(pid) has been reused by another process; no signal sent")
-        }
-        guard table.process(pid) != nil || !table.processes(inGroup: pgid).isEmpty else {
-            throw FleetError.rejected("\(record.friendlyName) is no longer running")
+                                     detail: "could not verify leader \(pid) for process group \(pgid); no signal sent")
+            throw FleetError.rejected("could not verify \(record.friendlyName)'s process identity; no signal sent")
         }
         return (pid, pgid)
     }
@@ -871,9 +859,10 @@ final class Controller: @unchecked Sendable {
         let target = try verifiedTarget(record)
 
         try registry.append(.stopRequested, service: record, detail: "force kill: \(reason)")
-        if record.state == .paused { killpg(target.pgid, SIGCONT) }
-        killpg(target.pgid, SIGKILL)
-        pendingStops[resolved] = Date()
+        guard killpg(target.pgid, SIGKILL) == 0 else {
+            throw FleetError.rejected("could not send SIGKILL to verified process group \(target.pgid)")
+        }
+        pendingStops[resolved] = [:]
         record.state = .stopping
         record.pausedAt = nil
         record.updatedAt = Date()

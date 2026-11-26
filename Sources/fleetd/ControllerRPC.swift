@@ -95,9 +95,8 @@ extension Controller {
                 guard !record.state.isTerminal else {
                     throw FleetError.rejected("\(record.friendlyName) is already \(record.state.rawValue)")
                 }
-                try self.requireSignallable(record)
-                self.beginStop(record, reason: request.reason ?? "requested by operator",
-                               requestedBy: "operator")
+                try self.beginStop(record, reason: request.reason ?? "requested by operator",
+                                   requestedBy: "operator")
                 return self.services[resolved] ?? record
             }
 
