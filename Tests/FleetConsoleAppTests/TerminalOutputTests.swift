@@ -316,13 +316,15 @@ struct TerminalOutputTests {
             #expect(errorRows.joined() == error)
             #expect(terminal.terminalDimensions.cols == grid.columns)
             agentErrorOutput = selectedText(terminal)
-            #expect(agentErrorOutput?.contains(errorRows.joined(separator: "\n") + "\n\n") == true,
-                    "The actual CLI diagnostic must preserve the baseline's exact physical copy break.")
+            #expect(agentErrorOutput?.contains("\n" + error + "\n\n") == true,
+                    "Copy must join the soft wrap without padding and preserve the hard blank line after the diagnostic.")
             terminal.selectNone()
             let snapshot = try #require(terminal.terminalContentSnapshot(region: .viewport))
             let diagnosticIndex = try #require(snapshot.rows.firstIndex { $0.text.hasPrefix("fleet-agent:") })
+            try #require(snapshot.rows.indices.contains(diagnosticIndex + 1))
             #expect(snapshot.rows[diagnosticIndex].text == errorRows[0])
             #expect(snapshot.rows[diagnosticIndex + 1].text == errorRows[1])
+            #expect(snapshot.rows[diagnosticIndex + 1].isWrapped)
             if ProcessInfo.processInfo.environment["FLEET_TERMINAL_EXPECT_AGENT_STYLE"] == "1" {
                 let headingRow = try #require(snapshot.rows.first { $0.text == "Error" })
                 #expect(headingRow.cells[0].attribute.style.contains(.bold) == true)
@@ -339,17 +341,17 @@ struct TerminalOutputTests {
                 "renderer": "SwiftTerm AppKit CoreGraphics (Metal disabled)",
                 "desktopInteraction": false,
                 "clipboardMutation": false,
-                "selectionPath": "TerminalView.selectAll/getSelection; same text extraction as Copy",
                 "samplePurpose": "shell regression samples; not Fleet Agent product output",
                 "scenarios": ["short", "56-column wrap", "stderr ANSI red", "partial and completed streaming",
                               "Unicode graphemes", "CR plus erase-line", "scrollback while streaming",
                               "40-column reflow preserves application cursor mode", "light and dark capture"],
                 "capturedGlyphPixelsChanged": changedPixels(blank, shortBitmap),
-                "selectedOutput": try paneHistory(socket: socket)
+                "tmuxPaneHistory": try paneHistory(socket: socket)
             ]
             if let agentErrorOutput {
                 receipt["agentBinary"] = ProcessInfo.processInfo.environment["FLEET_TERMINAL_AGENT_BINARY"]
                 receipt["agentErrorSelection"] = agentErrorOutput
+                receipt["agentErrorSelectionPath"] = "SwiftTerm selectAll/getSelection; AppKit Copy's logical text extraction"
             }
             try JSONSerialization.data(withJSONObject: receipt, options: [.prettyPrinted, .sortedKeys])
                 .write(to: directory.appendingPathComponent("terminal-rendering-receipt.json"))

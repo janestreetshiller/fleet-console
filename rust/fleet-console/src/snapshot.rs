@@ -3,9 +3,8 @@ use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Snapshot {
-    #[serde(rename = "generatedAt", default)]
+    #[serde(rename = "generatedAt")]
     pub generated_at: f64,
-    #[serde(default = "default_daemon")]
     pub daemon: fleet_proto::DaemonInfo,
     #[serde(default)]
     pub services: Vec<Service>,
@@ -116,18 +115,6 @@ pub fn event_kind_label(kind: &str) -> (String, bool) {
         other => (other, false),
     };
     (label.to_string(), is_bad)
-}
-
-fn default_daemon() -> fleet_proto::DaemonInfo {
-    fleet_proto::DaemonInfo {
-        version: String::new(),
-        pid: 0,
-        started_at: 0.0,
-        last_tick_at: None,
-        last_reconcile_at: None,
-        tick_interval_sec: 5.0,
-        socket_path: String::new(),
-    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

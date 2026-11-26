@@ -374,14 +374,21 @@ fn apply_launch_services(rows: Vec<LaunchRow>, cx: &mut App) {
 }
 
 fn open_dashboard(cx: &mut App, module: Module) {
+    cx.defer(move |cx| show_dashboard(cx, module));
+}
+
+fn show_dashboard(cx: &mut App, module: Module) {
     if let Some(handle) = cx.global::<Shell>().dashboard {
-        let _ = handle.update(cx, |view, window, view_cx| {
+        let updated = handle.update(cx, |view, window, view_cx| {
             view.module = module;
             window.activate_window();
             view_cx.notify();
         });
-        request_launch_services(cx);
-        return;
+        if updated.is_ok() {
+            request_launch_services(cx);
+            return;
+        }
+        cx.global_mut::<Shell>().dashboard = None;
     }
     let (connected, view, sample, processes, launch_rows) = {
         let shell = cx.global::<Shell>();
@@ -437,22 +444,13 @@ fn push_dashboard(cx: &mut App) {
     let Some(handle) = cx.global::<Shell>().dashboard else {
         return;
     };
-    let (connected, view, sample, processes, launch_rows) = {
-        let shell = cx.global::<Shell>();
-        (
-            shell.connected,
-            shell.view.clone(),
-            shell.sample.clone(),
-            shell.processes.clone(),
-            shell.launch_rows.clone(),
-        )
-    };
     let _ = handle.update(cx, |dash, _, view_cx| {
-        dash.connected = connected;
-        dash.view = view;
-        dash.sample = sample;
-        dash.processes = processes;
-        dash.launch_rows = launch_rows;
+        let shell = view_cx.global::<Shell>();
+        dash.connected = shell.connected;
+        dash.view = shell.view.clone();
+        dash.sample = shell.sample.clone();
+        dash.processes = shell.processes.clone();
+        dash.launch_rows = shell.launch_rows.clone();
         view_cx.notify();
     });
 }
@@ -519,6 +517,23 @@ fn push_popover_status(cx: &mut App) {
     }
 }
 
+fn dashboard_launch_module<'a>(
+    args: impl IntoIterator<Item = &'a str>,
+    dashboard_env: Option<&str>,
+) -> Option<Module> {
+    args.into_iter()
+        .find_map(|arg| match arg {
+            "--dashboard" | "--dashboard=overview" => Some(Module::Overview),
+            "--dashboard=processes" => Some(Module::Processes),
+            "--dashboard=storage" => Some(Module::Storage),
+            "--dashboard=services" => Some(Module::Services),
+            "--dashboard=events" => Some(Module::Events),
+            "--dashboard=launch" => Some(Module::LaunchServices),
+            _ => None,
+        })
+        .or_else(|| (dashboard_env == Some("1")).then_some(Module::Overview))
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.iter().any(|a| a == "--version") {
@@ -534,27 +549,15 @@ fn main() {
     }
     if args.iter().any(|a| a == "--help") {
         println!(
-            "FleetConsole — menubar (macOS) / tray (Linux) shell\n\nUsage: FleetConsole [--popover] [--dashboard[=module]] [--identity] [--version]\n  --popover   open the popover at launch (verification aid)\n  --dashboard open the Dashboard at launch, optionally on a module:\n              overview, processes, storage, services, events, launch\n"
+            "FleetConsole — menubar (macOS) / tray (Linux) shell\n\nUsage: FleetConsole [--popover] [--dashboard[=module]] [--identity] [--version]\n  --popover   open the popover at launch (verification aid)\n  --dashboard open the Dashboard at launch, optionally on a module:\n              overview, processes, storage, services, events, launch\n  FLEETCONSOLE_DASHBOARD=1 also opens the Dashboard at launch\n"
         );
         return;
     }
     let open_popover_at_launch = args.iter().any(|a| a == "--popover");
-    let dashboard_at_launch = args.iter().find_map(|a| {
-        if a == "--dashboard" {
-            Some(Module::Overview)
-        } else if let Some(name) = a.strip_prefix("--dashboard=") {
-            Some(match name {
-                "processes" => Module::Processes,
-                "storage" => Module::Storage,
-                "services" => Module::Services,
-                "events" => Module::Events,
-                "launch" => Module::LaunchServices,
-                _ => Module::Overview,
-            })
-        } else {
-            None
-        }
-    });
+    let dashboard_at_launch = dashboard_launch_module(
+        args.iter().map(String::as_str),
+        std::env::var("FLEETCONSOLE_DASHBOARD").as_deref().ok(),
+    );
 
     Application::new().run(move |cx: &mut App| {
         #[cfg(target_os = "macos")]
@@ -1246,5 +1249,52 @@ mod linux_tray {
         }
         .spawn()
             .map_err(|error| format!("StatusNotifierItem spawn failed: {error}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{dashboard_launch_module, Module};
+
+    #[test]
+    fn dashboard_launch_accepts_each_supported_route() {
+        for (arg, module) in [
+            ("--dashboard", Module::Overview),
+            ("--dashboard=overview", Module::Overview),
+            ("--dashboard=processes", Module::Processes),
+            ("--dashboard=storage", Module::Storage),
+            ("--dashboard=services", Module::Services),
+            ("--dashboard=events", Module::Events),
+            ("--dashboard=launch", Module::LaunchServices),
+        ] {
+            assert_eq!(dashboard_launch_module([arg], None), Some(module));
+        }
+    }
+
+    #[test]
+    fn invalid_module_does_not_select_a_route() {
+        assert_eq!(dashboard_launch_module(["--dashboard=unknown"], None), None);
+        assert_eq!(dashboard_launch_module(["--dashboard="], None), None);
+        assert_eq!(
+            dashboard_launch_module(["--dashboard=unknown", "--dashboard=events"], None),
+            Some(Module::Events),
+        );
+    }
+
+    #[test]
+    fn dashboard_environment_opens_overview_unless_a_route_is_explicit() {
+        assert_eq!(dashboard_launch_module([], None), None);
+        for value in ["", "0", "true", "01"] {
+            assert_eq!(dashboard_launch_module([], Some(value)), None);
+        }
+        assert_eq!(dashboard_launch_module([], Some("1")), Some(Module::Overview));
+        assert_eq!(
+            dashboard_launch_module(["--dashboard=unknown"], Some("1")),
+            Some(Module::Overview),
+        );
+        assert_eq!(
+            dashboard_launch_module(["--dashboard=services"], Some("1")),
+            Some(Module::Services),
+        );
     }
 }
